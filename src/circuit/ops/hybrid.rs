@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     circuit::{layouts, utils},
-    fieldutils::{IntegerRep, integer_rep_to_felt},
+    fieldutils::{integer_rep_to_felt, IntegerRep},
     graph::multiplier_to_scale,
     tensor::{self, DataFormat, Tensor, TensorType, ValTensor},
 };
@@ -109,13 +109,13 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
     ///
     fn requires_homogenous_input_scales(&self) -> Vec<usize> {
         match self {
-            HybridOp::Greater { .. }
-            | HybridOp::Less { .. }
-            | HybridOp::Equals { .. }
-            | HybridOp::GreaterEqual { .. }
+            HybridOp::Greater
+            | HybridOp::Less
+            | HybridOp::Equals
+            | HybridOp::GreaterEqual
             | HybridOp::Max
             | HybridOp::Min
-            | HybridOp::LessEqual { .. } => {
+            | HybridOp::LessEqual => {
                 vec![0, 1]
             }
             _ => vec![],
@@ -213,7 +213,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
         region: &mut RegionCtx<F>,
-        values: &[ValTensor<F>],
+        values: &[&ValTensor<F>],
     ) -> Result<Option<ValTensor<F>>, CircuitError> {
         Ok(Some(match self {
             HybridOp::Rsqrt {
@@ -362,10 +362,10 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
 
     fn out_scale(&self, in_scales: Vec<crate::Scale>) -> Result<crate::Scale, CircuitError> {
         let scale = match self {
-            HybridOp::Greater { .. }
-            | HybridOp::GreaterEqual { .. }
-            | HybridOp::Less { .. }
-            | HybridOp::LessEqual { .. }
+            HybridOp::Greater
+            | HybridOp::GreaterEqual
+            | HybridOp::Less
+            | HybridOp::LessEqual
             | HybridOp::ReduceArgMax { .. }
             | HybridOp::OneHot { .. }
             | HybridOp::ReduceArgMin { .. } => 0,

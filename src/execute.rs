@@ -1135,15 +1135,9 @@ pub(crate) fn calibrate(
 
         // if unix get a gag
         #[cfg(all(not(not(feature = "ezkl")), unix))]
-        let _r = match Gag::stdout() {
-            Ok(g) => Some(g),
-            _ => None,
-        };
+        let _r = Gag::stdout().ok();
         #[cfg(all(not(not(feature = "ezkl")), unix))]
-        let _g = match Gag::stderr() {
-            Ok(g) => Some(g),
-            _ => None,
-        };
+        let _g = Gag::stderr().ok();
 
         let mut circuit = match GraphCircuit::from_run_args(&local_run_args, &model_path) {
             Ok(c) => c,
@@ -1301,7 +1295,7 @@ pub(crate) fn calibrate(
                 .clone()
         }
         CalibrationTarget::Accuracy => {
-            let param_iterator = found_params.iter().sorted_by_key(|p| {
+            let mut param_iterator = found_params.iter().sorted_by_key(|p| {
                 (
                     p.run_args.input_scale,
                     p.run_args.param_scale,
@@ -1310,7 +1304,7 @@ pub(crate) fn calibrate(
                 )
             });
 
-            let last = param_iterator.last().ok_or("no params found")?;
+            let last = param_iterator.next_back().ok_or("no params found")?;
             let max_scale = (
                 last.run_args.input_scale,
                 last.run_args.param_scale,

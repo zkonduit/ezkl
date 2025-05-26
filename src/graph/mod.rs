@@ -595,7 +595,7 @@ impl GraphSettings {
             std::io::BufWriter::with_capacity(*EZKL_BUF_CAPACITY, std::fs::File::create(path)?);
         serde_json::to_writer(writer, &self).map_err(|e| {
             error!("failed to save settings file at {}", e);
-            std::io::Error::new(std::io::ErrorKind::Other, e)
+            std::io::Error::other(e)
         })
     }
     /// load params from file
@@ -605,7 +605,7 @@ impl GraphSettings {
             std::io::BufReader::with_capacity(*EZKL_BUF_CAPACITY, std::fs::File::open(path)?);
         let settings: GraphSettings = serde_json::from_reader(reader).map_err(|e| {
             error!("failed to load settings file at {}", e);
-            std::io::Error::new(std::io::ErrorKind::Other, e)
+            std::io::Error::other(e)
         })?;
 
         crate::check_version_string_matches(&settings.version);
@@ -1156,15 +1156,9 @@ impl GraphCircuit {
         let mut cs = ConstraintSystem::default();
         // if unix get a gag
         #[cfg(all(not(not(feature = "ezkl")), unix))]
-        let _r = match Gag::stdout() {
-            Ok(g) => Some(g),
-            _ => None,
-        };
+        let _r = Gag::stdout().ok();
         #[cfg(all(not(not(feature = "ezkl")), unix))]
-        let _g = match Gag::stderr() {
-            Ok(g) => Some(g),
-            _ => None,
-        };
+        let _g = Gag::stderr().ok();
 
         Self::configure_with_params(&mut cs, settings);
 
@@ -1421,13 +1415,13 @@ impl Circuit<Fp> for GraphCircuit {
 
         let mut module_configs = ModuleConfigs::from_visibility(
             cs,
-            params.module_sizes.clone(),
+            &params.module_sizes,
             params.run_args.logrows as usize,
         );
 
         let mut vars = ModelVars::new(cs, &params);
 
-        module_configs.configure_complex_modules(cs, visibility, params.module_sizes.clone());
+        module_configs.configure_complex_modules(cs, &visibility, &params.module_sizes);
 
         vars.instantiate_instance(
             cs,

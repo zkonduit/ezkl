@@ -365,9 +365,7 @@ impl GraphData {
     pub fn from_str(data: &str) -> Result<Self, GraphError> {
         let graph_input = serde_json::from_str(data);
         match graph_input {
-            Ok(graph_input) => {
-                return Ok(graph_input);
-            }
+            Ok(graph_input) => Ok(graph_input),
             Err(_) => {
                 let path = std::path::PathBuf::from(data);
                 GraphData::from_path(path)

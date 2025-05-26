@@ -198,15 +198,15 @@ jobs:
 
       - name: Build release binary (no asm or metal)
         if: matrix.build != 'linux-gnu' && matrix.build != 'macos-aarch64'
-        run: ${{ env.CARGO }} build --release ${{ env.TARGET_FLAGS }} -Z sparse-registry
+        run: ${{ env.CARGO }} build --release ${{ env.TARGET_FLAGS }} -Z sparse-registry --features mimalloc
 
       - name: Build release binary (asm)
         if: matrix.build == 'linux-gnu'
-        run: ${{ env.CARGO }} build --release ${{ env.TARGET_FLAGS }} -Z sparse-registry --features asm
+        run: ${{ env.CARGO }} build --release ${{ env.TARGET_FLAGS }} -Z sparse-registry --features asm,mimalloc
 
       - name: Build release binary (metal)
         if: matrix.build == 'macos-aarch64'
-        run: ${{ env.CARGO }} build --release ${{ env.TARGET_FLAGS }} -Z sparse-registry --features macos-metal
+        run: ${{ env.CARGO }} build --release ${{ env.TARGET_FLAGS }} -Z sparse-registry --features macos-metal,mimalloc
 
       - name: Strip release binary
         if: matrix.build != 'windows-msvc' && matrix.build != 'linux-aarch64'

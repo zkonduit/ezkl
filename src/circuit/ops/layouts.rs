@@ -18,12 +18,13 @@ use self::tensor::{create_constant_tensor, create_zero_tensor};
 use super::{chip::BaseConfig, region::RegionCtx};
 use crate::{
     circuit::{ops::base::BaseOp, utils},
-    fieldutils::{IntegerRep, felt_to_integer_rep, integer_rep_to_felt},
-    tensor::{DataFormat, KernelFormat},
+    fieldutils::{felt_to_integer_rep, integer_rep_to_felt, IntegerRep},
     tensor::{
-        Tensor, TensorError, ValType, create_unit_tensor, get_broadcasted_shape,
+        create_unit_tensor, get_broadcasted_shape,
         ops::{accumulated, add, mult, sub},
+        Tensor, TensorError, ValType,
     },
+    tensor::{DataFormat, KernelFormat},
 };
 
 use super::*;
@@ -51,17 +52,17 @@ const ASCII_ALPHABET: &str = "abcdefghijklmnopqrstuvwxyz";
 ///   Some(&[1, 2, 3, 1, 2, 3, 1, 2, 3]),
 /// &[3, 3],
 /// ).unwrap());
-/// let result = l1_distance::<Fp>(&dummy_config, &mut dummy_region, &[x, k]).unwrap();
+/// let result = l1_distance::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k]).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[0, 0, 0, 1, 1, 1, 2, 2, 2]), &[3, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 pub fn l1_distance<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 2],
+    values: &[&ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, CircuitError> {
     let diff = pairwise(config, region, values, BaseOp::Sub)?;
-    let abs_diff = abs(config, region, &[diff])?;
+    let abs_diff = abs(config, region, &[&diff])?;
 
     Ok(abs_diff)
 }
@@ -123,21 +124,21 @@ fn optimum_convex_function<F: PrimeField + TensorType + PartialOrd + std::hash::
     let f_x = f(config, region, x)?;
 
     // Evaluate function at x+1
-    let x_plus_1 = pairwise(config, region, &[x.clone(), one.clone()], BaseOp::Add)?;
+    let x_plus_1 = pairwise(config, region, &[x, &one], BaseOp::Add)?;
     let f_x_plus_1 = f(config, region, &x_plus_1)?;
 
     // Evaluate function at x-1
-    let x_minus_1 = pairwise(config, region, &[x.clone(), one.clone()], BaseOp::Sub)?;
+    let x_minus_1 = pairwise(config, region, &[x, &one], BaseOp::Sub)?;
     let f_x_minus_1 = f(config, region, &x_minus_1)?;
 
     // Check if f(x) ≤ f(x+1) - right side of optimality condition
-    let f_x_is_opt_rhs = less_equal(config, region, &[f_x.clone(), f_x_plus_1.clone()])?;
+    let f_x_is_opt_rhs = less_equal(config, region, &[&f_x, &f_x_plus_1])?;
 
     // Check if f(x) < f(x-1) - left side of optimality condition
-    let f_x_is_opt_lhs = less(config, region, &[f_x.clone(), f_x_minus_1.clone()])?;
+    let f_x_is_opt_lhs = less(config, region, &[&f_x, &f_x_minus_1])?;
 
     // x is optimal if both conditions are satisfied
-    let is_opt = and(config, region, &[f_x_is_opt_lhs, f_x_is_opt_rhs])?;
+    let is_opt = and(config, region, &[&f_x_is_opt_lhs, &f_x_is_opt_rhs])?;
 
     Ok(is_opt)
 }
@@ -156,17 +157,17 @@ fn optimum_convex_function<F: PrimeField + TensorType + PartialOrd + std::hash::
 pub fn diff_less_than<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 2],
+    values: &[&ValTensor<F>; 2],
     constant: F,
 ) -> Result<(), CircuitError> {
     let distance = l1_distance(config, region, values)?;
 
     let constant = create_constant_tensor(constant, 1);
-    let is_less = less(config, region, &[distance.clone(), constant.clone()])?;
+    let is_less = less(config, region, &[&distance, &constant])?;
 
     // assert the result is 1
     let comparison_unit = create_constant_tensor(F::ONE, is_less.len());
-    enforce_equality(config, region, &[is_less, comparison_unit])?;
+    enforce_equality(config, region, &[&is_less, &comparison_unit])?;
 
     Ok(())
 }
@@ -219,14 +220,14 @@ pub fn diff_less_than<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
 pub(crate) fn div<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    value: &[ValTensor<F>; 1],
+    value: &[&ValTensor<F>; 1],
     div: F,
 ) -> Result<ValTensor<F>, CircuitError> {
     if div == F::ONE {
         return Ok(value[0].clone());
     }
 
-    let input = value[0].clone();
+    let input = value[0];
     let input_dims = input.dims();
 
     let divisor = create_constant_tensor(div, 1);
@@ -235,14 +236,11 @@ pub(crate) fn div<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     let mut claimed_output: ValTensor<F> = if is_assigned {
         let input_evals = input.int_evals()?;
-        tensor::ops::nonlinearities::const_div(
-            &input_evals.clone(),
-            felt_to_integer_rep(div) as f64,
-        )
-        .par_iter()
-        .map(|x| Value::known(integer_rep_to_felt(*x)))
-        .collect::<Tensor<Value<F>>>()
-        .into()
+        tensor::ops::nonlinearities::const_div(&input_evals, felt_to_integer_rep(div) as f64)
+            .par_iter()
+            .map(|x| Value::known(integer_rep_to_felt(*x)))
+            .collect::<Tensor<Value<F>>>()
+            .into()
     } else {
         Tensor::new(
             Some(&vec![Value::<F>::unknown(); input.len()]),
@@ -252,16 +250,19 @@ pub(crate) fn div<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     };
     claimed_output.reshape(input_dims)?;
     // implicitly check if the prover provided output is within range
-    let claimed_output = identity(config, region, &[claimed_output], true)?;
-
-    let product = pairwise(
+    let claimed_output = decompose(
         config,
         region,
-        &[claimed_output.clone(), divisor.clone()],
-        BaseOp::Mult,
-    )?;
+        &[&claimed_output],
+        &region.base(),
+        &region.legs(),
+        false,
+    )?
+    .1;
 
-    diff_less_than(config, region, &[input.clone(), product.clone()], div)?;
+    let product = pairwise(config, region, &[&claimed_output, &divisor], BaseOp::Mult)?;
+
+    diff_less_than(config, region, &[input, &product], div)?;
 
     Ok(claimed_output)
 }
@@ -300,12 +301,12 @@ pub(crate) fn div<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    value: &[ValTensor<F>; 1],
+    value: &[&ValTensor<F>; 1],
     input_scale: F,
     output_scale: F,
     eps: f64,
 ) -> Result<ValTensor<F>, CircuitError> {
-    let input = value[0].clone();
+    let input = value[0];
     let input_dims = input.dims();
 
     let unit_scale = create_constant_tensor(output_scale * input_scale, 1);
@@ -334,52 +335,52 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     claimed_output.reshape(input_dims)?;
 
     // implicitly check if the prover provided output is within range
-    let claimed_output = identity(config, region, &[claimed_output], true)?;
+    let claimed_output = decompose(
+        config,
+        region,
+        &[&claimed_output],
+        &region.base(),
+        &region.legs(),
+        false,
+    )?
+    .1;
     // divide by input_scale
     let zero_inverse_val =
         tensor::ops::nonlinearities::zero_recip(felt_to_integer_rep(output_scale) as f64, eps)[0];
     let zero_inverse = create_constant_tensor(integer_rep_to_felt(zero_inverse_val), 1);
 
-    let equal_zero_mask = equals_zero(config, region, &[input.clone()])?;
-    let not_equal_zero_mask = not(config, region, &[equal_zero_mask.clone()])?;
-    let equal_inverse_mask = equals(config, region, &[claimed_output.clone(), zero_inverse])?;
+    let equal_zero_mask = equals_zero(config, region, &[input])?;
+    let not_equal_zero_mask = not(config, region, &[&equal_zero_mask])?;
+    let equal_inverse_mask = equals(config, region, &[&claimed_output, &zero_inverse])?;
 
     let masked_unit_scale = pairwise(
         config,
         region,
-        &[unit_scale.clone(), not_equal_zero_mask.clone()],
+        &[&unit_scale, &not_equal_zero_mask],
         BaseOp::Mult,
     )?;
 
     // assert the two masks are equal
-    enforce_equality(
-        config,
-        region,
-        &[equal_zero_mask.clone(), equal_inverse_mask],
-    )?;
+    enforce_equality(config, region, &[&equal_zero_mask, &equal_inverse_mask])?;
 
     let err_func = |config: &BaseConfig<F>,
                     region: &mut RegionCtx<F>,
                     x: &ValTensor<F>|
      -> Result<ValTensor<F>, CircuitError> {
-        let product = pairwise(config, region, &[x.clone(), input.clone()], BaseOp::Mult)?;
+        let product = pairwise(config, region, &[x, input], BaseOp::Mult)?;
 
-        let distance = l1_distance(
-            config,
-            region,
-            &[product.clone(), masked_unit_scale.clone()],
-        )?;
+        let distance = l1_distance(config, region, &[&product, &masked_unit_scale])?;
         Ok(distance)
     };
 
     // we need to add 1 to the points where it is zero to ignore the cvx opt conditions at those points
     let mut is_opt = optimum_convex_function(config, region, &claimed_output, err_func)?;
-    is_opt = pairwise(config, region, &[is_opt, equal_zero_mask], BaseOp::Add)?;
+    is_opt = pairwise(config, region, &[&is_opt, &equal_zero_mask], BaseOp::Add)?;
 
     let mut comparison_unit = create_constant_tensor(F::ONE, is_opt.len());
     comparison_unit.reshape(is_opt.dims())?;
     // assert that the result is 1
-    enforce_equality(config, region, &[is_opt, comparison_unit])?;
+    enforce_equality(config, region, &[&is_opt, &comparison_unit])?;
 
     Ok(claimed_output)
 }
@@ -401,17 +402,17 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[1, 2, 3, 2, 3, 4, 3, 4, 9]),
 ///    &[3, 3],
 /// ).unwrap());
-/// let result = sqrt::<Fp>(&dummy_config, &mut dummy_region, &[x], 1.0.into()).unwrap();
+/// let result = sqrt::<Fp>(&dummy_config, &mut dummy_region, &[&x], 1.0.into()).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 1, 2, 1, 2, 2, 2, 2, 3]), &[3, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 pub fn sqrt<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    value: &[ValTensor<F>; 1],
+    value: &[&ValTensor<F>; 1],
     input_scale: utils::F32,
 ) -> Result<ValTensor<F>, CircuitError> {
-    let input = value[0].clone();
+    let input = value[0];
     let input_dims = input.dims();
 
     let unit_scale = create_constant_tensor(integer_rep_to_felt(input_scale.0 as IntegerRep), 1);
@@ -434,16 +435,16 @@ pub fn sqrt<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     };
     claimed_output.reshape(input_dims)?;
     // force the output to be positive or zero, also implicitly checks that the output is in range
-    let claimed_output = abs(config, region, &[claimed_output.clone()])?;
+    let claimed_output = abs(config, region, &[&claimed_output])?;
     // rescaled input
-    let rescaled_input = pairwise(config, region, &[input.clone(), unit_scale], BaseOp::Mult)?;
+    let rescaled_input = pairwise(config, region, &[input, &unit_scale], BaseOp::Mult)?;
 
     let err_func = |config: &BaseConfig<F>,
                     region: &mut RegionCtx<F>,
                     x: &ValTensor<F>|
      -> Result<ValTensor<F>, CircuitError> {
-        let product = pairwise(config, region, &[x.clone(), x.clone()], BaseOp::Mult)?;
-        let distance = l1_distance(config, region, &[product.clone(), rescaled_input.clone()])?;
+        let product = pairwise(config, region, &[x, x], BaseOp::Mult)?;
+        let distance = l1_distance(config, region, &[&product, &rescaled_input])?;
         Ok(distance)
     };
 
@@ -453,7 +454,7 @@ pub fn sqrt<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     comparison_unit.reshape(is_opt.dims())?;
 
     // assert that the result is 1
-    enforce_equality(config, region, &[is_opt, comparison_unit])?;
+    enforce_equality(config, region, &[&is_opt, &comparison_unit])?;
 
     Ok(claimed_output)
 }
@@ -475,14 +476,14 @@ pub fn sqrt<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5]),
 /// &[3, 3],
 /// ).unwrap());
-/// let result = rsqrt::<Fp>(&dummy_config, &mut dummy_region, &[x], 1.0.into(), 1.0.into(), f64::EPSILON).unwrap();
+/// let result = rsqrt::<Fp>(&dummy_config, &mut dummy_region, &[&x], 1.0.into(), 1.0.into(), f64::EPSILON).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 1, 1, 1, 1, 1, 1, 1, 1]), &[3, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 pub fn rsqrt<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    value: &[ValTensor<F>; 1],
+    value: &[&ValTensor<F>; 1],
     input_scale: utils::F32,
     output_scale: utils::F32,
     eps: f64,
@@ -495,7 +496,7 @@ pub fn rsqrt<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let recip = recip(
         config,
         region,
-        &[sqrt],
+        &[&sqrt],
         felt_input_scale,
         felt_output_scale,
         eps,
@@ -527,12 +528,12 @@ pub fn rsqrt<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[5, 5, 10, -4, 2, -1, 2, 0, 1]),
 ///     &[1, 3, 3],
 /// ).unwrap());
-/// assert_eq!(dot::<Fp>(&dummy_config, &mut dummy_region, &[x, y]).unwrap().int_evals().unwrap()[0], 86);
+/// assert_eq!(dot::<Fp>(&dummy_config, &mut dummy_region, &[&x, &y]).unwrap().int_evals().unwrap()[0], 86);
 /// ```
 pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 2],
+    values: &[&ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, CircuitError> {
     if values[0].len() != values[1].len() {
         return Err(TensorError::DimMismatch("dot".to_string()).into());
@@ -542,7 +543,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     // time this entire function run
     let global_start = instant::Instant::now();
 
-    let mut values = values.clone();
+    let mut values = vec![values[0].clone(), values[1].clone()];
 
     let mut inputs = vec![];
     let block_width = config.custom_gates.output.num_inner_cols();
@@ -561,7 +562,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     // Now we can assign the dot product
     // time this step
-    let accumulated_dot = accumulated::dot(&[inputs[0].clone(), inputs[1].clone()], block_width)?;
+    let accumulated_dot = accumulated::dot(&inputs[0], &inputs[1], block_width)?;
     let (output, output_assigned_len) = region.assign_with_duplication_constrained(
         &config.custom_gates.output,
         &accumulated_dot.into(),
@@ -671,7 +672,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///   Some(&[2, 3, 2, 1, 1, 1]),
 /// &[3, 2],
 /// ).unwrap());
-/// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[x, k], "ij,jk->ik").unwrap();
+/// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], "ij,jk->ik").unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[8, 9, 5, 5]), &[2, 2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -684,7 +685,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///    Some(&[1, 2, 3, 1, 2, 3, 1, 2, 3]),
 ///  &[3, 3],
 /// ).unwrap());
-/// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[x, k], "ij,ij->ij").unwrap();
+/// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], "ij,ij->ij").unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 4, 9, 2, 6, 12, 3, 8, 15]), &[3, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -698,7 +699,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///    Some(&[1, 2, 3, 1, 2, 3, 1, 2, 3]),
 ///  &[3, 3],
 /// ).unwrap());
-/// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[x, k], "ik,jk->ij").unwrap();
+/// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], "ik,jk->ij").unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[14, 14, 14, 20, 20, 20, 26, 26, 26]), &[3, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -711,7 +712,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///    Some(&[1, 2, 3, 1, 2, 3, 1, 2, 3]),
 ///  &[3, 3],
 /// ).unwrap());
-/// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[x, k], "ik,ik->i").unwrap();
+/// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], "ik,ik->i").unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[14, 20, 26]), &[3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -725,7 +726,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///    Some(&[1, 2, 3]),
 ///  &[3],
 /// ).unwrap());
-/// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[x, k], "i,i->").unwrap();
+/// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], "i,i->").unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[14]), &[1]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -739,7 +740,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///    Some(&[4, 5, 7, 8]),
 ///  &[2, 2],
 /// ).unwrap());
-/// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[x, k], "anm,bm->ba").unwrap();
+/// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], "anm,bm->ba").unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[68, 80, 95, 113, 134, 158]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -757,7 +758,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///  &[2, 3],
 /// ).unwrap());
 ///
-/// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[z, x, k], "bn,anm,bm->ba").unwrap();
+/// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[&z, &x, &k], "bn,anm,bm->ba").unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[390, 414, 534, 994, 1153, 1384]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -771,7 +772,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///    Some(&[4, 5, 7, 8]),
 ///  &[2, 2],
 /// ).unwrap());
-/// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[x, k], "abc,cd->").unwrap();
+/// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], "abc,cd->").unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[648]), &[1]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -784,7 +785,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///    Some(&[4, 5, 7, 8]),
 ///  &[2, 2],
 /// ).unwrap());
-/// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[x, k], "abc,ed->").unwrap();
+/// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], "abc,ed->").unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[1296]), &[1]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -798,11 +799,11 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///  &[2],
 /// ).unwrap());
 ///
-/// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[x.clone(), k.clone()], "mk,k->m").unwrap();
+/// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], "mk,k->m").unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[41, 68]), &[2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
-/// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[x, k], "mk,k->mn").unwrap();
+/// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], "mk,k->mn").unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[41, 68]), &[2, 1]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -815,11 +816,11 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///  &[4],
 /// ).unwrap());
 ///
-/// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[x.clone(), k.clone()], "mk,k->ma").unwrap();
+/// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], "mk,k->ma").unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[231]), &[1, 1]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// // subtle difference
-/// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[x.clone(), k.clone()], "mk,n->ma").unwrap();
+/// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], "mk,n->ma").unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[1773]), &[1, 1]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -828,7 +829,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    inputs: &[ValTensor<F>],
+    inputs: &[&ValTensor<F>],
     equation: &str,
 ) -> Result<ValTensor<F>, CircuitError> {
     let mut equation = equation.split("->");
@@ -964,16 +965,7 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
         // in this case its just a dot product :)
         if non_common_coord_size == 1 && inputs.len() == 2 {
-            Ok(dot(
-                config,
-                region,
-                inputs[..].try_into().map_err(|e| {
-                    error!("{}", e);
-                    halo2_proofs::plonk::Error::Synthesis
-                })?,
-            )?
-            .get_inner_tensor()?[0]
-                .clone())
+            Ok(dot(config, region, &[&inputs[0], &inputs[1]])?.get_inner_tensor()?[0].clone())
         } else {
             let mut prod_res = None;
 
@@ -1001,8 +993,8 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
                 let mut input_pairs = vec![];
 
-                for input in inputs {
-                    input_pairs.push(input.get_inner_tensor()?.clone().into_iter());
+                for input in &inputs {
+                    input_pairs.push(input.get_inner_tensor()?.iter());
                 }
 
                 let input_pairs = input_pairs
@@ -1012,15 +1004,20 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
                 // Compute the product of all input tensors
                 for pair in input_pairs {
-                    let product_across_pair = prod(config, region, &[pair.into()])?;
+                    let product_across_pair = prod(config, region, &[&pair.into()])?;
 
                     if let Some(product) = prod_res {
                         prod_res = Some(
-                            pairwise(config, region, &[product, product_across_pair], BaseOp::Add)
-                                .map_err(|e| {
-                                    error!("{}", e);
-                                    halo2_proofs::plonk::Error::Synthesis
-                                })?,
+                            pairwise(
+                                config,
+                                region,
+                                &[&product, &product_across_pair],
+                                BaseOp::Add,
+                            )
+                            .map_err(|e| {
+                                error!("{}", e);
+                                halo2_proofs::plonk::Error::Synthesis
+                            })?,
                         );
                     } else {
                         prod_res = Some(product_across_pair);
@@ -1101,14 +1098,14 @@ pub enum SortCollisionMode {
 fn _sort_ascending<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     collision_handling: SortCollisionMode,
 ) -> Result<(ValTensor<F>, ValTensor<F>), CircuitError> {
     let mut input = values[0].clone();
     input.flatten();
 
     if input.len() == 1 {
-        return Ok((input.clone(), create_zero_tensor(1)));
+        return Ok((input, create_zero_tensor(1)));
     }
 
     let is_assigned = !input.any_unknowns()?;
@@ -1137,8 +1134,8 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let indices = shuffles(
         config,
         region,
-        &[assigned_sort.clone()],
-        &[input.clone()],
+        &[&assigned_sort],
+        &[&input],
         collision_handling,
     )?;
 
@@ -1157,60 +1154,59 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     match collision_handling {
         SortCollisionMode::Unsorted => {
             // In unsorted mode, just verify that a[i+1] ≥ a[i]
-            let is_greater = greater_equal(config, region, &[window_b.clone(), window_a.clone()])?;
-            enforce_equality(config, region, &[unit, is_greater])?;
+            let is_greater = greater_equal(config, region, &[&window_b, &window_a])?;
+            enforce_equality(config, region, &[&unit, &is_greater])?;
         }
         SortCollisionMode::SmallestIndexFirst => {
             // Check if a[i+1] > a[i]
-            let is_greater = greater(config, region, &[window_b.clone(), window_a.clone()])?;
+            let is_greater = greater(config, region, &[&window_b, &window_a])?;
 
             // Check if a[i+1] = a[i]
-            let is_equal = equals(config, region, &[window_b.clone(), window_a.clone()])?;
+            let is_equal = equals(config, region, &[&window_b, &window_a])?;
 
             // For equal elements, check if the original index of a[i+1] > original index of a[i]
-            let is_greater_indices =
-                greater(config, region, &[indices_b.clone(), indices_a.clone()])?;
+            let is_greater_indices = greater(config, region, &[&indices_b, &indices_a])?;
 
             // Element values are equal AND second element had larger original index
             let is_equal_and_is_greater_indices =
-                and(config, region, &[is_equal, is_greater_indices])?;
+                and(config, region, &[&is_equal, &is_greater_indices])?;
 
             // Either values are strictly ascending OR values are equal and indices are in correct order
             let is_greater_or_is_equal_and_is_greater_indices = or(
                 config,
                 region,
-                &[is_greater, is_equal_and_is_greater_indices],
+                &[&is_greater, &is_equal_and_is_greater_indices],
             )?;
 
             enforce_equality(
                 config,
                 region,
-                &[unit, is_greater_or_is_equal_and_is_greater_indices],
+                &[&unit, &is_greater_or_is_equal_and_is_greater_indices],
             )?;
         }
         SortCollisionMode::LargestIndexFirst => {
             // Similar to SmallestIndexFirst but with reversed index comparison
-            let is_greater = greater(config, region, &[window_b.clone(), window_a.clone()])?;
-            let is_equal = equals(config, region, &[window_b.clone(), window_a.clone()])?;
+            let is_greater = greater(config, region, &[&window_b, &window_a])?;
+            let is_equal = equals(config, region, &[&window_b, &window_a])?;
 
             // For equal elements, check if the original index of a[i+1] < original index of a[i]
-            let is_lesser_indices = less(config, region, &[indices_b.clone(), indices_a.clone()])?;
+            let is_lesser_indices = less(config, region, &[&indices_b, &indices_a])?;
 
             // Element values are equal AND second element had smaller original index
             let is_equal_and_is_lesser_indices =
-                and(config, region, &[is_equal, is_lesser_indices])?;
+                and(config, region, &[&is_equal, &is_lesser_indices])?;
 
             // Either values are strictly ascending OR values are equal and indices are in correct order
             let is_greater_or_is_equal_and_is_greater_indices = or(
                 config,
                 region,
-                &[is_greater, is_equal_and_is_lesser_indices],
+                &[&is_greater, &is_equal_and_is_lesser_indices],
             )?;
 
             enforce_equality(
                 config,
                 region,
-                &[unit, is_greater_or_is_equal_and_is_greater_indices],
+                &[&unit, &is_greater_or_is_equal_and_is_greater_indices],
             )?;
         }
     }
@@ -1242,7 +1238,7 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 fn _select_topk<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     k: usize,
     largest: bool,
 ) -> Result<ValTensor<F>, CircuitError> {
@@ -1277,7 +1273,7 @@ fn _select_topk<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
 ///     &[2,3],
 /// ).unwrap());
-/// let result = topk_axes::<Fp>(&dummy_config, &mut dummy_region, &[x], 2, 1, true).unwrap();
+/// let result = topk_axes::<Fp>(&dummy_config, &mut dummy_region, &[&x], 2, 1, true).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(
 ///     Some(&[15, 2, 1, 1]),
 ///     &[2,2],
@@ -1287,14 +1283,14 @@ fn _select_topk<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub fn topk_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     k: usize,
     dim: usize,
     largest: bool,
 ) -> Result<ValTensor<F>, CircuitError> {
     let topk_at_k = move |config: &BaseConfig<F>,
                           region: &mut RegionCtx<F>,
-                          values: &[ValTensor<F>; 1]|
+                          values: &[&ValTensor<F>; 1]|
           -> Result<ValTensor<F>, CircuitError> {
         _select_topk(config, region, values, k, largest)
     };
@@ -1307,9 +1303,9 @@ pub fn topk_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 fn select<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 2],
+    values: &[&ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, CircuitError> {
-    let (mut input, index) = (values[0].clone(), values[1].clone());
+    let (mut input, index) = (values[0].clone(), values[1]);
     input.flatten();
 
     // these will be assigned as constants
@@ -1334,7 +1330,7 @@ fn select<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     .into();
 
     let (_, assigned_output) =
-        dynamic_lookup(config, region, &[index, output], &[dim_indices, input])?;
+        dynamic_lookup(config, region, &[index, &output], &[&dim_indices, &input])?;
 
     Ok(assigned_output)
 }
@@ -1342,14 +1338,14 @@ fn select<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 fn one_hot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     num_classes: usize,
 ) -> Result<ValTensor<F>, CircuitError> {
     // assert values is flat
     assert_eq!(values[0].dims().len(), 1);
     // assert its a single elelemnt
     assert_eq!(values[0].len(), 1);
-    let input = values[0].clone();
+    let input = values[0];
     let is_assigned = !input.any_unknowns()?;
 
     let output: ValTensor<F> = if is_assigned {
@@ -1366,26 +1362,21 @@ fn one_hot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     }
     .into();
 
-    let assigned_input = region.assign(&config.custom_gates.inputs[0], &input)?;
+    let assigned_input = region.assign(&config.custom_gates.inputs[0], input)?;
 
     // now assert all elems are 0 or 1
-    let assigned_output = boolean_identity(config, region, &[output.clone()], true)?;
+    let assigned_output = boolean_identity(config, region, &[&output], true)?;
     region.increment(std::cmp::max(assigned_output.len(), assigned_input.len()));
 
-    let sum = sum(config, region, &[assigned_output.clone()])?;
+    let sum = sum(config, region, &[&assigned_output])?;
     // assert sum is 1
     let unit = create_unit_tensor(1);
 
-    enforce_equality(config, region, &[unit.clone(), sum])?;
+    enforce_equality(config, region, &[&unit, &sum])?;
 
-    let gathered = gather(
-        config,
-        region,
-        &[assigned_output.clone(), assigned_input.clone()],
-        0,
-    )?;
+    let gathered = gather(config, region, &[&assigned_output, &assigned_input], 0)?;
 
-    enforce_equality(config, region, &[unit, gathered])?;
+    enforce_equality(config, region, &[&unit, &gathered])?;
 
     Ok(assigned_output)
 }
@@ -1432,8 +1423,8 @@ fn one_hot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub(crate) fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    lookups: &[ValTensor<F>; 2],
-    tables: &[ValTensor<F>; 2],
+    lookups: &[&ValTensor<F>; 2],
+    tables: &[&ValTensor<F>; 2],
 ) -> Result<(ValTensor<F>, ValTensor<F>), CircuitError> {
     // if not all lookups same length err
     if lookups[0].len() != lookups[1].len() {
@@ -1453,13 +1444,13 @@ pub(crate) fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd + std::hash
 
     let dynamic_lookup_index = region.dynamic_lookup_index();
 
-    let (lookup_0, lookup_1) = (lookups[0].clone(), lookups[1].clone());
-    let (table_0, table_1) = (tables[0].clone(), tables[1].clone());
+    let (lookup_0, lookup_1) = (lookups[0], lookups[1]);
+    let (table_0, table_1) = (tables[0], tables[1]);
 
     let (table_0, flush_len_0) =
-        region.assign_dynamic_lookup(&config.dynamic_lookups.tables[0], &table_0)?;
+        region.assign_dynamic_lookup(&config.dynamic_lookups.tables[0], table_0)?;
     let (_table_1, flush_len_1) =
-        region.assign_dynamic_lookup(&config.dynamic_lookups.tables[1], &table_1)?;
+        region.assign_dynamic_lookup(&config.dynamic_lookups.tables[1], table_1)?;
     if flush_len_0 != flush_len_1 {
         return Err(CircuitError::MismatchedLookupTableLength(
             flush_len_0,
@@ -1473,8 +1464,8 @@ pub(crate) fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd + std::hash
     let _table_index =
         region.assign_dynamic_lookup(&config.dynamic_lookups.tables[2], &table_index)?;
 
-    let lookup_0 = region.assign(&config.dynamic_lookups.inputs[0], &lookup_0)?;
-    let lookup_1 = region.assign(&config.dynamic_lookups.inputs[1], &lookup_1)?;
+    let lookup_0 = region.assign(&config.dynamic_lookups.inputs[0], lookup_0)?;
+    let lookup_1 = region.assign(&config.dynamic_lookups.inputs[1], lookup_1)?;
     let lookup_len = lookup_0.len();
 
     // now set the lookup index
@@ -1573,12 +1564,12 @@ pub(crate) fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd + std::hash
 pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    output: &[ValTensor<F>; 1],
-    input: &[ValTensor<F>; 1],
+    output: &[&ValTensor<F>; 1],
+    input: &[&ValTensor<F>; 1],
     collision_handling: SortCollisionMode,
 ) -> Result<ValTensor<F>, CircuitError> {
     let shuffle_index = region.shuffle_index();
-    let (output, input) = (output[0].clone(), input[0].clone());
+    let (output, input) = (output[0], input[0]);
 
     // assert input and reference are same length
     if output.len() != input.len() {
@@ -1588,9 +1579,9 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
         ));
     }
 
-    let (output, flush_len_ref) = region.assign_shuffle(&config.shuffles.outputs[0], &output)?;
+    let (output, flush_len_ref) = region.assign_shuffle(&config.shuffles.outputs[0], output)?;
     let output_len = output.len();
-    let input = region.assign(&config.shuffles.inputs[0], &input)?;
+    let input = region.assign(&config.shuffles.inputs[0], input)?;
 
     // now create a vartensor of constants for the shuffle index
     let index = create_constant_tensor(F::from(shuffle_index as u64), output_len);
@@ -1718,11 +1709,11 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
 pub(crate) fn one_hot_axis<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     num_classes: usize,
     dim: usize,
 ) -> Result<ValTensor<F>, CircuitError> {
-    let input = values[0].clone();
+    let input = values[0];
     let input_inner = input.get_inner_tensor()?;
 
     let mut output_dims = values[0].dims().to_vec();
@@ -1733,9 +1724,9 @@ pub(crate) fn one_hot_axis<F: PrimeField + TensorType + PartialOrd + std::hash::
     let inner_loop_function =
         |i: usize, region: &mut RegionCtx<'_, F>| -> Result<ValTensor<F>, _> {
             let inp = input_inner[i].clone();
-            let tensor = Tensor::new(Some(&[inp.clone()]), &[1])?;
+            let tensor = Tensor::new(Some(&[inp]), &[1])?;
 
-            one_hot(config, region, &[tensor.into()], num_classes)
+            one_hot(config, region, &[&tensor.into()], num_classes)
         };
 
     region.apply_in_loop(&mut op_tensors, inner_loop_function)?;
@@ -1771,10 +1762,10 @@ pub(crate) fn one_hot_axis<F: PrimeField + TensorType + PartialOrd + std::hash::
 pub(crate) fn gather<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 2],
+    values: &[&ValTensor<F>; 2],
     dim: usize,
 ) -> Result<ValTensor<F>, CircuitError> {
-    let (input, mut index_clone) = (values[0].clone(), values[1].clone());
+    let (input, mut index_clone) = (values[0], values[1].clone());
     index_clone.flatten();
     if index_clone.is_singleton() {
         index_clone.reshape(&[1])?;
@@ -1786,9 +1777,9 @@ pub(crate) fn gather<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     output_size[dim] = index_clone.dims()[0];
 
     let linear_index =
-        linearize_element_index(config, region, &[index_clone], input_dims, dim, true)?;
+        linearize_element_index(config, region, &[&index_clone], input_dims, dim, true)?;
 
-    let mut output = select(config, region, &[input, linear_index])?;
+    let mut output = select(config, region, &[input, &linear_index])?;
 
     output.reshape(&output_size)?;
 
@@ -1799,10 +1790,10 @@ pub(crate) fn gather<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub(crate) fn gather_elements<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 2],
+    values: &[&ValTensor<F>; 2],
     dim: usize,
 ) -> Result<(ValTensor<F>, ValTensor<F>), CircuitError> {
-    let (input, index) = (values[0].clone(), values[1].clone());
+    let (input, index) = (values[0], values[1]);
 
     assert_eq!(input.dims().len(), index.dims().len());
 
@@ -1811,7 +1802,7 @@ pub(crate) fn gather_elements<F: PrimeField + TensorType + PartialOrd + std::has
 
     let linear_index = linearize_element_index(config, region, &[index], input.dims(), dim, false)?;
 
-    let mut output = select(config, region, &[input, linear_index.clone()])?;
+    let mut output = select(config, region, &[input, &linear_index])?;
 
     output.reshape(&output_size)?;
 
@@ -1822,10 +1813,10 @@ pub(crate) fn gather_elements<F: PrimeField + TensorType + PartialOrd + std::has
 pub(crate) fn gather_nd<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 2],
+    values: &[&ValTensor<F>; 2],
     batch_dims: usize,
 ) -> Result<(ValTensor<F>, ValTensor<F>), CircuitError> {
-    let (input, index) = (values[0].clone(), values[1].clone());
+    let (input, index) = (values[0], values[1]);
 
     let index_dims = index.dims().to_vec();
     let input_dims = input.dims().to_vec();
@@ -1860,7 +1851,7 @@ pub(crate) fn gather_nd<F: PrimeField + TensorType + PartialOrd + std::hash::Has
 
     let linear_index = linearize_nd_index(config, region, &[index], input.dims(), batch_dims)?;
 
-    let mut output = select(config, region, &[input, linear_index.clone()])?;
+    let mut output = select(config, region, &[input, &linear_index])?;
 
     output.reshape(&output_size)?;
 
@@ -1870,20 +1861,26 @@ pub(crate) fn gather_nd<F: PrimeField + TensorType + PartialOrd + std::hash::Has
 /// Takes a tensor representing a multi-dimensional index and returns a tensor representing the linearized index.
 /// The linearized index is the index of the element in the flattened tensor.
 /// FOr instance if the dims is [3,5,2], the linearized index of [2] at dim 1 is 2*5 + 3 = 13
-pub(crate) fn linearize_element_index<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn linearize_element_index<
+    'a,
+    F: PrimeField + TensorType + PartialOrd + std::hash::Hash,
+>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     dims: &[usize],
     dim: usize,
     is_flat_index: bool,
-) -> Result<ValTensor<F>, CircuitError> {
-    let index = values[0].clone();
+) -> Result<ValTensor<F>, CircuitError>
+where
+    &'a F: TensorType,
+{
+    let index = values[0];
     if !is_flat_index {
         assert_eq!(index.dims().len(), dims.len());
         // if the index is already flat, return it
         if index.dims().len() == 1 {
-            return Ok(index);
+            return Ok(index.clone());
         }
     }
 
@@ -1940,11 +1937,11 @@ pub(crate) fn linearize_element_index<F: PrimeField + TensorType + PartialOrd + 
         let res = pairwise(
             config,
             region,
-            &[index_val, val_dim_multiplier.clone()],
+            &[&index_val, &val_dim_multiplier],
             BaseOp::Mult,
         )?;
 
-        let res = pairwise(config, region, &[res, const_offset], BaseOp::Add)?;
+        let res = pairwise(config, region, &[&res, &const_offset], BaseOp::Add)?;
 
         Ok(res.get_inner_tensor()?[0].clone())
     };
@@ -1971,14 +1968,17 @@ pub(crate) fn linearize_element_index<F: PrimeField + TensorType + PartialOrd + 
 ///     If indices_shape[-1] == r-b, since the rank of indices is q, indices can be thought of as N (q-b-1)-dimensional tensors containing 1-D tensors of dimension r-b, where N is an integer equals to the product of 1 and all the elements in the batch dimensions of the indices_shape.
 ///     Let us think of each such r-b ranked tensor as indices_slice. Each scalar value corresponding to data[0:b-1,indices_slice] is filled into the corresponding location of the (q-b-1)-dimensional tensor to form the output tensor (Example 1 below)
 ///     If indices_shape[-1] < r-b, since the rank of indices is q, indices can be thought of as N (q-b-1)-dimensional tensor containing 1-D tensors of dimension < r-b. Let us think of each such tensors as indices_slice. Each tensor slice corresponding to data[0:b-1, indices_slice , :] is filled into the corresponding location of the (q-b-1)-dimensional tensor to form the output tensor (Examples 2, 3, 4 and 5 below)
-pub(crate) fn linearize_nd_index<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn linearize_nd_index<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     dims: &[usize],
     batch_dims: usize,
-) -> Result<ValTensor<F>, CircuitError> {
-    let index = values[0].clone();
+) -> Result<ValTensor<F>, CircuitError>
+where
+    &'a F: TensorType,
+{
+    let index = values[0];
     let index_dims = index.dims().to_vec();
 
     let last_dim = index.dims().last().unwrap();
@@ -2050,12 +2050,11 @@ pub(crate) fn linearize_nd_index<F: PrimeField + TensorType + PartialOrd + std::
 
                     Ok(grid
                         .map(|x| {
-                            let index = index.clone();
                             let constant_valtensor: ValTensor<F> = Tensor::from(
                                 x.into_iter().map(|x| ValType::Constant(F::from(x as u64))),
                             )
                             .into();
-                            index.concat(constant_valtensor)
+                            index.concat(&constant_valtensor)
                         })
                         .collect::<Result<Vec<_>, TensorError>>()?)
                 })
@@ -2088,11 +2087,11 @@ pub(crate) fn linearize_nd_index<F: PrimeField + TensorType + PartialOrd + std::
             let res = pairwise(
                 config,
                 region,
-                &[index_val.clone(), index_dim_multiplier.clone()],
+                &[&index_val, &index_dim_multiplier],
                 BaseOp::Mult,
             )?;
-            let res = res.concat(const_offset.clone())?;
-            let res = sum(config, region, &[res])?;
+            let res = res.concat(&const_offset)?;
+            let res = sum(config, region, &[&res])?;
             results.push(res.get_inner_tensor()?.clone());
             // assert than res is less than the product of the dims
             if region.witness_gen() {
@@ -2156,10 +2155,10 @@ pub(crate) fn get_missing_set_elements<
 >(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 2],
+    values: &[&ValTensor<F>; 2],
     ordered: bool,
 ) -> Result<ValTensor<F>, CircuitError> {
-    let (mut input, fullset) = (values[0].clone(), values[1].clone());
+    let (mut input, fullset) = (values[0].clone(), values[1]);
     let set_len = fullset.len();
     input.flatten();
 
@@ -2201,14 +2200,14 @@ pub(crate) fn get_missing_set_elements<
     region.increment(claimed_output.len());
 
     // Concatenate input and claimed output
-    let input_and_claimed_output = input.concat(claimed_output.clone())?;
+    let input_and_claimed_output = input.concat(&claimed_output)?;
 
     // Verify that input + claimed_output is a permutation of fullset
     shuffles(
         config,
         region,
-        &[input_and_claimed_output.clone()],
-        &[fullset.clone()],
+        &[&input_and_claimed_output],
+        &[fullset],
         SortCollisionMode::Unsorted,
     )?;
 
@@ -2217,7 +2216,7 @@ pub(crate) fn get_missing_set_elements<
         claimed_output = _sort_ascending(
             config,
             region,
-            &[claimed_output],
+            &[&claimed_output],
             SortCollisionMode::Unsorted,
         )?
         .0;
@@ -2254,10 +2253,10 @@ pub(crate) fn get_missing_set_elements<
 pub(crate) fn scatter_elements<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 3],
+    values: &[&ValTensor<F>; 3],
     dim: usize,
 ) -> Result<ValTensor<F>, CircuitError> {
-    let (input, mut index, src) = (values[0].clone(), values[1].clone(), values[2].clone());
+    let (input, mut index, src) = (values[0], values[1].clone(), values[2]);
 
     assert_eq!(input.dims().len(), index.dims().len());
 
@@ -2293,38 +2292,25 @@ pub(crate) fn scatter_elements<F: PrimeField + TensorType + PartialOrd + std::ha
     claimed_output.reshape(input.dims())?;
 
     // scatter elements is the inverse of gather elements
-    let (gather_src, linear_index) = gather_elements(
-        config,
-        region,
-        &[claimed_output.clone(), index.clone()],
-        dim,
-    )?;
+    let (gather_src, linear_index) =
+        gather_elements(config, region, &[&claimed_output, &index], dim)?;
 
     // assert this is equal to the src
-    enforce_equality(config, region, &[gather_src, src])?;
+    enforce_equality(config, region, &[&gather_src, src])?;
 
     let full_index_set: ValTensor<F> =
         Tensor::from((0..input.len() as u64).map(|x| ValType::Constant(F::from(x)))).into();
-    let input_indices = get_missing_set_elements(
-        config,
-        region,
-        &[linear_index, full_index_set.clone()],
-        true,
-    )?;
+    let input_indices =
+        get_missing_set_elements(config, region, &[&linear_index, &full_index_set], true)?;
 
     claimed_output.flatten();
-    let (gather_input, _) = gather_elements(
-        config,
-        region,
-        &[claimed_output.clone(), input_indices.clone()],
-        0,
-    )?;
+    let (gather_input, _) = gather_elements(config, region, &[&claimed_output, &input_indices], 0)?;
     // assert this is a subset of the input
     dynamic_lookup(
         config,
         region,
-        &[input_indices, gather_input],
-        &[full_index_set, input.clone()],
+        &[&input_indices, &gather_input],
+        &[&full_index_set, input],
     )?;
 
     claimed_output.reshape(input.dims())?;
@@ -2336,9 +2322,9 @@ pub(crate) fn scatter_elements<F: PrimeField + TensorType + PartialOrd + std::ha
 pub(crate) fn scatter_nd<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 3],
+    values: &[&ValTensor<F>; 3],
 ) -> Result<ValTensor<F>, CircuitError> {
-    let (input, mut index, src) = (values[0].clone(), values[1].clone(), values[2].clone());
+    let (input, mut index, src) = (values[0], values[1].clone(), values[2]);
 
     if !index.all_prev_assigned() {
         index = region.assign(&config.custom_gates.inputs[1], &index)?;
@@ -2372,37 +2358,27 @@ pub(crate) fn scatter_nd<F: PrimeField + TensorType + PartialOrd + std::hash::Ha
     claimed_output.reshape(input.dims())?;
 
     // scatter elements is the inverse of gather elements
-    let (gather_src, linear_index) =
-        gather_nd(config, region, &[claimed_output.clone(), index.clone()], 0)?;
+    let (gather_src, linear_index) = gather_nd(config, region, &[&claimed_output, &index], 0)?;
 
     // assert this is equal to the src
-    enforce_equality(config, region, &[gather_src, src])?;
+    enforce_equality(config, region, &[&gather_src, src])?;
 
     let full_index_set: ValTensor<F> =
         Tensor::from((0..input.len() as u64).map(|x| ValType::Constant(F::from(x)))).into();
 
-    let input_indices = get_missing_set_elements(
-        config,
-        region,
-        &[linear_index, full_index_set.clone()],
-        true,
-    )?;
+    let input_indices =
+        get_missing_set_elements(config, region, &[&linear_index, &full_index_set], true)?;
 
     // now that it is flattened we can gather over elements on dim 0
     claimed_output.flatten();
-    let (gather_input, _) = gather_elements(
-        config,
-        region,
-        &[claimed_output.clone(), input_indices.clone()],
-        0,
-    )?;
+    let (gather_input, _) = gather_elements(config, region, &[&claimed_output, &input_indices], 0)?;
 
     // assert this is a subset of the input
     dynamic_lookup(
         config,
         region,
-        &[input_indices, gather_input],
-        &[full_index_set, input.clone()],
+        &[&input_indices, &gather_input],
+        &[&full_index_set, input],
     )?;
 
     claimed_output.reshape(input.dims())?;
@@ -2429,14 +2405,14 @@ pub(crate) fn scatter_nd<F: PrimeField + TensorType + PartialOrd + std::hash::Ha
 ///     Some(&[2, 15, 2, 1, 1, 0]),
 ///     &[2, 3],
 /// ).unwrap());
-/// let result = sum::<Fp>(&dummy_config, &mut dummy_region, &[x]).unwrap();
+/// let result = sum::<Fp>(&dummy_config, &mut dummy_region, &[&x]).unwrap();
 /// let expected = 21;
 /// assert_eq!(result.int_evals().unwrap()[0], expected);
 /// ```
 pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, CircuitError> {
     if values[0].len() == 1 {
         return Ok(values[0].clone());
@@ -2444,21 +2420,12 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     region.flush()?;
     // time this entire function run
-    let mut values = values.clone();
-
-    // this section has been optimized to death, don't mess with it
-    values[0].remove_const_zero_values();
-
-    // if empty return a const
-    if values[0].is_empty() {
-        return Ok(create_zero_tensor(1));
-    }
+    let mut input = values[0].clone();
 
     let block_width = config.custom_gates.output.num_inner_cols();
 
     let assigned_len: usize;
     let input = {
-        let mut input = values[0].clone();
         input.pad_to_zero_rem(block_width, ValType::Constant(F::ZERO))?;
         let (res, len) =
             region.assign_with_duplication_unconstrained(&config.custom_gates.inputs[1], &input)?;
@@ -2527,26 +2494,16 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
 ///     &[2, 3],
 /// ).unwrap());
-/// let result = prod::<Fp>(&dummy_config, &mut dummy_region, &[x]).unwrap();
+/// let result = prod::<Fp>(&dummy_config, &mut dummy_region, &[&x]).unwrap();
 /// let expected = 0;
 /// assert_eq!(result.int_evals().unwrap()[0], expected);
 /// ```
 pub fn prod<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, CircuitError> {
     region.flush()?;
-    // time this entire function run
-
-    // this section has been optimized to death, don't mess with it
-    let removal_indices = values[0].get_const_zero_indices();
-
-    // if empty return a const
-    if !removal_indices.is_empty() {
-        return Ok(create_zero_tensor(1));
-    }
-
     let block_width = config.custom_gates.output.num_inner_cols();
     let assigned_len: usize;
     let input = {
@@ -2606,20 +2563,20 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 fn axes_wise_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     axes: &[usize],
     // generic layout op
     op: impl Fn(
-        &BaseConfig<F>,
-        &mut RegionCtx<F>,
-        &[ValTensor<F>; 1],
-    ) -> Result<ValTensor<F>, CircuitError>
-    + Send
-    + Sync,
+            &BaseConfig<F>,
+            &mut RegionCtx<F>,
+            &[&ValTensor<F>; 1],
+        ) -> Result<ValTensor<F>, CircuitError>
+        + Send
+        + Sync,
 ) -> Result<ValTensor<F>, CircuitError> {
     // calculate value of output
 
-    let a = &values[0];
+    let a = values[0];
 
     if axes.is_empty() {
         return Ok(a.clone());
@@ -2653,7 +2610,7 @@ fn axes_wise_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
             }
         }
         let values = a.get_slice(&prod_dims)?;
-        let op = op(config, region, &[values])?;
+        let op = op(config, region, &[&values])?;
 
         Ok(op.get_inner_tensor()?[0].clone())
     };
@@ -2682,7 +2639,7 @@ fn axes_wise_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
 ///     &[2, 3],
 /// ).unwrap());
-/// let result = prod_axes::<Fp>(&dummy_config, &mut dummy_region, &[x], &[1]).unwrap();
+/// let result = prod_axes::<Fp>(&dummy_config, &mut dummy_region, &[&x], &[1]).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(
 ///     Some(&[60, 0]),
 ///     &[2, 1],
@@ -2692,7 +2649,7 @@ fn axes_wise_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub fn prod_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     axes: &[usize],
 ) -> Result<ValTensor<F>, CircuitError> {
     // calculate value of output
@@ -2718,7 +2675,7 @@ pub fn prod_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
 ///     &[2, 3],
 /// ).unwrap());
-/// let result = sum_axes::<Fp>(&dummy_config, &mut dummy_region, &[x], &[1]).unwrap();
+/// let result = sum_axes::<Fp>(&dummy_config, &mut dummy_region, &[&x], &[1]).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(
 ///     Some(&[19, 2]),
 ///     &[2, 1],
@@ -2728,7 +2685,7 @@ pub fn prod_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub fn sum_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     axes: &[usize],
 ) -> Result<ValTensor<F>, CircuitError> {
     // calculate value of output
@@ -2754,7 +2711,7 @@ pub fn sum_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
 ///     &[2, 3],
 /// ).unwrap());
-/// let result = argmax_axes::<Fp>(&dummy_config, &mut dummy_region, &[x], 1).unwrap();
+/// let result = argmax_axes::<Fp>(&dummy_config, &mut dummy_region, &[&x], 1).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(
 ///     Some(&[1, 0]),
 ///     &[2, 1],
@@ -2764,13 +2721,13 @@ pub fn sum_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub fn argmax_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     dim: usize,
 ) -> Result<ValTensor<F>, CircuitError> {
     // these will be assigned as constants
     let argmax = move |config: &BaseConfig<F>,
                        region: &mut RegionCtx<F>,
-                       values: &[ValTensor<F>; 1]|
+                       values: &[&ValTensor<F>; 1]|
           -> Result<ValTensor<F>, CircuitError> { argmax(config, region, values) };
 
     // calculate value of output
@@ -2795,7 +2752,7 @@ pub fn argmax_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
 ///     &[2, 3],
 /// ).unwrap());
-/// let result = max_axes::<Fp>(&dummy_config, &mut dummy_region, &[x], &[1]).unwrap();
+/// let result = max_axes::<Fp>(&dummy_config, &mut dummy_region, &[&x], &[1]).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(
 ///     Some(&[15, 1]),
 ///     &[2, 1],
@@ -2805,7 +2762,7 @@ pub fn argmax_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub fn max_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     axes: &[usize],
 ) -> Result<ValTensor<F>, CircuitError> {
     // calculate value of output
@@ -2832,7 +2789,7 @@ pub fn max_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
 ///     &[2, 3],
 /// ).unwrap());
-/// let result = argmin_axes::<Fp>(&dummy_config, &mut dummy_region, &[x], 1).unwrap();
+/// let result = argmin_axes::<Fp>(&dummy_config, &mut dummy_region, &[&x], 1).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(
 ///     Some(&[0, 2]),
 ///     &[2, 1],
@@ -2842,14 +2799,14 @@ pub fn max_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub fn argmin_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     dim: usize,
 ) -> Result<ValTensor<F>, CircuitError> {
     // calculate value of output
 
     let argmin = move |config: &BaseConfig<F>,
                        region: &mut RegionCtx<F>,
-                       values: &[ValTensor<F>; 1]|
+                       values: &[&ValTensor<F>; 1]|
           -> Result<ValTensor<F>, CircuitError> { argmin(config, region, values) };
 
     axes_wise_op(config, region, values, &[dim], argmin)
@@ -2878,7 +2835,7 @@ pub fn argmin_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
 ///     &[2, 3],
 /// ).unwrap());
-/// let result = min_axes::<Fp>(&dummy_config, &mut dummy_region, &[x], &[1]).unwrap();
+/// let result = min_axes::<Fp>(&dummy_config, &mut dummy_region, &[&x], &[1]).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(
 ///     Some(&[2, 0]),
 ///     &[2, 1],
@@ -2888,7 +2845,7 @@ pub fn argmin_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub fn min_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     axes: &[usize],
 ) -> Result<ValTensor<F>, CircuitError> {
     // calculate value of output
@@ -2900,7 +2857,7 @@ pub fn min_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 2],
+    values: &[&ValTensor<F>; 2],
     op: BaseOp,
 ) -> Result<ValTensor<F>, CircuitError> {
     // time to calculate the value of the output
@@ -2920,7 +2877,7 @@ pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
         )));
     }
 
-    let inputs = [lhs.clone(), rhs.clone()]
+    let inputs = [lhs, rhs]
         .iter()
         .enumerate()
         .map(|(i, input)| {
@@ -2995,7 +2952,7 @@ pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
 /// Some(&[2, 15, 2, 1, 1, 0]),
 /// &[2, 3],
 /// ).unwrap());
-/// let result = mean_of_squares_axes::<Fp>(&dummy_config, &mut dummy_region, &[x], &[1]).unwrap();
+/// let result = mean_of_squares_axes::<Fp>(&dummy_config, &mut dummy_region, &[&x], &[1]).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(
 /// Some(&[78, 1]),
 /// &[2, 1],
@@ -3005,15 +2962,15 @@ pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
 pub fn mean_of_squares_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     axes: &[usize],
 ) -> Result<ValTensor<F>, CircuitError> {
     let squared = pow(config, region, values, 2)?;
-    let sum_squared = sum_axes(config, region, &[squared], axes)?;
+    let sum_squared = sum_axes(config, region, &[&squared], axes)?;
 
     let dividend: usize = values[0].len() / sum_squared.len();
 
-    let mean_squared = div(config, region, &[sum_squared], F::from(dividend as u64))?;
+    let mean_squared = div(config, region, &[&sum_squared], F::from(dividend as u64))?;
     Ok(mean_squared)
 }
 
@@ -3021,10 +2978,10 @@ pub fn mean_of_squares_axes<F: PrimeField + TensorType + PartialOrd + std::hash:
 pub(crate) fn expand<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     shape: &[usize],
 ) -> Result<ValTensor<F>, CircuitError> {
-    let mut assigned_input = region.assign(&config.custom_gates.inputs[0], &values[0])?;
+    let mut assigned_input = region.assign(&config.custom_gates.inputs[0], values[0])?;
     assigned_input.expand(shape)?;
     region.increment(assigned_input.len());
     Ok(assigned_input)
@@ -3038,7 +2995,7 @@ pub(crate) fn expand<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// # Arguments
 /// * `config` - The circuit configuration
 /// * `region` - The region context
-/// * `values` - Two tensors to compare [a, b]
+/// * `values` - Two tensors to compare [a, &b]
 ///
 /// # Returns
 /// * A boolean tensor with 1s where a > b and 0s elsewhere
@@ -3088,14 +3045,14 @@ pub(crate) fn expand<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///  Some(&[1, 2, 3, 4, 5, 6]),
 /// &[2, 3],
 /// ).unwrap());
-/// let result = greater::<Fp>(&dummy_config, &mut dummy_region, &[a,b]).unwrap();
+/// let result = greater::<Fp>(&dummy_config, &mut dummy_region, &[&a, &b]).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[0, 1, 1, 0, 0, 0]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 pub fn greater<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 2],
+    values: &[&ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, CircuitError> {
     let (mut lhs, mut rhs) = (values[0].clone(), values[1].clone());
 
@@ -3104,9 +3061,9 @@ pub fn greater<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     lhs.expand(&broadcasted_shape)?;
     rhs.expand(&broadcasted_shape)?;
 
-    let diff = pairwise(config, region, &[lhs, rhs], BaseOp::Sub)?;
-    let sign = sign(config, region, &[diff])?;
-    let eq = equals(config, region, &[sign, create_unit_tensor(1)])?;
+    let diff = pairwise(config, region, &[&lhs, &rhs], BaseOp::Sub)?;
+    let sign = sign(config, region, &[&diff], true)?;
+    let eq = equals(config, region, &[&sign, &create_unit_tensor(1)])?;
     Ok(eq)
 }
 
@@ -3137,26 +3094,21 @@ pub fn greater<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///  Some(&[1, 2, 3, 4, 5, 4]),
 /// &[2, 3],
 /// ).unwrap());
-/// let result = greater_equal::<Fp>(&dummy_config, &mut dummy_region, &[a,b]).unwrap();
+/// let result = greater_equal::<Fp>(&dummy_config, &mut dummy_region, &[&a, &b]).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 1, 1, 1, 0, 0]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 pub fn greater_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 2],
+    values: &[&ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, CircuitError> {
-    let (lhs, rhs) = (values[0].clone(), values[1].clone());
+    let (lhs, rhs) = (values[0], values[1]);
 
     // add 1 to lhs
-    let lhs_plus_one = pairwise(
-        config,
-        region,
-        &[lhs.clone(), create_unit_tensor(1)],
-        BaseOp::Add,
-    )?;
+    let lhs_plus_one = pairwise(config, region, &[lhs, &create_unit_tensor(1)], BaseOp::Add)?;
 
-    greater(config, region, &[lhs_plus_one, rhs])
+    greater(config, region, &[&lhs_plus_one, rhs])
 }
 
 /// Elementwise "less than" comparison between two tensors, returning a boolean tensor.
@@ -3167,7 +3119,7 @@ pub fn greater_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// # Arguments
 /// * `config` - The circuit configuration
 /// * `region` - The region context
-/// * `values` - Two tensors to compare [a, b]
+/// * `values` - Two tensors to compare [a, &b]
 ///
 /// # Returns
 /// * A boolean tensor with 1s where a < b and 0s elsewhere
@@ -3216,7 +3168,7 @@ pub fn greater_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// Some(&[1, 2, 3, 4, 5, 6]),
 /// &[2, 3],
 /// ).unwrap());
-/// let result = less::<Fp>(&dummy_config, &mut dummy_region, &[a,b]).unwrap();
+/// let result = less::<Fp>(&dummy_config, &mut dummy_region, &[&a, &b]).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[0, 1, 0, 0, 0, 1]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
@@ -3224,10 +3176,10 @@ pub fn greater_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub fn less<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 2],
+    values: &[&ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, CircuitError> {
     // just flip the order and use greater
-    greater(config, region, &[values[1].clone(), values[0].clone()])
+    greater(config, region, &[values[1], values[0]])
 }
 
 /// Less equals than operation.
@@ -3257,7 +3209,7 @@ pub fn less<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// Some(&[1, 2, 3, 4, 5, 6]),
 /// &[2, 3],
 /// ).unwrap());
-/// let result = less_equal::<Fp>(&dummy_config, &mut dummy_region, &[a,b]).unwrap();
+/// let result = less_equal::<Fp>(&dummy_config, &mut dummy_region, &[&a, &b]).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 1, 0, 1, 1, 1]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
@@ -3265,10 +3217,10 @@ pub fn less<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub fn less_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 2],
+    values: &[&ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, CircuitError> {
     // just flip the order and use greater
-    greater_equal(config, region, &[values[1].clone(), values[0].clone()])
+    greater_equal(config, region, &[values[1], values[0]])
 }
 
 /// Elementwise applies logical AND to two boolean tensors.
@@ -3326,19 +3278,19 @@ pub fn less_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// Some(&[1, 0, 1, 0, 1, 0]),
 /// &[2, 3],
 /// ).unwrap());
-/// let result = and::<Fp>(&dummy_config, &mut dummy_region, &[a,b]).unwrap();
+/// let result = and::<Fp>(&dummy_config, &mut dummy_region, &[&a, &b]).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 0, 1, 0, 1, 0]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 pub fn and<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 2],
+    values: &[&ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, CircuitError> {
-    let a = boolean_identity(config, region, &[values[0].clone()], true)?;
-    let b = boolean_identity(config, region, &[values[1].clone()], true)?;
+    let a = boolean_identity(config, region, &[values[0]], true)?;
+    let b = boolean_identity(config, region, &[values[1]], true)?;
 
-    let res = pairwise(config, region, &[a, b], BaseOp::Mult)?;
+    let res = pairwise(config, region, &[&a, &b], BaseOp::Mult)?;
 
     Ok(res)
 }
@@ -3395,21 +3347,21 @@ pub fn and<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///  Some(&[1, 0, 1, 0, 1, 0]),
 /// &[2, 3],
 /// ).unwrap());
-/// let result = or::<Fp>(&dummy_config, &mut dummy_region, &[a,b]).unwrap();
+/// let result = or::<Fp>(&dummy_config, &mut dummy_region, &[&a, &b]).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 1, 1, 1, 1, 0]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 pub fn or<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 2],
+    values: &[&ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, CircuitError> {
-    let a = values[0].clone();
-    let b = values[1].clone();
+    let a = values[0];
+    let b = values[1];
 
     let b = boolean_identity(config, region, &[b], true)?;
 
-    let iff_values = &[a.clone(), a, b];
+    let iff_values = &[a, a, &b];
 
     let res = iff(config, region, iff_values)?;
 
@@ -3475,17 +3427,17 @@ pub fn or<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// Some(&[1, 0, 1, 0, 1, 0]),
 /// &[2, 3],
 /// ).unwrap());
-/// let result = equals::<Fp>(&dummy_config, &mut dummy_region, &[a,b]).unwrap();
+/// let result = equals::<Fp>(&dummy_config, &mut dummy_region, &[&a, &b]).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 0, 1, 0, 1, 1]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 pub fn equals<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 2],
+    values: &[&ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, CircuitError> {
     let diff = pairwise(config, region, values, BaseOp::Sub)?;
-    equals_zero(config, region, &[diff])
+    equals_zero(config, region, &[&diff])
 }
 
 /// Checks if each element in a tensor equals zero, returning a boolean tensor.
@@ -3537,40 +3489,30 @@ pub fn equals<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub(crate) fn equals_zero<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, CircuitError> {
-    let values = values[0].clone();
-
-    // Get multiplicative inverse of each value (special handling for zero)
-    let values_inverse = values.inverse()?;
+    let values = values[0];
 
     // Multiply each value by its inverse - this equals 1 for non-zero values
-    let product_values_and_invert = pairwise(
-        config,
-        region,
-        &[values.clone(), values_inverse],
-        BaseOp::Mult,
-    )?;
-
-    // Create constant tensor of 1s
-    let ones = create_unit_tensor(1);
+    let product_values_and_invert =
+        pairwise(config, region, &[values, &values.inverse()?], BaseOp::Mult)?;
 
     // Subtract from 1: result is 0 for non-zero inputs, 1 for zero inputs
     let output = pairwise(
         config,
         region,
-        &[ones, product_values_and_invert],
+        &[&create_unit_tensor(1), &product_values_and_invert],
         BaseOp::Sub,
     )?;
 
     // Verify correctness: output * input must equal 0
     // (If input is 0, output is 1, so product is 0)
     // (If input is non-zero, output is 0, so product is 0)
-    let prod_check = pairwise(config, region, &[values, output.clone()], BaseOp::Mult)?;
+    let prod_check = pairwise(config, region, &[values, &output], BaseOp::Mult)?;
 
     // Enforce the product check
     let zero_tensor = create_zero_tensor(prod_check.len());
-    enforce_equality(config, region, &[prod_check, zero_tensor])?;
+    enforce_equality(config, region, &[&prod_check, &zero_tensor])?;
 
     Ok(output)
 }
@@ -3636,7 +3578,7 @@ pub(crate) fn equals_zero<F: PrimeField + TensorType + PartialOrd + std::hash::H
 /// Some(&[1, 0, 1, 0, 1, 0]),
 /// &[2, 3],
 /// ).unwrap());
-/// let result = xor::<Fp>(&dummy_config, &mut dummy_region, &[a,b]).unwrap();
+/// let result = xor::<Fp>(&dummy_config, &mut dummy_region, &[&a, &b]).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[0, 1, 0, 1, 0, 0]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
@@ -3644,22 +3586,22 @@ pub(crate) fn equals_zero<F: PrimeField + TensorType + PartialOrd + std::hash::H
 pub fn xor<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 2],
+    values: &[&ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, CircuitError> {
-    let lhs = values[0].clone();
-    let rhs = values[1].clone();
+    let lhs = values[0];
+    let rhs = values[1];
 
-    let lhs_not = not(config, region, &[lhs.clone()])?;
-    let rhs_not = not(config, region, &[rhs.clone()])?;
+    let lhs_not = not(config, region, &[lhs])?;
+    let rhs_not = not(config, region, &[rhs])?;
 
-    let lhs_and_rhs_not = and(config, region, &[lhs, rhs_not.clone()])?;
-    let lhs_not_and_rhs = and(config, region, &[rhs, lhs_not])?;
+    let lhs_and_rhs_not = and(config, region, &[lhs, &rhs_not])?;
+    let lhs_not_and_rhs = and(config, region, &[rhs, &lhs_not])?;
 
     // we can safely use add and not OR here because we know that lhs_and_rhs_not and lhs_not_and_rhs are =1 at different indices
     let res: ValTensor<F> = pairwise(
         config,
         region,
-        &[lhs_and_rhs_not, lhs_not_and_rhs],
+        &[&lhs_and_rhs_not, &lhs_not_and_rhs],
         BaseOp::Add,
     )?;
 
@@ -3718,21 +3660,21 @@ pub fn xor<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///    Some(&[1, 1, 1, 1, 1, 0]),
 ///   &[2, 3],
 /// ).unwrap());
-/// let result = not::<Fp>(&dummy_config, &mut dummy_region, &[x]).unwrap();
+/// let result = not::<Fp>(&dummy_config, &mut dummy_region, &[&x]).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[0, 0, 0, 0, 0, 1]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 pub fn not<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, CircuitError> {
-    let mask = values[0].clone();
+    let mask = values[0];
 
     let unit = create_unit_tensor(1);
     let nil = create_zero_tensor(1);
 
-    let res = iff(config, region, &[mask, nil, unit])?;
+    let res = iff(config, region, &[mask, &nil, &unit])?;
 
     Ok(res)
 }
@@ -3809,29 +3751,29 @@ pub fn not<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///   Some(&[7, 8, 9, 10, 11, 12]),
 /// &[2, 3],
 /// ).unwrap());
-/// let result = iff::<Fp>(&dummy_config, &mut dummy_region, &[mask, a, b]).unwrap();
+/// let result = iff::<Fp>(&dummy_config, &mut dummy_region, &[&mask, &a, &b]).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 8, 3, 10, 5, 12]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 pub fn iff<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 3],
+    values: &[&ValTensor<F>; 3],
 ) -> Result<ValTensor<F>, CircuitError> {
     // if mask > 0 then output a else output b
     let (mask, a, b) = (&values[0], &values[1], &values[2]);
 
     let unit = create_unit_tensor(1);
     // make sure mask is boolean
-    let assigned_mask = boolean_identity(config, region, &[mask.clone()], true)?;
+    let assigned_mask = boolean_identity(config, region, &[mask], true)?;
 
-    let one_minus_mask = pairwise(config, region, &[unit, assigned_mask.clone()], BaseOp::Sub)?;
+    let one_minus_mask = pairwise(config, region, &[&unit, &assigned_mask], BaseOp::Sub)?;
 
-    let masked_a = pairwise(config, region, &[a.clone(), assigned_mask], BaseOp::Mult)?;
+    let masked_a = pairwise(config, region, &[a, &assigned_mask], BaseOp::Mult)?;
 
-    let masked_b = pairwise(config, region, &[b.clone(), one_minus_mask], BaseOp::Mult)?;
+    let masked_b = pairwise(config, region, &[b, &one_minus_mask], BaseOp::Mult)?;
 
-    let res = pairwise(config, region, &[masked_a, masked_b], BaseOp::Add)?;
+    let res = pairwise(config, region, &[&masked_a, &masked_b], BaseOp::Add)?;
 
     Ok(res)
 }
@@ -3859,17 +3801,17 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap());
-/// let result = neg::<Fp>(&dummy_config, &mut dummy_region, &[x]).unwrap();
+/// let result = neg::<Fp>(&dummy_config, &mut dummy_region, &[&x]).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[-2, -1, -2, -1, -1, -1]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 pub fn neg<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, CircuitError> {
     let nil = create_zero_tensor(1);
-    pairwise(config, region, &[nil, values[0].clone()], BaseOp::Sub)
+    pairwise(config, region, &[&nil, values[0]], BaseOp::Sub)
 }
 
 /// Applies sum pooling over ND tensor of shape B x C x D1 x D2 x ... x DN.
@@ -3893,19 +3835,19 @@ pub fn neg<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
 ///     &[1, 1, 3, 3],
 /// ).unwrap());
-/// let pooled = sumpool::<Fp>(&dummy_config, &mut dummy_region, &[x.clone()], &vec![(0, 0); 2], &vec![1;2], &vec![2, 2], false, DataFormat::default()).unwrap();
+/// let pooled = sumpool::<Fp>(&dummy_config, &mut dummy_region, &[&x], &vec![(0, 0); 2], &vec![1;2], &vec![2, 2], false, DataFormat::default()).unwrap();
 /// let expected: Tensor<IntegerRep> = Tensor::<IntegerRep>::new(Some(&[11, 8, 8, 10]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(pooled.int_evals().unwrap(), expected);
 ///
 /// // This time with normalization
-/// let pooled = sumpool::<Fp>(&dummy_config, &mut dummy_region, &[x], &vec![(0, 0); 2], &vec![1;2],  &vec![2, 2], true, DataFormat::default()).unwrap();
+/// let pooled = sumpool::<Fp>(&dummy_config, &mut dummy_region, &[&x], &vec![(0, 0); 2], &vec![1;2],  &vec![2, 2], true, DataFormat::default()).unwrap();
 /// let expected: Tensor<IntegerRep> = Tensor::<IntegerRep>::new(Some(&[3, 2, 2, 3]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(pooled.int_evals().unwrap(), expected);
 /// ```
 pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>],
+    values: &[&ValTensor<F>],
     padding: &[(usize, usize)],
     stride: &[usize],
     kernel_shape: &[usize],
@@ -3950,7 +3892,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
             let output = conv(
                 config,
                 region,
-                &[input, kernel.clone()],
+                &[&input, &kernel],
                 padding,
                 stride,
                 1,
@@ -3965,11 +3907,11 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let shape = &res[0].dims()[2..];
     let mut last_elem = res[1..]
         .iter()
-        .try_fold(res[0].clone(), |acc, elem| acc.concat(elem.clone()))?;
+        .try_fold(res[0].clone(), |acc, elem| acc.concat(elem))?;
     last_elem.reshape(&[&[batch_size, image_channels], shape].concat())?;
 
     if normalized {
-        last_elem = div(config, region, &[last_elem], F::from(kernel_len as u64))?;
+        last_elem = div(config, region, &[&last_elem], F::from(kernel_len as u64))?;
     }
 
     data_format.from_canonical(&mut last_elem)?;
@@ -3998,7 +3940,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
 ///     &[1, 1, 3, 3],
 /// ).unwrap());
-/// let pooled = max_pool::<Fp>(&dummy_config, &mut dummy_region, &[x], &vec![(0, 0); 2], &vec![1;2], &vec![2;2], DataFormat::default()).unwrap();
+/// let pooled = max_pool::<Fp>(&dummy_config, &mut dummy_region, &[&x], &vec![(0, 0); 2], &vec![1;2], &vec![2;2], DataFormat::default()).unwrap();
 /// let expected: Tensor<IntegerRep> = Tensor::<IntegerRep>::new(Some(&[5, 4, 4, 6]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(pooled.int_evals().unwrap(), expected);
 ///
@@ -4006,12 +3948,14 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     padding: &[(usize, usize)],
     stride: &[usize],
     pool_dims: &[usize],
     data_format: DataFormat,
 ) -> Result<ValTensor<F>, CircuitError> {
+    let image_dims = values[0].dims();
+
     let mut image = values[0].clone();
     data_format.to_canonical(&mut image)?;
 
@@ -4021,12 +3965,9 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         image.reshape(&dims)?;
     }
 
-    let image_dims = image.dims();
-
     let (batch, input_channels) = (image_dims[0], image_dims[1]);
 
-    let mut padded_image = image.clone();
-    padded_image.pad(padding.to_vec(), 2)?;
+    image.pad(padding.to_vec(), 2)?;
 
     let slides = image_dims[2..]
         .iter()
@@ -4070,8 +4011,8 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
                 }),
         );
 
-        let slice = padded_image.get_slice(&slice)?;
-        let max_w = max(config, region, &[slice])?;
+        let slice = image.get_slice(&slice)?;
+        let max_w = max(config, region, &[&slice])?;
 
         Ok::<_, CircuitError>(max_w.get_inner_tensor()?[0].clone())
     };
@@ -4105,7 +4046,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[2, 4, 0, 1]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, c], &vec![(1, 1); 2], &vec![0;2], &vec![2;2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[&x, &c], &vec![(1, 1); 2], &vec![0;2], &vec![2;2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[0, 32, 0, 0, 6, 0, 0, 4, 0, 0, 0, 0]), &[1, 2, 2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -4118,7 +4059,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[3, 1, 1, 5]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 2], &vec![0;2], &vec![1;2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], &vec![(0, 0); 2], &vec![0;2], &vec![1;2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[6, 14, 4, 2, 17, 21, 0, 1, 5]), &[1, 1, 3, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -4131,7 +4072,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[3, 1, 1, 5]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(1, 1); 2], &vec![0;2], &vec![1;2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], &vec![(1, 1); 2], &vec![0;2], &vec![1;2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[17]), &[1, 1, 1, 1]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -4144,7 +4085,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[3, 1, 1, 5]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(1, 1); 2], &vec![0;2], &vec![2; 2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], &vec![(1, 1); 2], &vec![0;2], &vec![2; 2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[10, 4, 0, 3]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -4157,7 +4098,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[3, 1, 1, 5]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 2], &vec![0;2], &vec![2; 2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], &vec![(0, 0); 2], &vec![0;2], &vec![2; 2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[6, 2, 12, 4, 2, 10, 4, 20, 0, 0, 3, 1, 0, 0, 1, 5]), &[1, 1, 4, 4]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -4170,7 +4111,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[3, 2]),
 ///     &[1, 1, 2, 1],
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(1, 1); 2], &vec![0;2], &vec![2; 2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], &vec![(1, 1); 2], &vec![0;2], &vec![2; 2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[0, 0]), &[1, 1, 2, 1]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -4183,7 +4124,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[3, 2]),
 ///     &[1, 1, 2, 1],
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 2], &vec![0;2], &vec![2; 2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], &vec![(0, 0); 2], &vec![0;2], &vec![2; 2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[6, 0, 12, 4, 0, 8, 0, 0, 3, 0, 0, 2]), &[1, 1, 4, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -4193,7 +4134,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[2, 4, 0, 1]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, c], &vec![(1, 1); 2], &vec![0;2], &vec![2;2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[&x, &c], &vec![(1, 1); 2], &vec![0;2], &vec![2;2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[0, 32, 0, 0, 6, 0, 0, 4, 0, 0, 0, 0]), &[1, 2, 2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -4210,7 +4151,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[1]),
 ///     &[1],
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(1, 1); 2], &vec![0;2], &vec![1;2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k, &b], &vec![(1, 1); 2], &vec![0;2], &vec![1;2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[55, 58, 66, 69]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -4223,7 +4164,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[1, 1, 5, 3]),
 ///     &[2, 2, 1, 1],  // HWIO format
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(1, 1); 2], &vec![0;2], &vec![1;2], 1, DataFormat::NHWC, KernelFormat::HWIO).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], &vec![(1, 1); 2], &vec![0;2], &vec![1;2], 1, DataFormat::NHWC, KernelFormat::HWIO).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[27]), &[1, 1, 1, 1]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -4236,7 +4177,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[1, 2]),
 ///     &[1, 1, 2],  // OIH format
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0)], &vec![0], &vec![1], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], &vec![(0, 0)], &vec![0], &vec![1], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 4, 7, 6]), &[1, 1, 4]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -4249,7 +4190,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[1, 1]),
 ///     &[1, 1, 1, 1, 2],  // OIDHW format
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 3], &vec![0; 3], &vec![1; 3], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], &vec![(0, 0); 3], &vec![0; 3], &vec![1; 3], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 1, 2, 2, 3, 3, 4, 4]), &[1, 1, 2, 2, 2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -4262,7 +4203,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[1, 2, 3, 4, 5, 6, 7, 8]),
 ///     &[1, 2, 2, 2],  // OHWI format [out_channels, height, width, in_channels]
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 2], &vec![0;2], &vec![1;2], 1, DataFormat::NHWC, KernelFormat::OHWI).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], &vec![(0, 0); 2], &vec![0;2], &vec![1;2], 1, DataFormat::NHWC, KernelFormat::OHWI).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[10, 24, 4, 41, 78, 27, 27, 66, 39]), &[1, 3, 3, 1]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -4275,7 +4216,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[1, 2, 3, 4]),
 ///     &[1, 1, 2, 2],  // OIHW format [out_channels, in_channels, height, width]
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 2], &vec![0;2], &vec![1;2], 1, DataFormat::CHW, KernelFormat::OIHW).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], &vec![(0, 0); 2], &vec![0;2], &vec![1;2], 1, DataFormat::CHW, KernelFormat::OIHW).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[6, 6, 6]), &[1, 1, 1, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -4288,7 +4229,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[1, 2, 1, 2]),
 ///     &[2, 2, 1, 1],  // HWIO format [height, width, in_channels, out_channels]
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 2], &vec![0;2], &vec![1;2], 1, DataFormat::HWC, KernelFormat::HWIO).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], &vec![(0, 0); 2], &vec![0;2], &vec![1;2], 1, DataFormat::HWC, KernelFormat::HWIO).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[6, 6, 6]), &[1, 1, 3, 1]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
@@ -4298,7 +4239,7 @@ pub fn deconv<
 >(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    inputs: &[ValTensor<F>],
+    inputs: &[&ValTensor<F>],
     padding: &[(usize, usize)],
     output_padding: &[usize],
     stride: &[usize],
@@ -4312,7 +4253,7 @@ pub fn deconv<
     data_format.to_canonical(&mut working_image)?;
     kernel_format.to_canonical(&mut working_kernel)?;
 
-    if stride.iter().any(|&s| s == 0) {
+    if stride.contains(&0) {
         return Err(TensorError::DimMismatch(
             "non-positive stride is not supported for deconv".to_string(),
         )
@@ -4324,7 +4265,7 @@ pub fn deconv<
 
     // Expand image by inserting zeros according to stride
     for (i, s) in stride.iter().enumerate() {
-        expanded_image.intercalate_values(null_val.clone(), *s, 2 + i)?;
+        expanded_image.intercalate_values(&null_val, *s, 2 + i)?;
     }
 
     // Pad to kernel size for each spatial dimension
@@ -4379,15 +4320,12 @@ pub fn deconv<
         deconv_kernel.reshape(&dims)?;
     }
 
+    let deconv_kernel: ValTensor<F> = deconv_kernel.into();
     // Prepare inputs for convolution
     let conv_input = if has_bias {
-        vec![
-            sliced_expanded_image,
-            deconv_kernel.clone().into(),
-            inputs[2].clone(),
-        ]
+        vec![&sliced_expanded_image, &deconv_kernel, &inputs[2]]
     } else {
-        vec![sliced_expanded_image, deconv_kernel.clone().into()]
+        vec![&sliced_expanded_image, &deconv_kernel]
     };
 
     let conv_dim = working_kernel.dims()[2..].len();
@@ -4437,7 +4375,7 @@ pub fn deconv<
 ///     Some(&[0]),
 ///     &[1],
 /// ).unwrap());
-/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(0, 0); 2], &vec![1;2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
+/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k, &b], &vec![(0, 0); 2], &vec![1;2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[31, 16, 8, 26]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -4450,7 +4388,7 @@ pub fn deconv<
 ///     Some(&[1, 1, 5, 1]),
 ///     &[2, 2, 1, 1],  // HWIO format
 /// ).unwrap());
-/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 2], &vec![1;2], 1, DataFormat::NHWC, KernelFormat::HWIO).unwrap();
+/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], &vec![(0, 0); 2], &vec![1;2], 1, DataFormat::NHWC, KernelFormat::HWIO).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[11, 24, 20, 14]), &[1, 2, 2, 1]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -4467,7 +4405,7 @@ pub fn deconv<
 ///     Some(&[1, 1]),
 ///     &[2],
 /// ).unwrap());
-/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(0, 0); 2], &vec![1;2], 1, DataFormat::NHWC, KernelFormat::OHWI).unwrap();
+/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k, &b], &vec![(0, 0); 2], &vec![1;2], 1, DataFormat::NHWC, KernelFormat::OHWI).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[64, 66, 46, 58]), &[1, 2, 2, 1]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -4480,7 +4418,7 @@ pub fn deconv<
 ///     Some(&[1, 2, 3]),
 ///     &[1, 1, 3],  // OIHW format
 /// ).unwrap());
-/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0)], &vec![1], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
+/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], &vec![(0, 0)], &vec![1], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[14, 20, 26]), &[1, 1, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -4493,7 +4431,7 @@ pub fn deconv<
 ///     Some(&[1, 1]),
 ///     &[1, 1, 1, 1, 2],  // OIDHW format
 /// ).unwrap());
-/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 3], &vec![1; 3], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
+/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], &vec![(0, 0); 3], &vec![1; 3], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[3, 7, 11, 15]), &[1, 1, 2, 2, 1]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
@@ -4503,7 +4441,7 @@ pub fn conv<
 >(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>],
+    values: &[&ValTensor<F>],
     padding: &[(usize, usize)],
     stride: &[usize],
     num_groups: usize,
@@ -4511,12 +4449,13 @@ pub fn conv<
     kernel_format: KernelFormat,
 ) -> Result<ValTensor<F>, CircuitError> {
     let has_bias = values.len() == 3;
+
     let (mut working_image, mut working_kernel) = (values[0].clone(), values[1].clone());
 
     data_format.to_canonical(&mut working_image)?;
     kernel_format.to_canonical(&mut working_kernel)?;
 
-    if stride.iter().any(|&s| s == 0) {
+    if stride.contains(&0) {
         return Err(TensorError::DimMismatch(
             "non-positive stride is not supported for conv".to_string(),
         )
@@ -4544,12 +4483,10 @@ pub fn conv<
         working_image.reshape(&dim)?;
     }
 
-    let image_dims = working_image.dims();
-    let kernel_dims = working_kernel.dims();
-
+    let image_dims = working_image.dims().to_vec();
+    let kernel_dims = working_kernel.dims().to_vec();
     // Apply padding
-    let mut padded_image = working_image.clone();
-    padded_image.pad(padding.to_vec(), 2)?;
+    working_image.pad(padding.to_vec(), 2)?;
 
     // Extract dimensions
     let batch_size = image_dims[0];
@@ -4623,7 +4560,7 @@ pub fn conv<
             slices.push(coord..(coord + kernel_dim));
         }
 
-        let mut local_image = padded_image.get_slice(&slices)?;
+        let mut local_image = working_image.get_slice(&slices)?;
         local_image.flatten();
 
         let start_kernel_index = group * output_channels_per_group + i;
@@ -4631,7 +4568,7 @@ pub fn conv<
         let mut local_kernel = working_kernel.get_slice(&[start_kernel_index..end_kernel_index])?;
         local_kernel.flatten();
 
-        let mut res = einsum(config, region, &[local_image, local_kernel], "i,i->")?;
+        let mut res = dot(config, region, &[&local_image, &local_kernel])?;
 
         if has_bias {
             let bias_index = if values[2].len() > 1 {
@@ -4641,7 +4578,7 @@ pub fn conv<
             };
 
             let bias = values[2].get_single_elem(bias_index)?;
-            res = pairwise(config, region, &[res, bias], BaseOp::Add)?;
+            res = pairwise(config, region, &[&res, &bias], BaseOp::Add)?;
         }
         region.flush()?;
 
@@ -4667,13 +4604,13 @@ pub fn conv<
 pub(crate) fn pow<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     exponent: u32,
 ) -> Result<ValTensor<F>, CircuitError> {
     let mut t = values[0].clone();
 
     for _ in 1..exponent {
-        t = pairwise(config, region, &[t, values[0].clone()], BaseOp::Mult)?;
+        t = pairwise(config, region, &[&t, values[0]], BaseOp::Mult)?;
     }
 
     Ok(t)
@@ -4683,18 +4620,18 @@ pub(crate) fn pow<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub(crate) fn rescale<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>],
+    values: &[&ValTensor<F>],
     scales: &[(usize, u128)],
 ) -> Result<Vec<ValTensor<F>>, CircuitError> {
     let mut rescaled_inputs = vec![];
     for (i, ri) in values.iter().enumerate() {
         if scales[i].1 == 1 {
-            rescaled_inputs.push(ri.clone());
+            rescaled_inputs.push(ri.clone().clone());
             continue;
         }
 
         let multiplier = create_constant_tensor(F::from(scales[i].1 as u64), 1);
-        let scaled_input = pairwise(config, region, &[ri.clone(), multiplier], BaseOp::Mult)?;
+        let scaled_input = pairwise(config, region, &[ri, &multiplier], BaseOp::Mult)?;
         rescaled_inputs.push(scaled_input);
     }
 
@@ -4703,7 +4640,7 @@ pub(crate) fn rescale<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
 
 /// Dummy (no constraints) reshape layout
 pub(crate) fn reshape<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     new_dims: &[usize],
 ) -> Result<ValTensor<F>, CircuitError> {
     let mut t = values[0].clone();
@@ -4713,7 +4650,7 @@ pub(crate) fn reshape<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
 
 /// Dummy (no constraints) move_axis layout
 pub(crate) fn move_axis<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     source: usize,
     destination: usize,
 ) -> Result<ValTensor<F>, CircuitError> {
@@ -4726,10 +4663,10 @@ pub(crate) fn move_axis<F: PrimeField + TensorType + PartialOrd + std::hash::Has
 pub(crate) fn resize<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     scales: &[usize],
 ) -> Result<ValTensor<F>, CircuitError> {
-    let mut output = region.assign(&config.custom_gates.output, &values[0])?;
+    let mut output = region.assign(&config.custom_gates.output, values[0])?;
     region.increment(output.len());
     output.resize(scales)?;
 
@@ -4740,7 +4677,7 @@ pub(crate) fn resize<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub(crate) fn slice<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     axis: &usize,
     start: &usize,
     end: &usize,
@@ -4750,7 +4687,7 @@ pub(crate) fn slice<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     let is_assigned = output.all_prev_assigned();
     if !is_assigned {
-        output = region.assign(&config.custom_gates.output, &values[0])?;
+        output = region.assign(&config.custom_gates.output, values[0])?;
         region.increment(output.len());
     }
 
@@ -4763,7 +4700,7 @@ pub(crate) fn slice<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub(crate) fn trilu<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     k: &i32,
     upper: &bool,
 ) -> Result<ValTensor<F>, CircuitError> {
@@ -4772,7 +4709,7 @@ pub(crate) fn trilu<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     let is_assigned = output.all_prev_assigned();
     if !is_assigned {
-        output = region.assign(&config.custom_gates.inputs[0], &values[0])?;
+        output = region.assign(&config.custom_gates.inputs[0], values[0])?;
     }
 
     let res = tensor::ops::trilu(output.get_inner_tensor()?, *k, *upper)?;
@@ -4785,7 +4722,7 @@ pub(crate) fn trilu<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
 /// Concat layout
 pub(crate) fn concat<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
-    values: &[ValTensor<F>],
+    values: &[&ValTensor<F>],
     axis: &usize,
 ) -> Result<ValTensor<F>, CircuitError> {
     let collected_inner: Result<Vec<&Tensor<_>>, _> =
@@ -4805,7 +4742,6 @@ pub(crate) fn concat<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// * `config` - The circuit configuration
 /// * `region` - The region context
 /// * `values` - Single tensor to constrain
-/// * `decomp` - Whether to decompose the values (enabling range checks)
 ///
 /// # Returns
 /// * The constrained tensor (possibly assigned to advice)
@@ -4839,25 +4775,13 @@ pub(crate) fn concat<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub(crate) fn identity<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
-    decomp: bool,
+    values: &[&ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, CircuitError> {
     let mut output = values[0].clone();
     if !output.all_prev_assigned() {
         // checks they are in range
-        if decomp {
-            output = decompose(
-                config,
-                region,
-                &[output.clone()],
-                &region.base(),
-                &region.legs(),
-            )?
-            .1;
-        } else {
-            output = region.assign(&config.custom_gates.output, &values[0])?;
-            region.increment(output.len());
-        }
+        output = region.assign(&config.custom_gates.output, values[0])?;
+        region.increment(output.len());
     }
 
     Ok(output)
@@ -4901,12 +4825,12 @@ pub(crate) fn identity<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
 pub(crate) fn boolean_identity<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     assign: bool,
 ) -> Result<ValTensor<F>, CircuitError> {
     let output = if assign || !values[0].get_const_indices().is_empty() {
         // get zero constants indices
-        let output = region.assign(&config.custom_gates.output, &values[0])?;
+        let output = region.assign(&config.custom_gates.output, values[0])?;
         region.increment(output.len());
         output
     } else {
@@ -4922,12 +4846,12 @@ pub(crate) fn boolean_identity<F: PrimeField + TensorType + PartialOrd + std::ha
 pub(crate) fn downsample<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     axis: &usize,
     stride: &isize,
     modulo: &usize,
 ) -> Result<ValTensor<F>, CircuitError> {
-    let input = region.assign(&config.custom_gates.inputs[0], &values[0])?;
+    let input = region.assign(&config.custom_gates.inputs[0], values[0])?;
     let processed_output =
         tensor::ops::downsample(input.get_inner_tensor()?, *axis, *stride, *modulo)?;
     let output = region.assign(&config.custom_gates.output, &processed_output.into())?;
@@ -4944,7 +4868,7 @@ pub(crate) fn downsample<F: PrimeField + TensorType + PartialOrd + std::hash::Ha
 /// # Arguments
 /// * `config` - The circuit configuration
 /// * `region` - The region context
-/// * `values` - Two tensors that must be equal: [a, b]
+/// * `values` - Two tensors that must be equal: [a, &b]
 ///
 /// # Returns
 /// * The second tensor (after assignment)
@@ -4975,7 +4899,7 @@ pub(crate) fn downsample<F: PrimeField + TensorType + PartialOrd + std::hash::Ha
 pub(crate) fn enforce_equality<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 2],
+    values: &[&ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, CircuitError> {
     // assert of same len
     if values[0].len() != values[1].len() {
@@ -4983,8 +4907,8 @@ pub(crate) fn enforce_equality<F: PrimeField + TensorType + PartialOrd + std::ha
     }
 
     // assigns the instance to the advice.
-    let input = region.assign(&config.custom_gates.inputs[1], &values[0])?;
-    let output = region.assign(&config.custom_gates.output, &values[1])?;
+    let input = region.assign(&config.custom_gates.inputs[1], values[0])?;
+    let output = region.assign(&config.custom_gates.output, values[1])?;
 
     if !region.is_dummy() {
         region.constrain_equal(&input, &output)?;
@@ -5040,7 +4964,7 @@ pub(crate) fn enforce_equality<F: PrimeField + TensorType + PartialOrd + std::ha
 pub(crate) fn range_check<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     range: &crate::circuit::table::Range,
 ) -> Result<ValTensor<F>, CircuitError> {
     region.add_used_range_check(*range)?;
@@ -5048,9 +4972,9 @@ pub(crate) fn range_check<F: PrimeField + TensorType + PartialOrd + std::hash::H
     // time the entire operation
     let timer = instant::Instant::now();
 
-    let x = values[0].clone();
+    let x = values[0];
 
-    let w = region.assign(&config.range_checks.input, &x)?;
+    let w = region.assign(&config.range_checks.input, x)?;
 
     let assigned_len = x.len();
 
@@ -5159,46 +5083,35 @@ pub(crate) fn range_check<F: PrimeField + TensorType + PartialOrd + std::hash::H
 pub(crate) fn nonlinearity<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     nl: &LookupOp,
 ) -> Result<ValTensor<F>, CircuitError> {
-    region.add_used_lookup(nl.clone(), values)?;
+    region.add_used_lookup(nl, values[0])?;
 
     // time the entire operation
     let timer = instant::Instant::now();
 
-    let x = values[0].clone();
+    let x = values[0];
 
-    let removal_indices = values[0].get_const_indices();
-    let removal_indices: HashSet<usize> = HashSet::from_iter(removal_indices);
+    let w = region.assign(&config.static_lookups.input, x)?;
 
-    let w = region.assign_with_omissions(&config.static_lookups.input, &x, &removal_indices)?;
-
-    let output = w.get_inner_tensor()?.par_enum_map(|i, e| {
+    let output: Tensor<ValType<F>> = w.get_inner_tensor()?.par_enum_map(|_i, e| {
         Ok::<_, TensorError>(if let Some(f) = e.get_felt_eval() {
-            if !removal_indices.contains(&i) {
-                Value::known(nl.f(&[Tensor::from(vec![f].into_iter())])?.output[0]).into()
-            } else {
-                ValType::Constant(nl.f(&[Tensor::from(vec![f].into_iter())])?.output[0])
-            }
+            Value::known(nl.f(&[Tensor::from(vec![f].into_iter())])?.output[0]).into()
         } else {
             Value::<F>::unknown().into()
         })
     })?;
 
-    let assigned_len = x.len() - removal_indices.len();
-    let mut output = region.assign_with_omissions(
-        &config.static_lookups.output,
-        &output.into(),
-        &removal_indices,
-    )?;
+    let assigned_len = x.len();
+    let mut output = region.assign(&config.static_lookups.output, &output.into())?;
 
     let is_dummy = region.is_dummy();
 
     let table_index: ValTensor<F> = w
         .get_inner_tensor()?
-        .par_enum_map(|i, e| {
-            Ok::<_, CircuitError>(if let Some(f) = e.get_felt_eval() {
+        .par_enum_map(|_i, e| {
+            Ok::<ValType<F>, CircuitError>(if let Some(f) = e.get_felt_eval() {
                 let col_idx = if !is_dummy {
                     let table = config
                         .static_lookups
@@ -5209,18 +5122,14 @@ pub(crate) fn nonlinearity<F: PrimeField + TensorType + PartialOrd + std::hash::
                 } else {
                     F::ZERO
                 };
-                if !removal_indices.contains(&i) {
-                    Value::known(col_idx).into()
-                } else {
-                    ValType::Constant(col_idx)
-                }
+                Value::known(col_idx).into()
             } else {
                 Value::<F>::unknown().into()
             })
         })?
         .into();
 
-    region.assign_with_omissions(&config.static_lookups.index, &table_index, &removal_indices)?;
+    region.assign(&config.static_lookups.index, &table_index)?;
 
     if !is_dummy {
         (0..assigned_len)
@@ -5256,7 +5165,7 @@ pub(crate) fn nonlinearity<F: PrimeField + TensorType + PartialOrd + std::hash::
 pub(crate) fn argmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, CircuitError> {
     // this is safe because we later constrain it
     let argmax = values[0]
@@ -5275,17 +5184,13 @@ pub(crate) fn argmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         region.assign(&config.custom_gates.inputs[1], &argmax_val)?;
     region.increment(assigned_argmax.len());
 
-    let claimed_val = select(
-        config,
-        region,
-        &[values[0].clone(), assigned_argmax.clone()],
-    )?;
+    let claimed_val = select(config, region, &[values[0], &assigned_argmax])?;
 
     let (sorted_val, indices) =
         _sort_ascending(config, region, values, SortCollisionMode::LargestIndexFirst)?;
 
-    enforce_equality(config, region, &[claimed_val, sorted_val.last()?])?;
-    enforce_equality(config, region, &[assigned_argmax.clone(), indices.last()?])?;
+    enforce_equality(config, region, &[&claimed_val, &sorted_val.last()?])?;
+    enforce_equality(config, region, &[&assigned_argmax, &indices.last()?])?;
 
     Ok(assigned_argmax)
 }
@@ -5294,7 +5199,7 @@ pub(crate) fn argmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub(crate) fn argmin<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, CircuitError> {
     // this is safe because we later constrain it
     let argmin = values[0]
@@ -5314,19 +5219,15 @@ pub(crate) fn argmin<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     region.increment(assigned_argmin.len());
 
     // these will be assigned as constants
-    let claimed_val = select(
-        config,
-        region,
-        &[values[0].clone(), assigned_argmin.clone()],
-    )?;
+    let claimed_val = select(config, region, &[values[0], &assigned_argmin])?;
     let (min_val, indices) = _sort_ascending(
         config,
         region,
         values,
         SortCollisionMode::SmallestIndexFirst,
     )?;
-    enforce_equality(config, region, &[claimed_val, min_val.first()?])?;
-    enforce_equality(config, region, &[assigned_argmin.clone(), indices.first()?])?;
+    enforce_equality(config, region, &[&claimed_val, &min_val.first()?])?;
+    enforce_equality(config, region, &[&assigned_argmin, &indices.first()?])?;
 
     Ok(assigned_argmin)
 }
@@ -5335,7 +5236,7 @@ pub(crate) fn argmin<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// # Arguments
 /// * `config` - BaseConfig
 /// * `region` - RegionCtx
-/// * `values` - &[ValTensor<F>; 2]
+/// * `values` - &[&ValTensor<F>; 2]
 /// # Returns
 /// * ValTensor<F>
 /// # Example
@@ -5359,7 +5260,7 @@ pub(crate) fn argmin<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///  &[1, 1, 2, 2],
 /// ).unwrap());
 ///
-/// let result = max_comp::<Fp>(&dummy_config, &mut dummy_region, &[x, y]).unwrap();
+/// let result = max_comp::<Fp>(&dummy_config, &mut dummy_region, &[&x, &y]).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[5, 2, 3, 1]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
@@ -5367,28 +5268,23 @@ pub(crate) fn argmin<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub fn max_comp<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 2],
+    values: &[&ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, CircuitError> {
     let is_greater = greater(config, region, values)?;
-    let is_less = not(config, region, &[is_greater.clone()])?;
+    let is_less = not(config, region, &[&is_greater])?;
 
-    let max_val_p1 = pairwise(
-        config,
-        region,
-        &[values[0].clone(), is_greater],
-        BaseOp::Mult,
-    )?;
+    let max_val_p1 = pairwise(config, region, &[values[0], &is_greater], BaseOp::Mult)?;
 
-    let max_val_p2 = pairwise(config, region, &[values[1].clone(), is_less], BaseOp::Mult)?;
+    let max_val_p2 = pairwise(config, region, &[values[1], &is_less], BaseOp::Mult)?;
 
-    pairwise(config, region, &[max_val_p1, max_val_p2], BaseOp::Add)
+    pairwise(config, region, &[&max_val_p1, &max_val_p2], BaseOp::Add)
 }
 
 /// Min comp layout
 /// # Arguments
 /// * `config` - BaseConfig
 /// * `region` - RegionCtx
-/// * `values` - &[ValTensor<F>; 2]
+/// * `values` - &[&ValTensor<F>; 2]
 /// # Returns
 /// * ValTensor<F>
 /// # Example
@@ -5411,35 +5307,30 @@ pub fn max_comp<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///  Some(&[5, 1, 1, 1]),
 /// &[1, 1, 2, 2],
 /// ).unwrap());
-/// let result = min_comp::<Fp>(&dummy_config, &mut dummy_region, &[x, y]).unwrap();
+/// let result = min_comp::<Fp>(&dummy_config, &mut dummy_region, &[&x, &y]).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[5, 1, 1, 0]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 pub fn min_comp<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 2],
+    values: &[&ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, CircuitError> {
     let is_greater = greater(config, region, values)?;
-    let is_less = not(config, region, &[is_greater.clone()])?;
+    let is_less = not(config, region, &[&is_greater])?;
 
-    let min_val_p1 = pairwise(config, region, &[values[0].clone(), is_less], BaseOp::Mult)?;
+    let min_val_p1 = pairwise(config, region, &[values[0], &is_less], BaseOp::Mult)?;
 
-    let min_val_p2 = pairwise(
-        config,
-        region,
-        &[values[1].clone(), is_greater],
-        BaseOp::Mult,
-    )?;
+    let min_val_p2 = pairwise(config, region, &[values[1], &is_greater], BaseOp::Mult)?;
 
-    pairwise(config, region, &[min_val_p1, min_val_p2], BaseOp::Add)
+    pairwise(config, region, &[&min_val_p1, &min_val_p2], BaseOp::Add)
 }
 
 /// max layout
 pub(crate) fn max<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, CircuitError> {
     Ok(
         _sort_ascending(config, region, values, SortCollisionMode::Unsorted)?
@@ -5452,7 +5343,7 @@ pub(crate) fn max<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub(crate) fn min<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, CircuitError> {
     Ok(
         _sort_ascending(config, region, values, SortCollisionMode::Unsorted)?
@@ -5465,7 +5356,7 @@ pub(crate) fn min<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// # Arguments
 /// * `config` - BaseConfig
 /// * `region` - RegionCtx
-/// * `values` - &[ValTensor<F>; 1]
+/// * `values` - &[&ValTensor<F>; 1]
 /// * `scale` - utils::F32
 /// * `legs` - usize
 /// # Returns
@@ -5486,19 +5377,19 @@ pub(crate) fn min<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// Some(&[3, -2, -3, 1]),
 /// &[1, 1, 2, 2],
 /// ).unwrap());
-/// let result = floor::<Fp>(&dummy_config, &mut dummy_region, &[x], 2.0.into(), 2).unwrap();
+/// let result = floor::<Fp>(&dummy_config, &mut dummy_region, &[&x], 2.0.into(), 2).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[2, -2, -4, 0]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 pub fn floor<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     scale: utils::F32,
     legs: usize,
 ) -> Result<ValTensor<F>, CircuitError> {
     // decompose with base scale and then set the last element to zero
-    let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs)?.0;
+    let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs, true)?.0;
     // set the last element to zero and then recompose, we don't actually need to assign here
     // as this will automatically be assigned in the recompose function and uses the constant caching of RegionCtx
     let zero = ValType::Constant(F::ZERO);
@@ -5527,32 +5418,28 @@ pub fn floor<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
             sliced_input.flatten();
             let last_elem = sliced_input.last()?;
 
-            let last_elem_is_zero = equals_zero(config, region, &[last_elem.clone()])?;
-            let last_elem_is_not_zero = not(config, region, &[last_elem_is_zero.clone()])?;
+            let last_elem_is_zero = equals_zero(config, region, &[&last_elem])?;
+            let last_elem_is_not_zero = not(config, region, &[&last_elem_is_zero])?;
 
             let sign = sliced_input.first()?;
-            let is_negative = equals(config, region, &[sign, assigned_negative_one.clone()])?;
+            let is_negative = equals(config, region, &[&sign, &assigned_negative_one])?;
 
-            let is_negative_and_not_zero = and(
-                config,
-                region,
-                &[last_elem_is_not_zero.clone(), is_negative.clone()],
-            )?;
+            let is_negative_and_not_zero =
+                and(config, region, &[&last_elem_is_not_zero, &is_negative])?;
 
             // increment the penultimate element
             let incremented_elem = pairwise(
                 config,
                 region,
                 &[
-                    sliced_input.get_slice(&[sliced_input.len() - 2..sliced_input.len() - 1])?,
-                    is_negative_and_not_zero.clone(),
+                    &sliced_input.get_slice(&[sliced_input.len() - 2..sliced_input.len() - 1])?,
+                    &is_negative_and_not_zero,
                 ],
                 BaseOp::Add,
             )?;
 
             let mut inner_tensor = sliced_input.get_inner_tensor()?.clone();
-            inner_tensor[sliced_input.len() - 2] =
-                incremented_elem.get_inner_tensor()?.clone()[0].clone();
+            inner_tensor[sliced_input.len() - 2] = incremented_elem.get_inner_tensor()?[0].clone();
 
             // set the last elem to zero
             inner_tensor[sliced_input.len() - 1] = zero.clone();
@@ -5568,7 +5455,7 @@ pub fn floor<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     recompose(
         config,
         region,
-        &[incremented_tensor.into()],
+        &[&incremented_tensor.into()],
         &(scale.0 as usize),
     )
 }
@@ -5577,7 +5464,7 @@ pub fn floor<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// # Arguments
 /// * `config` - BaseConfig
 /// * `region` - RegionCtx
-/// * `values` - &[ValTensor<F>; 1]
+/// * `values` - &[&ValTensor<F>; 1]
 /// * `scale` - utils::F32
 /// * `legs` - usize
 /// # Returns
@@ -5598,7 +5485,7 @@ pub fn floor<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///  Some(&[3, -2, 3, 1]),
 /// &[1, 1, 2, 2],
 /// ).unwrap());
-/// let result = ceil::<Fp>(&dummy_config, &mut dummy_region, &[x], 2.0.into(), 2).unwrap();
+/// let result = ceil::<Fp>(&dummy_config, &mut dummy_region, &[&x], 2.0.into(), 2).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[4, -2, 4, 2]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
@@ -5606,12 +5493,12 @@ pub fn floor<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub fn ceil<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     scale: utils::F32,
     legs: usize,
 ) -> Result<ValTensor<F>, CircuitError> {
     // decompose with base scale and then set the last element to zero
-    let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs)?.0;
+    let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs, true)?.0;
     // set the last element to zero and then recompose, we don't actually need to assign here
     // as this will automatically be assigned in the recompose function and uses the constant caching of RegionCtx
     let zero = ValType::Constant(F::ZERO);
@@ -5640,35 +5527,32 @@ pub fn ceil<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
             sliced_input.flatten();
             let last_elem = sliced_input.last()?;
 
-            let last_elem_is_zero = equals_zero(config, region, &[last_elem.clone()])?;
-            let last_elem_is_not_zero = not(config, region, &[last_elem_is_zero.clone()])?;
+            let last_elem_is_zero = equals_zero(config, region, &[&last_elem])?;
+            let last_elem_is_not_zero = not(config, region, &[&last_elem_is_zero])?;
 
             let sign = sliced_input.first()?;
-            let is_positive = equals(config, region, &[sign, assigned_one.clone()])?;
+            let is_positive = equals(config, region, &[&sign, &assigned_one])?;
 
-            let is_positive_and_not_zero = and(
-                config,
-                region,
-                &[last_elem_is_not_zero.clone(), is_positive.clone()],
-            )?;
+            let is_positive_and_not_zero =
+                and(config, region, &[&last_elem_is_not_zero, &is_positive])?;
 
             // increment the penultimate element
             let incremented_elem = pairwise(
                 config,
                 region,
                 &[
-                    sliced_input.get_slice(&[sliced_input.len() - 2..sliced_input.len() - 1])?,
-                    is_positive_and_not_zero.clone(),
+                    &sliced_input.get_slice(&[sliced_input.len() - 2..sliced_input.len() - 1])?,
+                    &is_positive_and_not_zero,
                 ],
                 BaseOp::Add,
             )?;
 
-            let mut inner_tensor = sliced_input.get_inner_tensor()?.clone();
-            inner_tensor[sliced_input.len() - 2] =
-                incremented_elem.get_inner_tensor()?.clone()[0].clone();
+            let sliced_len = sliced_input.len();
+            let inner_tensor = sliced_input.get_inner_tensor_mut()?;
+            inner_tensor[sliced_len - 2] = incremented_elem.get_inner_tensor()?[0].clone();
 
             // set the last elem to zero
-            inner_tensor[sliced_input.len() - 1] = zero.clone();
+            inner_tensor[sliced_len - 1] = zero.clone();
 
             Ok(inner_tensor.clone())
         };
@@ -5681,7 +5565,7 @@ pub fn ceil<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     recompose(
         config,
         region,
-        &[incremented_tensor.into()],
+        &[&incremented_tensor.into()],
         &(scale.0 as usize),
     )
 }
@@ -5690,7 +5574,7 @@ pub fn ceil<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// # Arguments
 /// * `config` - BaseConfig
 /// * `region` - RegionCtx
-/// * `values` - &[ValTensor<F>; 1]
+/// * `values` - &[&ValTensor<F>; 1]
 /// * `scale` - utils::F32
 /// # Returns
 /// * ValTensor<F>
@@ -5712,7 +5596,7 @@ pub fn ceil<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// &[1, 1, 2, 2],
 /// ).unwrap());
 ///
-/// let result = ln::<Fp>(&dummy_config, &mut dummy_region, &[x], 2.0.into(), f64::EPSILON).unwrap();
+/// let result = ln::<Fp>(&dummy_config, &mut dummy_region, &[&x], 2.0.into(), f64::EPSILON).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[4, 0, 4, -8]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -5720,7 +5604,7 @@ pub fn ceil<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     scale: utils::F32,
     eps: f64,
 ) -> Result<ValTensor<F>, CircuitError> {
@@ -5753,7 +5637,7 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let mut claimed_output: ValTensor<F> = if is_assigned {
         let input_evals = input.int_evals()?;
         // returns an integer with the base 2 logarithm
-        tensor::ops::nonlinearities::ilog2(&input_evals.clone(), scale.0 as f64)
+        tensor::ops::nonlinearities::ilog2(&input_evals, scale.0 as f64)
             .par_iter()
             .map(|x| Value::known(integer_rep_to_felt(*x)))
             .collect::<Tensor<Value<F>>>()
@@ -5766,13 +5650,21 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         .into()
     };
     claimed_output.reshape(input.dims())?;
-    let claimed_output = identity(&config, region, &[claimed_output], true)?;
+    let claimed_output = decompose(
+        config,
+        region,
+        &[&claimed_output],
+        &region.base(),
+        &region.legs(),
+        true,
+    )?
+    .1;
     region.increment(claimed_output.len());
 
     let pow2_of_claimed_output = nonlinearity(
         config,
         region,
-        &[claimed_output.clone()],
+        &[&claimed_output],
         &LookupOp::PowersOfTwo { scale },
     )?;
 
@@ -5781,26 +5673,17 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     region.update_max_min_lookup_inputs_force(-num_bits, num_bits)?;
 
     // now subtract 1 from the claimed output
-    let claimed_output_minus_one = pairwise(
-        config,
-        region,
-        &[claimed_output.clone(), unit.clone()],
-        BaseOp::Sub,
-    )?;
+    let claimed_output_minus_one =
+        pairwise(config, region, &[&claimed_output, &unit], BaseOp::Sub)?;
 
     // now add 1 to the claimed output
-    let claimed_output_plus_one = pairwise(
-        config,
-        region,
-        &[claimed_output.clone(), unit.clone()],
-        BaseOp::Add,
-    )?;
+    let claimed_output_plus_one = pairwise(config, region, &[&claimed_output, &unit], BaseOp::Add)?;
 
     // prior power of 2 is less than claimed output
     let prior_pow2 = nonlinearity(
         config,
         region,
-        &[claimed_output_minus_one],
+        &[&claimed_output_minus_one],
         &LookupOp::PowersOfTwo { scale },
     )?;
 
@@ -5808,89 +5691,74 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let next_pow2 = nonlinearity(
         config,
         region,
-        &[claimed_output_plus_one],
+        &[&claimed_output_plus_one],
         &LookupOp::PowersOfTwo { scale },
     )?;
 
     let distance_to_claimed = pairwise(
         config,
         region,
-        &[input.clone(), pow2_of_claimed_output.clone()],
+        &[&input, &pow2_of_claimed_output],
         BaseOp::Sub,
     )?;
 
-    let abs_distance_to_claimed = abs(config, region, &[distance_to_claimed.clone()])?;
+    let abs_distance_to_claimed = abs(config, region, &[&distance_to_claimed])?;
 
-    let abs_distance_to_next_pow2 =
-        l1_distance(config, region, &[input.clone(), next_pow2.clone()])?;
+    let abs_distance_to_next_pow2 = l1_distance(config, region, &[&input, &next_pow2])?;
 
-    let abs_distance_to_prior_pow2 =
-        l1_distance(config, region, &[input.clone(), prior_pow2.clone()])?;
+    let abs_distance_to_prior_pow2 = l1_distance(config, region, &[&input, &prior_pow2])?;
 
     // because we round up this can be equal
     let is_closest_to_0: ValTensor<F> = less(
         config,
         region,
-        &[
-            abs_distance_to_claimed.clone(),
-            abs_distance_to_next_pow2.clone(),
-        ],
+        &[&abs_distance_to_claimed, &abs_distance_to_next_pow2],
     )?;
 
     let is_closest_to_1 = less(
         config,
         region,
-        &[
-            abs_distance_to_claimed.clone(),
-            abs_distance_to_prior_pow2.clone(),
-        ],
+        &[&abs_distance_to_claimed, &abs_distance_to_prior_pow2],
     )?;
 
-    let is_closest = and(
-        config,
-        region,
-        &[is_closest_to_0.clone(), is_closest_to_1.clone()],
-    )?;
+    let is_closest = and(config, region, &[&is_closest_to_0, &is_closest_to_1])?;
 
     let mut comparison_unit = create_constant_tensor(integer_rep_to_felt(1), is_closest.len());
     comparison_unit.reshape(is_closest.dims())?;
     let assigned_unit = region.assign(&config.custom_gates.inputs[1], &comparison_unit)?;
 
-    enforce_equality(config, region, &[is_closest, assigned_unit])?;
+    enforce_equality(config, region, &[&is_closest, &assigned_unit])?;
 
     // get a linear interpolation now
 
-    let sign_of_distance_to_claimed = sign(config, region, &[distance_to_claimed.clone()])?;
+    let sign_of_distance_to_claimed = sign(config, region, &[&distance_to_claimed], true)?;
     let sign_of_distance_to_claimed_is_negative = equals(
         config,
         region,
-        &[sign_of_distance_to_claimed.clone(), negative_one.clone()],
+        &[&sign_of_distance_to_claimed, &negative_one],
     )?;
 
-    let sign_of_distance_to_claimed_is_positive = not(
-        config,
-        region,
-        &[sign_of_distance_to_claimed_is_negative.clone()],
-    )?;
+    let sign_of_distance_to_claimed_is_positive =
+        not(config, region, &[&sign_of_distance_to_claimed_is_negative])?;
 
     let pow2_prior_to_claimed_distance = pairwise(
         config,
         region,
-        &[pow2_of_claimed_output.clone(), prior_pow2.clone()],
+        &[&pow2_of_claimed_output, &prior_pow2],
         BaseOp::Sub,
     )?;
 
     let pow2_next_to_claimed_distance = pairwise(
         config,
         region,
-        &[next_pow2.clone(), pow2_of_claimed_output.clone()],
+        &[&next_pow2, &pow2_of_claimed_output],
         BaseOp::Sub,
     )?;
 
     let recip_pow2_prior_to_claimed_distance = recip(
         config,
         region,
-        &[pow2_prior_to_claimed_distance],
+        &[&pow2_prior_to_claimed_distance],
         scale_as_felt,
         scale_as_felt * scale_as_felt,
         eps,
@@ -5899,10 +5767,7 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let interpolated_distance = pairwise(
         config,
         region,
-        &[
-            recip_pow2_prior_to_claimed_distance.clone(),
-            distance_to_claimed.clone(),
-        ],
+        &[&recip_pow2_prior_to_claimed_distance, &distance_to_claimed],
         BaseOp::Mult,
     )?;
 
@@ -5910,8 +5775,8 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         config,
         region,
         &[
-            interpolated_distance.clone(),
-            sign_of_distance_to_claimed_is_negative.clone(),
+            &interpolated_distance,
+            &sign_of_distance_to_claimed_is_negative,
         ],
         BaseOp::Mult,
     )?;
@@ -5919,7 +5784,7 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let recip_next_to_claimed_distance = recip(
         config,
         region,
-        &[pow2_next_to_claimed_distance],
+        &[&pow2_next_to_claimed_distance],
         scale_as_felt,
         scale_as_felt * scale_as_felt,
         eps,
@@ -5928,10 +5793,7 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let interpolated_distance_next = pairwise(
         config,
         region,
-        &[
-            recip_next_to_claimed_distance.clone(),
-            distance_to_claimed.clone(),
-        ],
+        &[&recip_next_to_claimed_distance, &distance_to_claimed],
         BaseOp::Mult,
     )?;
 
@@ -5939,8 +5801,8 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         config,
         region,
         &[
-            interpolated_distance_next.clone(),
-            sign_of_distance_to_claimed_is_positive.clone(),
+            &interpolated_distance_next,
+            &sign_of_distance_to_claimed_is_positive,
         ],
         BaseOp::Mult,
     )?;
@@ -5948,39 +5810,38 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let scaled_claimed_output = pairwise(
         config,
         region,
-        &[claimed_output.clone(), triple_scaled_as_felt_tensor],
+        &[&claimed_output, &triple_scaled_as_felt_tensor],
         BaseOp::Mult,
     )?;
 
     let claimed_output = pairwise(
         config,
         region,
-        &[
-            scaled_claimed_output.clone(),
-            gated_prior_interpolated_distance.clone(),
-        ],
+        &[&scaled_claimed_output, &gated_prior_interpolated_distance],
         BaseOp::Add,
     )?;
 
     let claimed_output = pairwise(
         config,
         region,
-        &[
-            claimed_output.clone(),
-            gated_next_interpolated_distance.clone(),
-        ],
+        &[&claimed_output, &gated_next_interpolated_distance],
         BaseOp::Add,
     )?;
 
     // now multiply the claimed output by ln2
-    pairwise(config, region, &[claimed_output, ln2_tensor], BaseOp::Mult)
+    pairwise(
+        config,
+        region,
+        &[&claimed_output, &ln2_tensor],
+        BaseOp::Mult,
+    )
 }
 
 /// round layout
 /// # Arguments
 /// * `config` - BaseConfig
 /// * `region` - RegionCtx
-/// * `values` - &[ValTensor<F>; 1]
+/// * `values` - &[&ValTensor<F>; 1]
 /// * `scale` - utils::F32
 /// * `legs` - usize
 /// # Returns
@@ -6001,7 +5862,7 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// Some(&[3, -2, 3, 1]),
 /// &[1, 1, 2, 2],
 /// ).unwrap());
-/// let result = round::<Fp>(&dummy_config, &mut dummy_region, &[x], 4.0.into(), 2).unwrap();
+/// let result = round::<Fp>(&dummy_config, &mut dummy_region, &[&x], 4.0.into(), 2).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[4, -4, 4, 0]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
@@ -6009,12 +5870,12 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub fn round<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     scale: utils::F32,
     legs: usize,
 ) -> Result<ValTensor<F>, CircuitError> {
     // decompose with base scale and then set the last element to zero
-    let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs)?.0;
+    let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs, true)?.0;
     // set the last element to zero and then recompose, we don't actually need to assign here
     // as this will automatically be assigned in the recompose function and uses the constant caching of RegionCtx
     let zero = ValType::Constant(F::ZERO);
@@ -6054,35 +5915,26 @@ pub fn round<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
             let last_elem = sliced_input.last()?;
 
             let sign = sliced_input.first()?;
-            let is_positive = equals(config, region, &[sign.clone(), one.clone()])?;
-            let is_negative = equals(config, region, &[sign, negative_one.clone()])?;
+            let is_positive = equals(config, region, &[&sign, &one])?;
+            let is_negative = equals(config, region, &[&sign, &negative_one])?;
 
-            let is_greater_than_midway = greater_equal(
-                config,
-                region,
-                &[last_elem.clone(), assigned_midway_point.clone()],
-            )?;
+            let is_greater_than_midway =
+                greater_equal(config, region, &[&last_elem, &assigned_midway_point])?;
 
             // if greater than midway point and positive, increment
-            let is_positive_and_more_than_midway = and(
-                config,
-                region,
-                &[is_positive.clone(), is_greater_than_midway.clone()],
-            )?;
+            let is_positive_and_more_than_midway =
+                and(config, region, &[&is_positive, &is_greater_than_midway])?;
 
             // is less than midway point and negative, decrement
-            let is_negative_and_more_than_midway = and(
-                config,
-                region,
-                &[is_negative.clone(), is_greater_than_midway],
-            )?;
+            let is_negative_and_more_than_midway =
+                and(config, region, &[&is_negative, &is_greater_than_midway])?;
 
             let conditions_for_increment = or(
                 config,
                 region,
                 &[
-                    is_positive_and_more_than_midway.clone(),
-                    is_negative_and_more_than_midway.clone(),
+                    &is_positive_and_more_than_midway,
+                    &is_negative_and_more_than_midway,
                 ],
             )?;
 
@@ -6091,18 +5943,18 @@ pub fn round<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
                 config,
                 region,
                 &[
-                    sliced_input.get_slice(&[sliced_input.len() - 2..sliced_input.len() - 1])?,
-                    conditions_for_increment.clone(),
+                    &sliced_input.get_slice(&[sliced_input.len() - 2..sliced_input.len() - 1])?,
+                    &conditions_for_increment,
                 ],
                 BaseOp::Add,
             )?;
 
-            let mut inner_tensor = sliced_input.get_inner_tensor()?.clone();
-            inner_tensor[sliced_input.len() - 2] =
-                incremented_elem.get_inner_tensor()?.clone()[0].clone();
+            let sliced_len = sliced_input.len();
+            let inner_tensor = sliced_input.get_inner_tensor_mut()?;
+            inner_tensor[sliced_len - 2] = incremented_elem.get_inner_tensor()?[0].clone();
 
             // set the last elem to zero
-            inner_tensor[sliced_input.len() - 1] = zero.clone();
+            inner_tensor[sliced_len - 1] = zero.clone();
 
             Ok(inner_tensor.clone())
         };
@@ -6115,7 +5967,7 @@ pub fn round<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     recompose(
         config,
         region,
-        &[incremented_tensor.into()],
+        &[&incremented_tensor.into()],
         &(scale.0 as usize),
     )
 }
@@ -6152,7 +6004,7 @@ pub fn round<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// Some(&[3, -2, 3, 1]),
 /// &[1, 1, 2, 2],
 /// ).unwrap());
-/// let result = round_half_to_even::<Fp>(&dummy_config, &mut dummy_region, &[x], 4.0.into(), 2).unwrap();
+/// let result = round_half_to_even::<Fp>(&dummy_config, &mut dummy_region, &[&x], 4.0.into(), 2).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[4, 0, 4, 0]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
@@ -6160,12 +6012,12 @@ pub fn round<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub fn round_half_to_even<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     scale: utils::F32,
     legs: usize,
 ) -> Result<ValTensor<F>, CircuitError> {
     // decompose with base scale and then set the last element to zero
-    let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs)?.0;
+    let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs, true)?.0;
     // set the last element to zero and then recompose, we don't actually need to assign here
     // as this will automatically be assigned in the recompose function and uses the constant caching of RegionCtx
     let zero = ValType::Constant(F::ZERO);
@@ -6202,33 +6054,19 @@ pub fn round_half_to_even<F: PrimeField + TensorType + PartialOrd + std::hash::H
             let penultimate_elem =
                 sliced_input.get_slice(&[sliced_input.len() - 2..sliced_input.len() - 1])?;
 
-            let is_equal_to_midway =
-                equals(config, region, &[last_elem.clone(), midway_point.clone()])?;
+            let is_equal_to_midway = equals(config, region, &[&last_elem, &midway_point])?;
             // penultimate_elem is equal to midway point and even, do nothing
-            let is_odd = nonlinearity(
-                config,
-                region,
-                &[penultimate_elem.clone()],
-                &LookupOp::IsOdd,
-            )?;
+            let is_odd = nonlinearity(config, region, &[&penultimate_elem], &LookupOp::IsOdd)?;
 
-            let is_odd_and_equal_to_midway = and(
-                config,
-                region,
-                &[is_odd.clone(), is_equal_to_midway.clone()],
-            )?;
+            let is_odd_and_equal_to_midway = and(config, region, &[&is_odd, &is_equal_to_midway])?;
 
-            let is_greater_than_midway =
-                greater(config, region, &[last_elem.clone(), midway_point.clone()])?;
+            let is_greater_than_midway = greater(config, region, &[&last_elem, &midway_point])?;
 
             // if the number is equal to midway point and odd increment, or if it is is_greater_than_midway
             let is_odd_and_equal_to_midway_or_greater_than_midway = or(
                 config,
                 region,
-                &[
-                    is_odd_and_equal_to_midway.clone(),
-                    is_greater_than_midway.clone(),
-                ],
+                &[&is_odd_and_equal_to_midway, &is_greater_than_midway],
             )?;
 
             // increment the penultimate element
@@ -6236,18 +6074,18 @@ pub fn round_half_to_even<F: PrimeField + TensorType + PartialOrd + std::hash::H
                 config,
                 region,
                 &[
-                    sliced_input.get_slice(&[sliced_input.len() - 2..sliced_input.len() - 1])?,
-                    is_odd_and_equal_to_midway_or_greater_than_midway.clone(),
+                    &sliced_input.get_slice(&[sliced_input.len() - 2..sliced_input.len() - 1])?,
+                    &is_odd_and_equal_to_midway_or_greater_than_midway,
                 ],
                 BaseOp::Add,
             )?;
 
-            let mut inner_tensor = sliced_input.get_inner_tensor()?.clone();
-            inner_tensor[sliced_input.len() - 2] =
-                incremented_elem.get_inner_tensor()?.clone()[0].clone();
+            let sliced_len = sliced_input.len();
+            let inner_tensor = sliced_input.get_inner_tensor_mut()?;
+            inner_tensor[sliced_len - 2] = incremented_elem.get_inner_tensor()?[0].clone();
 
             // set the last elem to zero
-            inner_tensor[sliced_input.len() - 1] = zero.clone();
+            inner_tensor[sliced_len - 1] = zero.clone();
 
             Ok(inner_tensor.clone())
         };
@@ -6262,7 +6100,7 @@ pub fn round_half_to_even<F: PrimeField + TensorType + PartialOrd + std::hash::H
     recompose(
         config,
         region,
-        &[incremented_tensor.into()],
+        &[&incremented_tensor.into()],
         &(scale.0 as usize),
     )
 }
@@ -6303,7 +6141,7 @@ pub fn round_half_to_even<F: PrimeField + TensorType + PartialOrd + std::hash::H
 pub(crate) fn recompose<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     base: &usize,
 ) -> Result<ValTensor<F>, CircuitError> {
     let mut input = values[0].clone();
@@ -6365,15 +6203,15 @@ pub(crate) fn recompose<F: PrimeField + TensorType + PartialOrd + std::hash::Has
     let rest = input.get_slice(&rest_slice)?;
 
     // Compute the dot product of the digits with the base powers
-    let prod_recomp = einsum(config, region, &[rest.clone(), bases], &equation)?;
+    let prod_recomp = einsum(config, region, &[&rest, &bases], &equation)?;
 
     // Multiply by the sign to get the final value
-    let mut signed_recomp = pairwise(config, region, &[prod_recomp, sign], BaseOp::Mult)?;
+    let mut signed_recomp = pairwise(config, region, &[&prod_recomp, &sign], BaseOp::Mult)?;
 
     // Reshape the result to match the original dimensions
     signed_recomp.reshape(&first_dims)?;
 
-    Ok(signed_recomp.into())
+    Ok(signed_recomp)
 }
 
 /// Decomposes numbers into a positional number system (e.g., base-10 digits).
@@ -6423,9 +6261,10 @@ pub(crate) fn recompose<F: PrimeField + TensorType + PartialOrd + std::hash::Has
 pub(crate) fn decompose<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     base: &usize,
     n: &usize,
+    zero_sign_matters: bool,
 ) -> Result<(ValTensor<F>, ValTensor<F>), CircuitError> {
     let mut input = values[0].clone();
 
@@ -6485,25 +6324,25 @@ pub(crate) fn decompose<F: PrimeField + TensorType + PartialOrd + std::hash::Has
     let sign = claimed_output.get_slice(&sign_slice)?;
     let rest = claimed_output.get_slice(&rest_slice)?;
 
-    let sign = range_check(config, region, &[sign], &(-1, 1))?;
+    let sign = range_check(config, region, &[&sign], &(-1, 1))?;
 
     // isZero(input) * sign == 0.
-    {
-        let is_zero = equals_zero(config, region, &[input.clone()])?;
+    if zero_sign_matters {
+        let is_zero = equals_zero(config, region, &[&input])?;
         // take the product of the sign and is_zero
-        let sign_is_zero = pairwise(config, region, &[sign.clone(), is_zero], BaseOp::Mult)?;
+        let sign_is_zero = pairwise(config, region, &[&sign, &is_zero], BaseOp::Mult)?;
         // constrain the sign_is_zero to be 0
         enforce_equality(
             config,
             region,
             &[
-                sign_is_zero.clone(),
-                create_constant_tensor(F::ZERO, sign_is_zero.len()),
+                &sign_is_zero,
+                &create_constant_tensor(F::ZERO, sign_is_zero.len()),
             ],
         )?;
     }
 
-    let rest = range_check(config, region, &[rest], &(0, (*base - 1) as IntegerRep))?;
+    let rest = range_check(config, region, &[&rest], &(0, (*base - 1) as IntegerRep))?;
 
     // equation needs to be constructed as ij,ij->i but for arbitrary n dims we need to construct this dynamically
     // indices should map in order of the alphabet
@@ -6514,11 +6353,11 @@ pub(crate) fn decompose<F: PrimeField + TensorType + PartialOrd + std::hash::Has
 
     // now add the rhs
 
-    let prod_decomp = einsum(config, region, &[rest.clone(), bases], &equation)?;
+    let prod_decomp = einsum(config, region, &[&rest, &bases], &equation)?;
 
-    let signed_decomp = pairwise(config, region, &[prod_decomp, sign], BaseOp::Mult)?;
+    let signed_decomp = pairwise(config, region, &[&prod_decomp, &sign], BaseOp::Mult)?;
 
-    enforce_equality(config, region, &[input.clone(), signed_decomp])?;
+    enforce_equality(config, region, &[&input, &signed_decomp])?;
 
     Ok((claimed_output, input))
 }
@@ -6526,9 +6365,18 @@ pub(crate) fn decompose<F: PrimeField + TensorType + PartialOrd + std::hash::Has
 pub(crate) fn sign<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
+    zero_sign_matters: bool,
 ) -> Result<ValTensor<F>, CircuitError> {
-    let mut decomp = decompose(config, region, values, &region.base(), &region.legs())?.0;
+    let mut decomp = decompose(
+        config,
+        region,
+        values,
+        &region.base(),
+        &region.legs(),
+        zero_sign_matters,
+    )?
+    .0;
     // get every n elements now, which correspond to the sign bit
     decomp.get_every_n(region.legs() + 1)?;
     decomp.reshape(values[0].dims())?;
@@ -6539,33 +6387,28 @@ pub(crate) fn sign<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub(crate) fn abs<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, CircuitError> {
-    let sign = sign(config, region, values)?;
+    let sign = sign(config, region, values, false)?;
 
-    pairwise(config, region, &[values[0].clone(), sign], BaseOp::Mult)
+    pairwise(config, region, &[values[0], &sign], BaseOp::Mult)
 }
 
 pub(crate) fn leaky_relu<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     alpha: &utils::F32,
     input_scale: &i32,
 ) -> Result<ValTensor<F>, CircuitError> {
-    let sign = sign(config, region, values)?;
+    let sign = sign(config, region, values, false)?;
 
     let mut unit = create_unit_tensor(sign.len());
     unit.reshape(sign.dims())?;
 
-    let relu_mask = equals(config, region, &[sign, unit])?;
+    let relu_mask = equals(config, region, &[&sign, &unit])?;
 
-    let positive = pairwise(
-        config,
-        region,
-        &[values[0].clone(), relu_mask.clone()],
-        BaseOp::Mult,
-    )?;
+    let positive = pairwise(config, region, &[values[0], &relu_mask], BaseOp::Mult)?;
 
     if alpha.0 == 0. {
         return Ok(positive);
@@ -6577,9 +6420,9 @@ pub(crate) fn leaky_relu<F: PrimeField + TensorType + PartialOrd + std::hash::Ha
 
     let scale_constant = create_constant_tensor(F::from(2_i32.pow(*input_scale as u32) as u64), 1);
 
-    let rescaled_positive = pairwise(config, region, &[positive, scale_constant], BaseOp::Mult)?;
+    let rescaled_positive = pairwise(config, region, &[&positive, &scale_constant], BaseOp::Mult)?;
 
-    let neg_mask = not(config, region, &[relu_mask])?;
+    let neg_mask = not(config, region, &[&relu_mask])?;
 
     let quantized_alpha = quantize_tensor(
         Tensor::from([alpha.0; 1].into_iter()),
@@ -6589,30 +6432,30 @@ pub(crate) fn leaky_relu<F: PrimeField + TensorType + PartialOrd + std::hash::Ha
 
     let alpha_tensor = create_constant_tensor(quantized_alpha[0], 1);
 
-    let scaled_neg_mask = pairwise(config, region, &[neg_mask, alpha_tensor], BaseOp::Mult)?;
+    let scaled_neg_mask = pairwise(config, region, &[&neg_mask, &alpha_tensor], BaseOp::Mult)?;
 
-    let neg_part = pairwise(
+    let neg_part = pairwise(config, region, &[values[0], &scaled_neg_mask], BaseOp::Mult)?;
+
+    pairwise(
         config,
         region,
-        &[values[0].clone(), scaled_neg_mask],
-        BaseOp::Mult,
-    )?;
-
-    pairwise(config, region, &[rescaled_positive, neg_part], BaseOp::Add)
+        &[&rescaled_positive, &neg_part],
+        BaseOp::Add,
+    )
 }
 
 fn multi_dim_axes_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     axes: &[usize],
     op: impl Fn(
-        &BaseConfig<F>,
-        &mut RegionCtx<F>,
-        &[ValTensor<F>; 1],
-    ) -> Result<ValTensor<F>, CircuitError>
-    + Send
-    + Sync,
+            &BaseConfig<F>,
+            &mut RegionCtx<F>,
+            &[&ValTensor<F>; 1],
+        ) -> Result<ValTensor<F>, CircuitError>
+        + Send
+        + Sync,
 ) -> Result<ValTensor<F>, CircuitError> {
     let mut input = values[0].clone();
 
@@ -6622,7 +6465,7 @@ fn multi_dim_axes_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     }
 
     if input.dims().len() == 1 {
-        return op(config, region, &[input]);
+        return op(config, region, &[&input]);
     }
 
     // Calculate the output tensor size
@@ -6657,7 +6500,7 @@ fn multi_dim_axes_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         let mut sliced_input = input.get_slice(&slice)?;
         sliced_input.flatten();
 
-        op(config, region, &[sliced_input])
+        op(config, region, &[&sliced_input])
     };
 
     region.apply_in_loop(&mut op_tensors, inner_loop_function)?;
@@ -6707,7 +6550,7 @@ fn multi_dim_axes_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub(crate) fn softmax_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     input_scale: utils::F32,
     output_scale: utils::F32,
     axes: &[usize],
@@ -6715,7 +6558,7 @@ pub(crate) fn softmax_axes<F: PrimeField + TensorType + PartialOrd + std::hash::
 ) -> Result<ValTensor<F>, CircuitError> {
     let soft_max_at_scale = move |config: &BaseConfig<F>,
                                   region: &mut RegionCtx<F>,
-                                  values: &[ValTensor<F>; 1]|
+                                  values: &[&ValTensor<F>; 1]|
           -> Result<ValTensor<F>, CircuitError> {
         softmax(config, region, values, input_scale, output_scale, eps)
     };
@@ -6729,7 +6572,7 @@ pub(crate) fn softmax_axes<F: PrimeField + TensorType + PartialOrd + std::hash::
 pub(crate) fn percent<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     input_scale: utils::F32,
     output_scale: utils::F32,
     eps: f64,
@@ -6737,24 +6580,24 @@ pub(crate) fn percent<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
     let is_assigned = values[0].all_prev_assigned();
     let mut input = values[0].clone();
     if !is_assigned {
-        input = region.assign(&config.custom_gates.inputs[0], &values[0])?;
+        input = region.assign(&config.custom_gates.inputs[0], values[0])?;
         region.increment(input.len());
     };
     // sum of exps
-    let denom = sum(config, region, &[input.clone()])?;
+    let denom = sum(config, region, &[&input])?;
 
     let input_felt_scale = F::from(input_scale.0 as u64);
     let output_felt_scale = F::from(output_scale.0 as u64);
     let inv_denom = recip(
         config,
         region,
-        &[denom],
+        &[&denom],
         input_felt_scale,
         output_felt_scale,
         eps,
     )?;
     // product of num * (1 / denom) = input_scale * output_scale
-    pairwise(config, region, &[input, inv_denom], BaseOp::Mult)
+    pairwise(config, region, &[&input, &inv_denom], BaseOp::Mult)
 }
 
 /// Applies softmax
@@ -6776,7 +6619,7 @@ pub(crate) fn percent<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
 ///     Some(&[2, 2, 3, 2, 2, 0]),
 ///     &[2, 3],
 /// ).unwrap());
-/// let result = softmax::<Fp>(&dummy_config, &mut dummy_region, &[x], 128.0.into(), (128.0 * 128.0).into(), f64::EPSILON).unwrap();
+/// let result = softmax::<Fp>(&dummy_config, &mut dummy_region, &[&x], 128.0.into(), (128.0 * 128.0).into(), f64::EPSILON).unwrap();
 /// // doubles the scale of the input
 /// let expected = Tensor::<IntegerRep>::new(Some(&[350012, 350012, 352768, 350012, 350012, 344500]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
@@ -6784,7 +6627,7 @@ pub(crate) fn percent<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
 pub fn softmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[&ValTensor<F>; 1],
     input_scale: utils::F32,
     output_scale: utils::F32,
     eps: f64,
@@ -6792,26 +6635,19 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     // get the max then subtract it
     let max_val = max(config, region, values)?;
     // rebase the input to 0
-    let sub = pairwise(config, region, &[values[0].clone(), max_val], BaseOp::Sub)?;
+    let sub = pairwise(config, region, &[values[0], &max_val], BaseOp::Sub)?;
     // elementwise exponential
     let ex = nonlinearity(
         config,
         region,
-        &[sub],
+        &[&sub],
         &LookupOp::Exp {
             scale: input_scale,
             base: E.into(),
         },
     )?;
 
-    percent(
-        config,
-        region,
-        &[ex.clone()],
-        input_scale,
-        output_scale,
-        eps,
-    )
+    percent(config, region, &[&ex], input_scale, output_scale, eps)
 }
 
 /// Checks that the percent error between the expected public output and the actual output value
@@ -6839,26 +6675,46 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///    Some(&[101, 201, 302, 403, 503, 603]),
 ///   &[2, 3],
 /// ).unwrap());
-/// let result = output::<Fp>(&dummy_config, &mut dummy_region, &[x, y], false).unwrap();
+/// let result = output::<Fp>(&dummy_config, &mut dummy_region, &[&x, &y], false).unwrap();
 /// ```
 pub fn output<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 2],
+    values: &[&ValTensor<F>; 2],
     decomp: bool,
 ) -> Result<ValTensor<F>, CircuitError> {
     let mut values = [values[0].clone(), values[1].clone()];
 
-    if !values[0].all_prev_assigned() {
-        // range check the outputs
-        values[0] = layouts::identity(config, region, &[values[0].clone()], decomp)?;
+    // range check the outputs
+    if decomp {
+        values[0] = decompose(
+            config,
+            region,
+            &[&values[0]],
+            &region.base(),
+            &region.legs(),
+            false,
+        )?
+        .1;
+    } else if !values[0].all_prev_assigned() {
+        values[0] = region.assign(&config.custom_gates.inputs[0], &values[0])?;
     }
 
-    if !values[1].all_prev_assigned() {
-        // range check the outputs
-        values[1] = layouts::identity(config, region, &[values[1].clone()], decomp)?;
+    // range check the outputs
+    if decomp {
+        values[1] = decompose(
+            config,
+            region,
+            &[&values[1]],
+            &region.base(),
+            &region.legs(),
+            false,
+        )?
+        .1;
+    } else if !values[1].all_prev_assigned() {
+        values[1] = region.assign(&config.custom_gates.inputs[1], &values[1])?;
     }
 
     // regular equality constraint
-    return enforce_equality(config, region, &[values[0].clone(), values[1].clone()]);
+    enforce_equality(config, region, &[&values[0], &values[1]])
 }

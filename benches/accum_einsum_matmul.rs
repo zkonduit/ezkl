@@ -15,6 +15,7 @@ use halo2_proofs::{
     plonk::{Circuit, ConstraintSystem, Error},
 };
 use halo2curves::bn256::{Bn256, Fr};
+use itertools::Itertools;
 use rand::rngs::OsRng;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::marker::PhantomData;
@@ -61,7 +62,7 @@ impl Circuit<Fr> for MyCircuit {
                 config
                     .layout(
                         &mut region,
-                        &self.inputs,
+                        &self.inputs.iter().collect_vec(),
                         Box::new(PolyOp::Einsum {
                             equation: "ab,bc->ac".to_string(),
                         }),

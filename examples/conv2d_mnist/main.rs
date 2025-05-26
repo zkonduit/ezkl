@@ -32,7 +32,6 @@ use mnist::*;
 use rand::rngs::OsRng;
 use std::marker::PhantomData;
 
-
 mod params;
 
 const K: usize = 20;
@@ -216,11 +215,7 @@ where
                         .layer_config
                         .layout(
                             &mut region,
-                            &[
-                                self.input.clone(),
-                                self.l0_params[0].clone(),
-                                self.l0_params[1].clone(),
-                            ],
+                            &[&self.input, &self.l0_params[0], &self.l0_params[1]],
                             Box::new(op),
                         )
                         .unwrap();
@@ -229,7 +224,7 @@ where
                         .layer_config
                         .layout(
                             &mut region,
-                            &[x.unwrap()],
+                            &[&x.unwrap()],
                             Box::new(PolyOp::LeakyReLU {
                                 slope: 0.0.into(),
                                 scale: 1,
@@ -241,7 +236,7 @@ where
                         .layer_config
                         .layout(
                             &mut region,
-                            &[x.unwrap()],
+                            &[&x.unwrap()],
                             Box::new(LookupOp::Div { denom: 32.0.into() }),
                         )
                         .unwrap()
@@ -253,7 +248,7 @@ where
                         .layer_config
                         .layout(
                             &mut region,
-                            &[self.l2_params[0].clone(), x],
+                            &[&self.l2_params[0], &x],
                             Box::new(PolyOp::Einsum {
                                 equation: "ij,j->ik".to_string(),
                             }),
@@ -265,7 +260,7 @@ where
                         .layer_config
                         .layout(
                             &mut region,
-                            &[x, self.l2_params[1].clone()],
+                            &[&x, &self.l2_params[1]],
                             Box::new(PolyOp::Add),
                         )
                         .unwrap()

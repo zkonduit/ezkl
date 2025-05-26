@@ -280,9 +280,17 @@ impl<F: PrimeField + TensorType + PartialOrd> From<Vec<ValType<F>>> for ValTenso
     fn from(t: Vec<ValType<F>>) -> ValTensor<F> {
         ValTensor::Value {
             inner: t.clone().into_iter().into(),
-
             dims: vec![t.len()],
+            scale: 1,
+        }
+    }
+}
 
+impl<F: PrimeField + TensorType + PartialOrd> From<Vec<&ValType<F>>> for ValTensor<F> {
+    fn from(t: Vec<&ValType<F>>) -> ValTensor<F> {
+        ValTensor::Value {
+            inner: t.clone().into_iter().cloned().into(),
+            dims: vec![t.len()],
             scale: 1,
         }
     }
@@ -640,6 +648,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
     /// # Returns
     /// A tensor containing the base-n decomposition of each value
     pub fn decompose(&self, base: usize, n: usize) -> Result<Self, TensorError> {
+        let mut dims = self.dims().to_vec();
+        dims.push(n + 1);
+
         let res = self
             .get_inner()?
             .par_iter()
@@ -665,9 +676,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
             })
             .collect::<Result<Vec<_>, _>>();
 
-        let mut tensor = Tensor::from(res?.into_iter().flatten().collect::<Vec<_>>().into_iter());
-        let mut dims = self.dims().to_vec();
-        dims.push(n + 1);
+        let mut tensor = res?.into_iter().flatten().collect::<Tensor<_>>();
 
         tensor.reshape(&dims)?;
 
@@ -1043,119 +1052,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
         Ok(())
     }
 
-    /// Removes constant zero values from the tensor
-    /// Uses parallel processing for tensors larger than a threshold
-    pub fn remove_const_zero_values(&mut self) {
-        let size_threshold = 1_000_000; // Tuned using benchmarks
-
-        if self.len() < size_threshold {
-            // Single-threaded for small tensors
-            match self {
-                ValTensor::Value { inner: v, dims, .. } => {
-                    *v = v
-                        .clone()
-                        .into_iter()
-                        .filter_map(|e| {
-                            if let ValType::Constant(r) = e {
-                                if r == F::ZERO {
-                                    return None;
-                                }
-                            } else if let ValType::AssignedConstant(_, r) = e {
-                                if r == F::ZERO {
-                                    return None;
-                                }
-                            }
-                            Some(e)
-                        })
-                        .collect();
-                    *dims = v.dims().to_vec();
-                }
-                ValTensor::Instance { .. } => {}
-            }
-        } else {
-            // Parallel processing for large tensors
-            let num_cores = std::thread::available_parallelism()
-                .map(|n| n.get())
-                .unwrap_or(1);
-            let chunk_size = (self.len() / num_cores).max(100_000);
-
-            match self {
-                ValTensor::Value { inner: v, dims, .. } => {
-                    *v = v
-                        .par_chunks_mut(chunk_size)
-                        .flat_map(|chunk| {
-                            chunk.par_iter_mut().filter_map(|e| {
-                                if let ValType::Constant(r) = e {
-                                    if *r == F::ZERO {
-                                        return None;
-                                    }
-                                } else if let ValType::AssignedConstant(_, r) = e {
-                                    if *r == F::ZERO {
-                                        return None;
-                                    }
-                                }
-                                Some(e.clone())
-                            })
-                        })
-                        .collect();
-                    *dims = v.dims().to_vec();
-                }
-                ValTensor::Instance { .. } => {}
-            }
-        }
-    }
-
-    /// Gets the indices of all constant zero values
-    /// Uses parallel processing for large tensors
-    ///
-    /// # Returns
-    /// A vector of indices where constant zero values are located
-    pub fn get_const_zero_indices(&self) -> Vec<usize> {
-        let size_threshold = 1_000_000;
-
-        if self.len() < size_threshold {
-            // Single-threaded for small tensors
-            match &self {
-                ValTensor::Value { inner: v, .. } => v
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(i, e)| match e {
-                        ValType::Constant(r) | ValType::AssignedConstant(_, r) => {
-                            (*r == F::ZERO).then_some(i)
-                        }
-                        _ => None,
-                    })
-                    .collect(),
-                ValTensor::Instance { .. } => vec![],
-            }
-        } else {
-            // Parallel processing for large tensors
-            let num_cores = std::thread::available_parallelism()
-                .map(|n| n.get())
-                .unwrap_or(1);
-            let chunk_size = (self.len() / num_cores).max(100_000);
-
-            match &self {
-                ValTensor::Value { inner: v, .. } => v
-                    .par_chunks(chunk_size)
-                    .enumerate()
-                    .flat_map(|(chunk_idx, chunk)| {
-                        chunk
-                            .par_iter()
-                            .enumerate()
-                            .filter_map(move |(i, e)| match e {
-                                ValType::Constant(r) | ValType::AssignedConstant(_, r) => {
-                                    (*r == F::ZERO).then_some(chunk_idx * chunk_size + i)
-                                }
-                                _ => None,
-                            })
-                    })
-                    .collect::<Vec<_>>(),
-                ValTensor::Instance { .. } => vec![],
-            }
-        }
-    }
-
     /// Gets the indices of all constant values
     /// Uses parallel processing for large tensors
     ///
@@ -1276,7 +1172,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
     /// Returns an error if called on an Instance tensor
     pub fn intercalate_values(
         &mut self,
-        value: ValType<F>,
+        value: &ValType<F>,
         stride: usize,
         axis: usize,
     ) -> Result<(), TensorError> {
@@ -1368,10 +1264,10 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
     }
 
     /// Concatenates two tensors along the first dimension
-    pub fn concat(&self, other: Self) -> Result<Self, TensorError> {
+    pub fn concat(&self, other: &Self) -> Result<Self, TensorError> {
         let res = match (self, other) {
             (ValTensor::Value { inner: v1, .. }, ValTensor::Value { inner: v2, .. }) => {
-                ValTensor::from(Tensor::new(Some(&[v1.clone(), v2]), &[2])?.combine()?)
+                ValTensor::from(Tensor::new(Some(&[v1.clone(), v2.clone()]), &[2])?.combine()?)
             }
             _ => {
                 return Err(TensorError::WrongMethod);

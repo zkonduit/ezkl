@@ -16,6 +16,7 @@ use halo2_proofs::{
     plonk::{Circuit, ConstraintSystem, Error},
 };
 use halo2curves::bn256::{Bn256, Fr};
+use itertools::Itertools;
 use rand::rngs::OsRng;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::marker::PhantomData;
@@ -58,7 +59,11 @@ impl Circuit<Fr> for MyCircuit {
             |region| {
                 let mut region = RegionCtx::new(region, 0, 1, 1024, 2);
                 config
-                    .layout(&mut region, &self.inputs, Box::new(PolyOp::Pow(4)))
+                    .layout(
+                        &mut region,
+                        &self.inputs.iter().collect_vec(),
+                        Box::new(PolyOp::Pow(4)),
+                    )
                     .unwrap();
                 Ok(())
             },
