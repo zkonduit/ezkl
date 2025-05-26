@@ -245,25 +245,6 @@ jobs:
         #   AR=/opt/homebrew/opt/llvm/bin/llvm-ar CC=/opt/homebrew/opt/llvm/bin/clang wasm-pack test --firefox --headless -- -Z build-std="panic_abort,std" --features web
         run: wasm-pack test --chrome --headless -- -Z build-std="panic_abort,std" --features web
 
-  foudry-solidity-tests:
-    permissions:
-      contents: read
-    runs-on: non-gpu
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          persist-credentials: false
-          submodules: recursive
-
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@3b74dacdda3c0b763089addb99ed86bc3800e68b
-
-      - name: Run tests
-        run: |
-          cd tests/foundry
-          forge install https://github.com/foundry-rs/forge-std --no-git --no-commit
-          forge test -vvvv --fuzz-runs 64
-
   mock-proving-tests:
     permissions:
       contents: read
@@ -372,9 +353,6 @@ jobs:
       - name: Build wasm package for nodejs target.
         run: |
           wasm-pack build --target nodejs --out-dir ./in-browser-evm-verifier/nodejs . -- -Z build-std="panic_abort,std"
-      - name: Replace memory definition in nodejs
-        run: |
-          sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" in-browser-evm-verifier/nodejs/ezkl.js
       - name: Build @ezkljs/verify package
         run: |
           cd in-browser-evm-verifier
@@ -497,9 +475,6 @@ jobs:
       - name: Build wasm package for nodejs target.
         run: |
           wasm-pack build --target nodejs --out-dir ./tests/wasm/nodejs . -- -Z build-std="panic_abort,std"
-      - name: Replace memory definition in nodejs
-        run: |
-          sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" tests/wasm/nodejs/ezkl.js
       - name: KZG prove and verify tests (public outputs + column overflow)
         run: cargo nextest run --verbose tests::kzg_prove_and_verify_with_overflow_::w
       - name: KZG prove and verify tests (public outputs + fixed params + column overflow)
@@ -744,24 +719,6 @@ jobs:
     permissions:
       contents: read
     runs-on: large-self-hosted
-    services:
-      # Label used to access the service container
-      postgres:
-        # Docker Hub image
-        image: postgres
-        env:
-          POSTGRES_USER: ubuntu
-          POSTGRES_HOST_AUTH_METHOD: trust
-        # Set health checks to wait until postgres has started
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-          -v /var/run/postgresql:/var/run/postgresql
-        ports:
-          # Maps tcp port 5432 on service container to the host
-          - 5432:5432
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:

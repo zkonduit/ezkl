@@ -49,7 +49,7 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>:
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
         region: &mut RegionCtx<F>,
-        values: &[ValTensor<F>],
+        values: &[&ValTensor<F>],
     ) -> Result<Option<ValTensor<F>>, CircuitError>;
 
     /// Returns the scale of the output of the operation.
@@ -209,7 +209,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Input 
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
         region: &mut RegionCtx<F>,
-        values: &[ValTensor<F>],
+        values: &[&ValTensor<F>],
     ) -> Result<Option<ValTensor<F>>, CircuitError> {
         let value = values[0].clone();
         if !value.all_prev_assigned() {
@@ -223,12 +223,29 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Input 
                         true,
                     )?))
                 }
-                _ => Ok(Some(super::layouts::identity(
-                    config,
-                    region,
-                    values[..].try_into()?,
-                    self.decomp,
-                )?)),
+                _ => {
+                    if self.decomp {
+                        log::debug!("constraining input to be decomp");
+                        Ok(Some(
+                            super::layouts::decompose(
+                                config,
+                                region,
+                                values[..].try_into()?,
+                                &region.base(),
+                                &region.legs(),
+                                false,
+                            )?
+                            .1,
+                        ))
+                    } else {
+                        log::debug!("constraining input to be identity");
+                        Ok(Some(super::layouts::identity(
+                            config,
+                            region,
+                            values[..].try_into()?,
+                        )?))
+                    }
+                }
             }
         } else {
             Ok(Some(value))
@@ -263,7 +280,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Unknow
         &self,
         _: &mut crate::circuit::BaseConfig<F>,
         _: &mut RegionCtx<F>,
-        _: &[ValTensor<F>],
+        _: &[&ValTensor<F>],
     ) -> Result<Option<ValTensor<F>>, CircuitError> {
         Err(super::CircuitError::UnsupportedOp)
     }
@@ -319,8 +336,13 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Constant<F> {
 }
 
 impl<
-    F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Serialize + for<'de> Deserialize<'de>,
-> Op<F> for Constant<F>
+        F: PrimeField
+            + TensorType
+            + PartialOrd
+            + std::hash::Hash
+            + Serialize
+            + for<'de> Deserialize<'de>,
+    > Op<F> for Constant<F>
 {
     fn as_any(&self) -> &dyn Any {
         self
@@ -333,20 +355,20 @@ impl<
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
         region: &mut RegionCtx<F>,
-        _: &[ValTensor<F>],
+        _: &[&ValTensor<F>],
     ) -> Result<Option<ValTensor<F>>, CircuitError> {
         let value = if let Some(value) = &self.pre_assigned_val {
             value.clone()
         } else {
             self.quantized_values.clone().try_into()?
         };
-        // we gotta constrain it once if its used multiple times
-        Ok(Some(layouts::identity(
-            config,
-            region,
-            &[value],
-            self.decomp,
-        )?))
+        Ok(Some(if self.decomp {
+            log::debug!("constraining constant to be decomp");
+            super::layouts::decompose(config, region, &[&value], &region.base(), &region.legs(), false)?.1
+        } else {
+            log::debug!("constraining constant to be identity");
+            super::layouts::identity(config, region, &[&value])?
+        }))
     }
 
     fn clone_dyn(&self) -> Box<dyn Op<F>> {

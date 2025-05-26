@@ -67,8 +67,11 @@ pub enum GraphError {
     #[error("invalid input types")]
     InvalidInputTypes,
     /// Missing results
-    #[error("missing results")]
-    MissingResults,
+    #[error("missing result for node {0}")]
+    MissingResults(usize),
+    /// Missing input
+    #[error("missing input {0}")]
+    MissingInputForNode(usize),
     /// Tensor error
     #[error("[tensor] {0}")]
     TensorError(#[from] crate::tensor::TensorError),

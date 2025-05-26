@@ -29,8 +29,14 @@
 //! A library for turning computational graphs, such as neural networks, into ZK-circuits.
 //!
 use log::warn;
-#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-use mimalloc as _;
+
+#[global_allocator]
+#[cfg(all(feature = "jemalloc", not(target_arch = "wasm32")))]
+static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
+
+#[global_allocator]
+#[cfg(all(feature = "mimalloc", not(target_arch = "wasm32")))]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 /// Error type
 // #[cfg_attr(not(feature = "ezkl"), derive(uniffi::Error))]
@@ -97,11 +103,11 @@ impl From<String> for EZKLError {
 
 use std::str::FromStr;
 
-use circuit::{CheckMode, table::Range};
+use circuit::{table::Range, CheckMode};
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use clap::Args;
 use fieldutils::IntegerRep;
-use graph::{MAX_PUBLIC_SRS, Visibility};
+use graph::{Visibility, MAX_PUBLIC_SRS};
 use halo2_proofs::poly::{
     ipa::commitment::IPACommitmentScheme, kzg::commitment::KZGCommitmentScheme,
 };

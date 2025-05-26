@@ -1,8 +1,6 @@
-use std::collections::HashSet;
-
 use log::{debug, error, warn};
 
-use crate::circuit::{CheckMode, region::ConstantsMap};
+use crate::circuit::{region::ConstantsMap, CheckMode};
 
 use super::*;
 /// A wrapper around Halo2's Column types that represents a tensor of variables in the circuit.
@@ -379,50 +377,6 @@ impl VarTensor {
                 Err(halo2_proofs::plonk::Error::Synthesis)
             }
         }
-    }
-
-    /// Assigns values from a ValTensor to this tensor, excluding specified positions
-    ///
-    /// # Arguments
-    /// * `region` - The region to assign values in
-    /// * `offset` - Base offset for assignments
-    /// * `values` - The ValTensor containing values to assign
-    /// * `omissions` - Set of positions to skip during assignment
-    /// * `constants` - Map for tracking constant assignments
-    ///
-    /// # Returns
-    /// The assigned ValTensor or an error if assignment fails
-    pub fn assign_with_omissions<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
-        &self,
-        region: &mut Region<F>,
-        offset: usize,
-        values: &ValTensor<F>,
-        omissions: &HashSet<usize>,
-        constants: &mut ConstantsMap<F>,
-    ) -> Result<ValTensor<F>, halo2_proofs::plonk::Error> {
-        let mut assigned_coord = 0;
-        let mut res: ValTensor<F> = match values {
-            ValTensor::Instance { .. } => {
-                error!(
-                    "assignment with omissions is not supported on instance columns. increase K if you require more rows."
-                );
-                Err(halo2_proofs::plonk::Error::Synthesis)
-            }
-            ValTensor::Value { inner: v, .. } => Ok::<ValTensor<F>, halo2_proofs::plonk::Error>(
-                v.enum_map(|coord, k| {
-                    if omissions.contains(&coord) {
-                        return Ok::<_, halo2_proofs::plonk::Error>(k);
-                    }
-                    let cell =
-                        self.assign_value(region, offset, k.clone(), assigned_coord, constants)?;
-                    assigned_coord += 1;
-                    Ok::<_, halo2_proofs::plonk::Error>(cell)
-                })?
-                .into(),
-            ),
-        }?;
-        res.set_scale(values.scale());
-        Ok(res)
     }
 
     /// Assigns values from a ValTensor to this tensor

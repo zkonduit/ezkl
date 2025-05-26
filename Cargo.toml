@@ -88,9 +88,9 @@ pyo3-log = { version = "0.12.0", default-features = false, optional = true }
 tract-onnx = { git = "https://github.com/sonos/tract/", rev = "37132e0397d0a73e5bd3a8615d932dabe44f6736", default-features = false, optional = true }
 tabled = { version = "0.12.0", optional = true }
 objc = { version = "0.2.4", optional = true }
-mimalloc = { version = "0.1", optional = true }
 pyo3-stub-gen = { version = "0.6.0", optional = true }
-
+jemallocator = { version = "0.5", optional = true }
+mimalloc = { version = "0.1", optional = true }
 # universal bindings
 uniffi = { version = "=0.28.0", optional = true }
 getrandom = { version = "0.2.8", optional = true }
@@ -243,7 +243,6 @@ ezkl = [
     "dep:lazy_static",
     "dep:tokio",
     "dep:openssl",
-    "dep:mimalloc",
     "dep:chrono",
     "dep:sha256",
     "dep:clap_complete",
@@ -270,12 +269,15 @@ no-banner = []
 no-update = []
 macos-metal = ["halo2_proofs/macos"]
 ios-metal = ["halo2_proofs/ios"]
+jemalloc = ["dep:jemallocator"]
+mimalloc = ["dep:mimalloc"]
 
 
 [patch.crates-io]
 uniffi_testing = { git = "https://github.com/ElusAegis/uniffi-rs", branch = "feat/testing-feature-build-fix" }
 
 [profile.release]
+# debug = true
 rustflags = ["-C", "relocation-model=pic"]
 lto = "fat"
 codegen-units = 1

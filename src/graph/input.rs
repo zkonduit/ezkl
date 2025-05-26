@@ -1,15 +1,15 @@
 use super::errors::GraphError;
 use super::quantize_float;
-use crate::EZKL_BUF_CAPACITY;
 use crate::circuit::InputType;
 use crate::fieldutils::integer_rep_to_felt;
+use crate::EZKL_BUF_CAPACITY;
 use halo2curves::bn256::Fr as Fp;
-#[cfg(feature = "python-bindings")]
-use pyo3::ToPyObject;
 #[cfg(feature = "python-bindings")]
 use pyo3::prelude::*;
 #[cfg(feature = "python-bindings")]
 use pyo3::types::PyDict;
+#[cfg(feature = "python-bindings")]
+use pyo3::ToPyObject;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::io::BufReader;
 use std::io::BufWriter;
@@ -17,7 +17,7 @@ use std::io::Read;
 use std::panic::UnwindSafe;
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use tract_onnx::tract_core::{
-    tract_data::{TVec, prelude::Tensor as TractTensor},
+    tract_data::{prelude::Tensor as TractTensor, TVec},
     value::TValue,
 };
 
@@ -425,9 +425,7 @@ impl GraphData {
     pub fn from_str(data: &str) -> Result<Self, GraphError> {
         let graph_input = serde_json::from_str(data);
         match graph_input {
-            Ok(graph_input) => {
-                return Ok(graph_input);
-            }
+            Ok(graph_input) => Ok(graph_input),
             Err(_) => {
                 let path = std::path::PathBuf::from(data);
                 GraphData::from_path(path)

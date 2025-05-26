@@ -3,10 +3,10 @@
 mod native_tests {
 
     // use ezkl::circuit::table::RESERVED_BLINDING_ROWS_PAD;
-    use ezkl::Commitments;
     use ezkl::graph::input::{FileSource, FileSourceInner, GraphData};
     use ezkl::graph::{DataSource, GraphSettings, GraphWitness};
     use ezkl::pfsys::Snark;
+    use ezkl::Commitments;
     use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
     use halo2curves::bn256::Bn256;
     use lazy_static::lazy_static;

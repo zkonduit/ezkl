@@ -1,24 +1,24 @@
-use crate::graph::DataSource;
-use crate::graph::GraphSettings;
 use crate::graph::input::{CallToAccount, CallsToAccount, FileSourceInner, GraphData};
 use crate::graph::modules::POSEIDON_INSTANCES;
-use crate::pfsys::Snark;
+use crate::graph::DataSource;
+use crate::graph::GraphSettings;
 use crate::pfsys::evm::EvmVerificationError;
+use crate::pfsys::Snark;
 use alloy::contract::CallBuilder;
 use alloy::core::primitives::Address as H160;
 use alloy::core::primitives::Bytes;
 use alloy::core::primitives::U256;
-use alloy::dyn_abi::abi::TokenSeq;
 use alloy::dyn_abi::abi::token::{DynSeqToken, PackedSeqToken, WordToken};
+use alloy::dyn_abi::abi::TokenSeq;
 // use alloy::providers::Middleware;
 use alloy::json_abi::JsonAbi;
 use alloy::primitives::ruint::ParseError;
-use alloy::primitives::{B256, I256, ParseSignedError};
-use alloy::providers::ProviderBuilder;
+use alloy::primitives::{ParseSignedError, B256, I256};
 use alloy::providers::fillers::{
     ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, SignerFiller,
 };
 use alloy::providers::network::{Ethereum, EthereumSigner};
+use alloy::providers::ProviderBuilder;
 use alloy::providers::{Identity, Provider, RootProvider};
 use alloy::rpc::types::eth::TransactionInput;
 use alloy::rpc::types::eth::TransactionRequest;
@@ -27,9 +27,9 @@ use alloy::signers::wallet::{LocalWallet, WalletError};
 use alloy::sol as abigen;
 use alloy::transports::http::Http;
 use alloy::transports::{RpcError, TransportErrorKind};
-use foundry_compilers::Solc;
 use foundry_compilers::artifacts::Settings as SolcSettings;
 use foundry_compilers::error::{SolcError, SolcIoError};
+use foundry_compilers::Solc;
 use halo2_solidity_verifier::encode_calldata;
 use halo2curves::bn256::{Fr, G1Affine};
 use halo2curves::group::ff::PrimeField;
@@ -711,7 +711,7 @@ pub async fn verify_proof_with_data_attestation(
     };
 
     let encoded = func.encode_input(&[
-        Token::Address(addr_verifier.0.0.into()),
+        Token::Address(addr_verifier.0 .0.into()),
         Token::Bytes(encoded_verifier),
     ])?;
 
@@ -757,7 +757,7 @@ pub async fn test_on_chain_data<M: 'static + Provider<Http<Client>, Ethereum>>(
     let call_to_account = CallToAccount {
         call_data: hex::encode(call),
         decimals,
-        address: hex::encode(contract.address().0.0),
+        address: hex::encode(contract.address().0 .0),
     };
     info!("call_to_account: {:#?}", call_to_account);
     Ok(call_to_account)
@@ -913,9 +913,9 @@ pub async fn get_contract_artifacts(
     runs: usize,
 ) -> Result<(JsonAbi, Bytes, Bytes), EthError> {
     use foundry_compilers::{
-        SHANGHAI_SOLC, SolcInput,
-        artifacts::{Optimizer, output_selection::OutputSelection},
+        artifacts::{output_selection::OutputSelection, Optimizer},
         compilers::CompilerInput,
+        SolcInput, SHANGHAI_SOLC,
     };
 
     if !sol_code_path.exists() {

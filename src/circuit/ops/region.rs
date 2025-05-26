@@ -10,7 +10,6 @@ use halo2_proofs::{
     plonk::{Error, Selector},
 };
 use halo2curves::ff::PrimeField;
-use itertools::Itertools;
 use maybe_rayon::iter::ParallelExtend;
 use std::{
     cell::RefCell,
@@ -462,15 +461,14 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     /// Update the max and min from inputs
     pub fn update_max_min_lookup_inputs(
         &mut self,
-        inputs: &[ValTensor<F>],
+        inputs: &ValTensor<F>,
     ) -> Result<(), CircuitError> {
-        let (mut min, mut max) = (0, 0);
-        for i in inputs {
-            max = max.max(i.int_evals()?.into_iter().max().unwrap_or_default());
-            min = min.min(i.int_evals()?.into_iter().min().unwrap_or_default());
-        }
-        self.statistics.max_lookup_inputs = self.statistics.max_lookup_inputs.max(max);
-        self.statistics.min_lookup_inputs = self.statistics.min_lookup_inputs.min(min);
+        let int_eval = inputs.int_evals()?;
+        let max = int_eval.iter().max().unwrap_or(&0);
+        let min = int_eval.iter().min().unwrap_or(&0);
+
+        self.statistics.max_lookup_inputs = self.statistics.max_lookup_inputs.max(*max);
+        self.statistics.min_lookup_inputs = self.statistics.min_lookup_inputs.min(*min);
         Ok(())
     }
 
@@ -505,10 +503,10 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     /// add used lookup
     pub fn add_used_lookup(
         &mut self,
-        lookup: LookupOp,
-        inputs: &[ValTensor<F>],
+        lookup: &LookupOp,
+        inputs: &ValTensor<F>,
     ) -> Result<(), CircuitError> {
-        self.statistics.used_lookups.insert(lookup);
+        self.statistics.used_lookups.insert(lookup.clone());
         self.update_max_min_lookup_inputs(inputs)
     }
 
@@ -640,34 +638,6 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         values: &ValTensor<F>,
     ) -> Result<(ValTensor<F>, usize), CircuitError> {
         self.assign_dynamic_lookup(var, values)
-    }
-
-    /// Assign a valtensor to a vartensor
-    pub fn assign_with_omissions(
-        &mut self,
-        var: &VarTensor,
-        values: &ValTensor<F>,
-        ommissions: &HashSet<usize>,
-    ) -> Result<ValTensor<F>, CircuitError> {
-        if let Some(region) = &self.region {
-            Ok(var.assign_with_omissions(
-                &mut region.borrow_mut(),
-                self.linear_coord,
-                values,
-                ommissions,
-                &mut self.assigned_constants,
-            )?)
-        } else {
-            let mut values_clone = values.clone();
-            let mut indices = ommissions.clone().into_iter().collect_vec();
-            values_clone.remove_indices(&mut indices, false)?;
-
-            let values_map = values.create_constants_map();
-
-            self.assigned_constants.par_extend(values_map);
-
-            Ok(values.clone())
-        }
     }
 
     /// Assign a valtensor to a vartensor with duplication

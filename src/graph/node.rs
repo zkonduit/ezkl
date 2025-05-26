@@ -37,6 +37,7 @@ use crate::tensor::TensorError;
 // Import curve-specific field type
 use halo2curves::bn256::Fr as Fp;
 
+use itertools::Itertools;
 // Import logging for EZKL
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use log::trace;
@@ -118,16 +119,15 @@ impl Op<Fp> for Rescaled {
         &self,
         config: &mut crate::circuit::BaseConfig<Fp>,
         region: &mut crate::circuit::region::RegionCtx<Fp>,
-        values: &[crate::tensor::ValTensor<Fp>],
+        values: &[&crate::tensor::ValTensor<Fp>],
     ) -> Result<Option<crate::tensor::ValTensor<Fp>>, CircuitError> {
         if self.scale.len() != values.len() {
             return Err(TensorError::DimMismatch("rescaled inputs".to_string()).into());
         }
 
         let res =
-            &crate::circuit::layouts::rescale(config, region, values[..].try_into()?, &self.scale)?
-                [..];
-        self.inner.layout(config, region, res)
+            crate::circuit::layouts::rescale(config, region, values[..].try_into()?, &self.scale)?;
+        self.inner.layout(config, region, &res.iter().collect_vec())
     }
 
     /// Create a cloned boxed copy of this operation
@@ -274,13 +274,13 @@ impl Op<Fp> for RebaseScale {
         &self,
         config: &mut crate::circuit::BaseConfig<Fp>,
         region: &mut crate::circuit::region::RegionCtx<Fp>,
-        values: &[crate::tensor::ValTensor<Fp>],
+        values: &[&crate::tensor::ValTensor<Fp>],
     ) -> Result<Option<crate::tensor::ValTensor<Fp>>, CircuitError> {
         let original_res = self
             .inner
             .layout(config, region, values)?
             .ok_or(CircuitError::MissingLayout(self.as_string()))?;
-        self.rebase_op.layout(config, region, &[original_res])
+        self.rebase_op.layout(config, region, &[&original_res])
     }
 
     /// Create a cloned boxed copy of this operation
@@ -472,7 +472,7 @@ impl Op<Fp> for SupportedOp {
         &self,
         config: &mut crate::circuit::BaseConfig<Fp>,
         region: &mut crate::circuit::region::RegionCtx<Fp>,
-        values: &[crate::tensor::ValTensor<Fp>],
+        values: &[&crate::tensor::ValTensor<Fp>],
     ) -> Result<Option<crate::tensor::ValTensor<Fp>>, CircuitError> {
         self.as_op().layout(config, region, values)
     }

@@ -37,15 +37,15 @@ impl ModuleConfigs {
     /// Create new module configs from visibility of each variable
     pub fn from_visibility(
         cs: &mut ConstraintSystem<Fp>,
-        module_size: ModuleSizes,
+        module_size: &ModuleSizes,
         logrows: usize,
     ) -> Self {
         let mut config = Self::default();
 
-        for size in module_size.polycommit {
+        for size in &module_size.polycommit {
             config
                 .polycommit
-                .push(PolyCommitChip::configure(cs, (logrows, size)));
+                .push(PolyCommitChip::configure(cs, (logrows, *size)));
         }
 
         config
@@ -55,8 +55,8 @@ impl ModuleConfigs {
     pub fn configure_complex_modules(
         &mut self,
         cs: &mut ConstraintSystem<Fp>,
-        visibility: VarVisibility,
-        module_size: ModuleSizes,
+        visibility: &VarVisibility,
+        module_size: &ModuleSizes,
     ) {
         if (visibility.input.is_hashed()
             || visibility.output.is_hashed()

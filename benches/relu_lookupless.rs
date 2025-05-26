@@ -70,7 +70,7 @@ impl Circuit<Fr> for NLCircuit {
                 config
                     .layout(
                         &mut region,
-                        &[self.input.clone()],
+                        &[&self.input],
                         Box::new(PolyOp::LeakyReLU {
                             slope: 0.0.into(),
                             scale: 1,
