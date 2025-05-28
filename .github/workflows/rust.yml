@@ -25,29 +25,29 @@ jobs:
       contents: read
     runs-on: large-self-hosted
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
       - name: Configure Git credentials
         run: |
-          if [ -z "$VERIFICATION_EZKL_TOKEN" ]; then
-            echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
 
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
-          echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
 
           # Also set the URL replacement as before
           git config --global \
-            url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
             "https://github.com/"
         env:
-          VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
@@ -66,29 +66,29 @@ jobs:
       contents: read
     runs-on: ubuntu-latest
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
       - name: Configure Git credentials
         run: |
-          if [ -z "$VERIFICATION_EZKL_TOKEN" ]; then
-            echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
 
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
-          echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
 
           # Also set the URL replacement as before
           git config --global \
-            url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
             "https://github.com/"
         env:
-          VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
@@ -103,29 +103,29 @@ jobs:
       contents: read
     runs-on: ubuntu-latest
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
       - name: Configure Git credentials
         run: |
-          if [ -z "$VERIFICATION_EZKL_TOKEN" ]; then
-            echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
 
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
-          echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
 
           # Also set the URL replacement as before
           git config --global \
-            url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
             "https://github.com/"
         env:
-          VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
@@ -140,29 +140,29 @@ jobs:
       contents: read
     runs-on: ubuntu-latest-32-cores
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
       - name: Configure Git credentials
         run: |
-          if [ -z "$VERIFICATION_EZKL_TOKEN" ]; then
-            echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
 
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
-          echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
 
           # Also set the URL replacement as before
           git config --global \
-            url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
             "https://github.com/"
         env:
-          VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
@@ -219,29 +219,29 @@ jobs:
       contents: read
     runs-on: non-gpu
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
       - name: Configure Git credentials
         run: |
-          if [ -z "$VERIFICATION_EZKL_TOKEN" ]; then
-            echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
 
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
-          echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
 
           # Also set the URL replacement as before
           git config --global \
-            url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
             "https://github.com/"
         env:
-          VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
@@ -273,29 +273,29 @@ jobs:
       contents: read
     runs-on: non-gpu
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
       - name: Configure Git credentials
         run: |
-          if [ -z "$VERIFICATION_EZKL_TOKEN" ]; then
-            echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
 
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
-          echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
 
           # Also set the URL replacement as before
           git config --global \
-            url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
             "https://github.com/"
         env:
-          VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
@@ -327,29 +327,29 @@ jobs:
       contents: read
     runs-on: ubuntu-latest-16-cores
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
       - name: Configure Git credentials
         run: |
-          if [ -z "$VERIFICATION_EZKL_TOKEN" ]; then
-            echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
 
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
-          echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
 
           # Also set the URL replacement as before
           git config --global \
-            url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
             "https://github.com/"
         env:
-          VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
@@ -368,29 +368,29 @@ jobs:
       contents: read
     runs-on: non-gpu
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
       - name: Configure Git credentials
         run: |
-          if [ -z "$VERIFICATION_EZKL_TOKEN" ]; then
-            echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
 
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
-          echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
 
           # Also set the URL replacement as before
           git config --global \
-            url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
             "https://github.com/"
         env:
-          VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
@@ -418,7 +418,7 @@ jobs:
       contents: read
     runs-on: non-gpu
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
@@ -426,22 +426,22 @@ jobs:
           persist-credentials: false
       - name: Configure Git credentials
         run: |
-          if [ -z "$VERIFICATION_EZKL_TOKEN" ]; then
-            echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
 
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
-          echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
 
           # Also set the URL replacement as before
           git config --global \
-            url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
             "https://github.com/"
         env:
-          VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -506,29 +506,29 @@ jobs:
     runs-on: non-gpu
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
       - name: Configure Git credentials
         run: |
-          if [ -z "$VERIFICATION_EZKL_TOKEN" ]; then
-            echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
 
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
-          echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
 
           # Also set the URL replacement as before
           git config --global \
-            url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
             "https://github.com/"
         env:
-          VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
@@ -620,29 +620,29 @@ jobs:
     runs-on: non-gpu
     needs: [build, library-tests, docs]
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
       - name: Configure Git credentials
         run: |
-          if [ -z "$VERIFICATION_EZKL_TOKEN" ]; then
-            echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
 
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
-          echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
 
           # Also set the URL replacement as before
           git config --global \
-            url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
             "https://github.com/"
         env:
-          VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
@@ -757,29 +757,29 @@ jobs:
     runs-on: self-hosted
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
       - name: Configure Git credentials
         run: |
-          if [ -z "$VERIFICATION_EZKL_TOKEN" ]; then
-            echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
 
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
-          echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
 
           # Also set the URL replacement as before
           git config --global \
-            url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
             "https://github.com/"
         env:
-          VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
       - uses: dtolnay/rust-toolchain@4f94fbe7e03939b0e674bcc9ca609a16088f63ff  #nightly branch, TODO: update when required
         with:
@@ -819,29 +819,29 @@ jobs:
     runs-on: large-self-hosted
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
       - name: Configure Git credentials
         run: |
-          if [ -z "$VERIFICATION_EZKL_TOKEN" ]; then
-            echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
 
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
-          echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
 
           # Also set the URL replacement as before
           git config --global \
-            url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
             "https://github.com/"
         env:
-          VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
@@ -861,29 +861,29 @@ jobs:
     runs-on: large-self-hosted
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
       - name: Configure Git credentials
         run: |
-          if [ -z "$VERIFICATION_EZKL_TOKEN" ]; then
-            echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
 
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
-          echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
 
           # Also set the URL replacement as before
           git config --global \
-            url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
             "https://github.com/"
         env:
-          VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
@@ -907,29 +907,29 @@ jobs:
     runs-on: ubuntu-latest-32-cores
     needs: [build, library-tests, docs]
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
       - name: Configure Git credentials
         run: |
-          if [ -z "$VERIFICATION_EZKL_TOKEN" ]; then
-            echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
 
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
-          echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
 
           # Also set the URL replacement as before
           git config --global \
-            url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
             "https://github.com/"
         env:
-          VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
@@ -949,29 +949,29 @@ jobs:
     runs-on: non-gpu
     needs: [build, library-tests, docs]
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
       - name: Configure Git credentials
         run: |
-          if [ -z "$VERIFICATION_EZKL_TOKEN" ]; then
-            echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
 
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
-          echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
 
           # Also set the URL replacement as before
           git config --global \
-            url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
             "https://github.com/"
         env:
-          VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
       - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa  #v4.8.0
         with:
@@ -1000,29 +1000,29 @@ jobs:
     runs-on: non-gpu
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
       - name: Configure Git credentials
         run: |
-          if [ -z "$VERIFICATION_EZKL_TOKEN" ]; then
-            echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
 
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
-          echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
 
           # Also set the URL replacement as before
           git config --global \
-            url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
             "https://github.com/"
         env:
-          VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
       - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa  #v4.8.0
         with:
@@ -1054,29 +1054,29 @@ jobs:
       contents: read
     runs-on: large-self-hosted
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
       - name: Configure Git credentials
         run: |
-          if [ -z "$VERIFICATION_EZKL_TOKEN" ]; then
-            echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
 
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
-          echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
 
           # Also set the URL replacement as before
           git config --global \
-            url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
             "https://github.com/"
         env:
-          VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
       - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa  #v4.8.0
         with:
@@ -1133,29 +1133,29 @@ jobs:
       contents: read
     runs-on: macos-latest
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
       - name: Configure Git credentials
         run: |
-          if [ -z "$VERIFICATION_EZKL_TOKEN" ]; then
-            echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
 
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
-          echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
 
           # Also set the URL replacement as before
           git config --global \
-            url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
             "https://github.com/"
         env:
-          VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
@@ -1176,29 +1176,29 @@ jobs:
     needs: [ios-integration-tests]
 
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
       - name: Configure Git credentials
         run: |
-          if [ -z "$VERIFICATION_EZKL_TOKEN" ]; then
-            echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
 
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
-          echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
 
           # Also set the URL replacement as before
           git config --global \
-            url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
             "https://github.com/"
         env:
-          VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
