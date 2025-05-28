@@ -36,15 +36,15 @@ jobs:
             echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-
-          # Configure git to use the token for all GitHub requests
+          
+          # For libgit2 (what Cargo uses internally)
           git config --global credential.helper store
-          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-
-          # Also set the URL replacement as before
+          
+          # Also set URL replacement with oauth2 format
           git config --global \
-            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
             "https://github.com/"
         env:
           EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -77,15 +77,15 @@ jobs:
             echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-
-          # Configure git to use the token for all GitHub requests
+          
+          # For libgit2 (what Cargo uses internally)
           git config --global credential.helper store
-          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-
-          # Also set the URL replacement as before
+          
+          # Also set URL replacement with oauth2 format
           git config --global \
-            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
             "https://github.com/"
         env:
           EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -114,15 +114,15 @@ jobs:
             echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-
-          # Configure git to use the token for all GitHub requests
+          
+          # For libgit2 (what Cargo uses internally)
           git config --global credential.helper store
-          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-
-          # Also set the URL replacement as before
+          
+          # Also set URL replacement with oauth2 format
           git config --global \
-            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
             "https://github.com/"
         env:
           EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -151,15 +151,15 @@ jobs:
             echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-
-          # Configure git to use the token for all GitHub requests
+          
+          # For libgit2 (what Cargo uses internally)
           git config --global credential.helper store
-          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-
-          # Also set the URL replacement as before
+          
+          # Also set URL replacement with oauth2 format
           git config --global \
-            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
             "https://github.com/"
         env:
           EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -230,15 +230,15 @@ jobs:
             echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-
-          # Configure git to use the token for all GitHub requests
+          
+          # For libgit2 (what Cargo uses internally)
           git config --global credential.helper store
-          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-
-          # Also set the URL replacement as before
+          
+          # Also set URL replacement with oauth2 format
           git config --global \
-            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
             "https://github.com/"
         env:
           EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -284,15 +284,15 @@ jobs:
             echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-
-          # Configure git to use the token for all GitHub requests
+          
+          # For libgit2 (what Cargo uses internally)
           git config --global credential.helper store
-          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-
-          # Also set the URL replacement as before
+          
+          # Also set URL replacement with oauth2 format
           git config --global \
-            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
             "https://github.com/"
         env:
           EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -338,15 +338,15 @@ jobs:
             echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-
-          # Configure git to use the token for all GitHub requests
+          
+          # For libgit2 (what Cargo uses internally)
           git config --global credential.helper store
-          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-
-          # Also set the URL replacement as before
+          
+          # Also set URL replacement with oauth2 format
           git config --global \
-            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
             "https://github.com/"
         env:
           EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -379,15 +379,15 @@ jobs:
             echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-
-          # Configure git to use the token for all GitHub requests
+          
+          # For libgit2 (what Cargo uses internally)
           git config --global credential.helper store
-          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-
-          # Also set the URL replacement as before
+          
+          # Also set URL replacement with oauth2 format
           git config --global \
-            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
             "https://github.com/"
         env:
           EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -430,15 +430,15 @@ jobs:
             echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-
-          # Configure git to use the token for all GitHub requests
+          
+          # For libgit2 (what Cargo uses internally)
           git config --global credential.helper store
-          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-
-          # Also set the URL replacement as before
+          
+          # Also set URL replacement with oauth2 format
           git config --global \
-            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
             "https://github.com/"
         env:
           EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -517,15 +517,15 @@ jobs:
             echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-
-          # Configure git to use the token for all GitHub requests
+          
+          # For libgit2 (what Cargo uses internally)
           git config --global credential.helper store
-          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-
-          # Also set the URL replacement as before
+          
+          # Also set URL replacement with oauth2 format
           git config --global \
-            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
             "https://github.com/"
         env:
           EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -631,15 +631,15 @@ jobs:
             echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-
-          # Configure git to use the token for all GitHub requests
+          
+          # For libgit2 (what Cargo uses internally)
           git config --global credential.helper store
-          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-
-          # Also set the URL replacement as before
+          
+          # Also set URL replacement with oauth2 format
           git config --global \
-            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
             "https://github.com/"
         env:
           EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -768,15 +768,15 @@ jobs:
             echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-
-          # Configure git to use the token for all GitHub requests
+          
+          # For libgit2 (what Cargo uses internally)
           git config --global credential.helper store
-          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-
-          # Also set the URL replacement as before
+          
+          # Also set URL replacement with oauth2 format
           git config --global \
-            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
             "https://github.com/"
         env:
           EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -830,15 +830,15 @@ jobs:
             echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-
-          # Configure git to use the token for all GitHub requests
+          
+          # For libgit2 (what Cargo uses internally)
           git config --global credential.helper store
-          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-
-          # Also set the URL replacement as before
+          
+          # Also set URL replacement with oauth2 format
           git config --global \
-            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
             "https://github.com/"
         env:
           EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -872,15 +872,15 @@ jobs:
             echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-
-          # Configure git to use the token for all GitHub requests
+          
+          # For libgit2 (what Cargo uses internally)
           git config --global credential.helper store
-          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-
-          # Also set the URL replacement as before
+          
+          # Also set URL replacement with oauth2 format
           git config --global \
-            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
             "https://github.com/"
         env:
           EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -918,15 +918,15 @@ jobs:
             echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-
-          # Configure git to use the token for all GitHub requests
+          
+          # For libgit2 (what Cargo uses internally)
           git config --global credential.helper store
-          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-
-          # Also set the URL replacement as before
+          
+          # Also set URL replacement with oauth2 format
           git config --global \
-            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
             "https://github.com/"
         env:
           EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -960,15 +960,15 @@ jobs:
             echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-
-          # Configure git to use the token for all GitHub requests
+          
+          # For libgit2 (what Cargo uses internally)
           git config --global credential.helper store
-          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-
-          # Also set the URL replacement as before
+          
+          # Also set URL replacement with oauth2 format
           git config --global \
-            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
             "https://github.com/"
         env:
           EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -1011,15 +1011,15 @@ jobs:
             echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-
-          # Configure git to use the token for all GitHub requests
+          
+          # For libgit2 (what Cargo uses internally)
           git config --global credential.helper store
-          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-
-          # Also set the URL replacement as before
+          
+          # Also set URL replacement with oauth2 format
           git config --global \
-            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
             "https://github.com/"
         env:
           EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -1065,15 +1065,15 @@ jobs:
             echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-
-          # Configure git to use the token for all GitHub requests
+          
+          # For libgit2 (what Cargo uses internally)
           git config --global credential.helper store
-          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-
-          # Also set the URL replacement as before
+          
+          # Also set URL replacement with oauth2 format
           git config --global \
-            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
             "https://github.com/"
         env:
           EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -1144,15 +1144,15 @@ jobs:
             echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-
-          # Configure git to use the token for all GitHub requests
+          
+          # For libgit2 (what Cargo uses internally)
           git config --global credential.helper store
-          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-
-          # Also set the URL replacement as before
+          
+          # Also set URL replacement with oauth2 format
           git config --global \
-            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
             "https://github.com/"
         env:
           EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -1187,15 +1187,15 @@ jobs:
             echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-
-          # Configure git to use the token for all GitHub requests
+          
+          # For libgit2 (what Cargo uses internally)
           git config --global credential.helper store
-          echo "https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-
-          # Also set the URL replacement as before
+          
+          # Also set URL replacement with oauth2 format
           git config --global \
-            url."https://${EVM_VERIFIER_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
             "https://github.com/"
         env:
           EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
