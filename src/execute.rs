@@ -1,12 +1,13 @@
 use crate::circuit::region::RegionSettings;
 use crate::circuit::CheckMode;
 use crate::commands::CalibrationTarget;
-use crate::eth::{deploy_contract_via_solidity, deploy_da_verifier_via_solidity, fix_da_sol};
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
+use crate::eth::{deploy_contract_via_solidity, register_vka_via_rv};
 #[allow(unused_imports)]
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
 use crate::eth::{get_contract_artifacts, verify_proof_via_solidity};
 use crate::graph::input::GraphData;
 use crate::graph::{GraphCircuit, GraphSettings, GraphWitness, Model};
-use crate::graph::{TestDataSource, TestSources};
 use crate::pfsys::evm::aggregation_kzg::{AggregationCircuit, PoseidonTranscript};
 use crate::pfsys::{
     create_keys, load_pk, load_vk, save_params, save_pk, Snark, StrategyType, TranscriptType,
@@ -14,7 +15,7 @@ use crate::pfsys::{
 use crate::pfsys::{
     create_proof_circuit, swap_proof_commitments_polycommit, verify_proof_circuit, ProofSplitCommit,
 };
-use crate::pfsys::{save_vk, srs::*};
+use crate::pfsys::{encode_calldata, save_vk, srs::*};
 use crate::tensor::TensorError;
 use crate::EZKL_BUF_CAPACITY;
 use crate::{commands::*, EZKLError};
@@ -38,6 +39,7 @@ use halo2_proofs::poly::kzg::{
 };
 use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{EncodedChallenge, TranscriptReadBuffer};
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
 use halo2_solidity_verifier;
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
 use halo2curves::ff::{FromUniformBytes, WithSmallOrderMulGroup};
@@ -54,9 +56,12 @@ use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::compile;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use snark_verifier::system::halo2::Config;
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
 use std::fs::File;
 use std::io::BufWriter;
-use std::io::{Cursor, Write};
+use std::io::Cursor;
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
+use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -166,7 +171,6 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             scale_rebase_multiplier,
             max_logrows,
         )
-        .await
         .map(|e| serde_json::to_string(&e).unwrap()),
         Commands::GenWitness {
             data,
@@ -181,12 +185,12 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             vk_path,
             srs_path,
         )
-        .await
         .map(|e| serde_json::to_string(&e).unwrap()),
         Commands::Mock { model, witness } => mock(
             model.unwrap_or(DEFAULT_MODEL.into()),
             witness.unwrap_or(DEFAULT_WITNESS.into()),
         ),
+        #[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
         Commands::CreateEvmVerifier {
             vk_path,
             srs_path,
@@ -205,48 +209,35 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             )
             .await
         }
+        #[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
         Commands::EncodeEvmCalldata {
             proof_path,
             calldata_path,
-            addr_vk,
+            vka_path,
         } => encode_evm_calldata(
             proof_path.unwrap_or(DEFAULT_PROOF.into()),
             calldata_path.unwrap_or(DEFAULT_CALLDATA.into()),
-            addr_vk,
+            vka_path,
         )
         .map(|e| serde_json::to_string(&e).unwrap()),
+        #[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
         Commands::CreateEvmVka {
             vk_path,
             srs_path,
             settings_path,
-            sol_code_path,
-            abi_path,
+            vka_path,
+            decimals,
         } => {
             create_evm_vka(
                 vk_path.unwrap_or(DEFAULT_VK.into()),
                 srs_path,
                 settings_path.unwrap_or(DEFAULT_SETTINGS.into()),
-                sol_code_path.unwrap_or(DEFAULT_VK_SOL.into()),
-                abi_path.unwrap_or(DEFAULT_VK_ABI.into()),
+                vka_path.unwrap_or(DEFAULT_VKA.into()),
+                decimals.unwrap_or(DEFAULT_DECIMALS.parse().unwrap()),
             )
             .await
         }
-        Commands::CreateEvmDa {
-            settings_path,
-            sol_code_path,
-            abi_path,
-            data,
-            witness,
-        } => {
-            create_evm_data_attestation(
-                settings_path.unwrap_or(DEFAULT_SETTINGS.into()),
-                sol_code_path.unwrap_or(DEFAULT_SOL_CODE_DA.into()),
-                abi_path.unwrap_or(DEFAULT_VERIFIER_DA_ABI.into()),
-                data.unwrap_or(DEFAULT_DATA.into()),
-                witness,
-            )
-            .await
-        }
+        #[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
         Commands::CreateEvmVerifierAggr {
             vk_path,
             srs_path,
@@ -292,24 +283,6 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             disable_selector_compression
                 .unwrap_or(DEFAULT_DISABLE_SELECTOR_COMPRESSION.parse().unwrap()),
         ),
-        Commands::SetupTestEvmData {
-            data,
-            compiled_circuit,
-            test_data,
-            rpc_url,
-            input_source,
-            output_source,
-        } => {
-            setup_test_evm_data(
-                data.unwrap_or(DEFAULT_DATA.into()),
-                compiled_circuit.unwrap_or(DEFAULT_COMPILED_CIRCUIT.into()),
-                test_data,
-                rpc_url,
-                input_source,
-                output_source,
-            )
-            .await
-        }
         Commands::SwapProofCommitments {
             proof_path,
             witness_path,
@@ -418,6 +391,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             commitment.into(),
         )
         .map(|e| serde_json::to_string(&e).unwrap()),
+        #[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
         Commands::DeployEvm {
             sol_code_path,
             rpc_url,
@@ -436,39 +410,37 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             )
             .await
         }
-        Commands::DeployEvmDa {
-            data,
-            settings_path,
-            sol_code_path,
-            rpc_url,
-            addr_path,
-            optimizer_runs,
-            private_key,
-        } => {
-            deploy_da_evm(
-                data.unwrap_or(DEFAULT_DATA.into()),
-                settings_path.unwrap_or(DEFAULT_SETTINGS.into()),
-                sol_code_path.unwrap_or(DEFAULT_SOL_CODE_DA.into()),
-                rpc_url,
-                addr_path.unwrap_or(DEFAULT_CONTRACT_ADDRESS_DA.into()),
-                optimizer_runs,
-                private_key,
-            )
-            .await
-        }
+        #[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
         Commands::VerifyEvm {
             proof_path,
             addr_verifier,
             rpc_url,
-            addr_da,
-            addr_vk,
+            vka_path,
+            encoded_calldata,
         } => {
             verify_evm(
                 proof_path.unwrap_or(DEFAULT_PROOF.into()),
                 addr_verifier,
                 rpc_url,
-                addr_da,
-                addr_vk,
+                vka_path,
+                encoded_calldata,
+            )
+            .await
+        }
+        #[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
+        Commands::RegisterVka {
+            addr_verifier,
+            vka_path,
+            rpc_url,
+            vka_digest_path,
+            private_key,
+        } => {
+            register_vka(
+                rpc_url,
+                addr_verifier,
+                vka_path.unwrap_or(DEFAULT_VKA.into()),
+                vka_digest_path.unwrap_or(DEFAULT_VKA_DIGEST.into()),
+                private_key,
             )
             .await
         }
@@ -719,7 +691,7 @@ pub(crate) fn table(model: PathBuf, run_args: RunArgs) -> Result<String, EZKLErr
     Ok(String::new())
 }
 
-pub(crate) async fn gen_witness(
+pub(crate) fn gen_witness(
     compiled_circuit_path: PathBuf,
     data: String,
     output: Option<PathBuf>,
@@ -741,7 +713,7 @@ pub(crate) async fn gen_witness(
         None
     };
 
-    let mut input = circuit.load_graph_input(&data).await?;
+    let mut input = circuit.load_graph_input(&data)?;
     #[cfg(any(not(feature = "ezkl"), target_arch = "wasm32"))]
     let mut input = circuit.load_graph_input(&data)?;
 
@@ -1052,7 +1024,7 @@ impl AccuracyResults {
 /// Calibrate the circuit parameters to a given a dataset
 #[allow(trivial_casts)]
 #[allow(clippy::too_many_arguments)]
-pub(crate) async fn calibrate(
+pub(crate) fn calibrate(
     model_path: PathBuf,
     data: String,
     settings_path: PathBuf,
@@ -1078,7 +1050,7 @@ pub(crate) async fn calibrate(
 
     let input_shapes = model.graph.input_shapes()?;
 
-    let chunks = data.split_into_batches(input_shapes).await?;
+    let chunks = data.split_into_batches(input_shapes)?;
     info!("num calibration batches: {}", chunks.len());
 
     debug!("running onnx predictions...");
@@ -1183,7 +1155,7 @@ pub(crate) async fn calibrate(
                 let chunk = chunk.clone();
 
                 let data = circuit
-                    .load_graph_from_file_exclusively(&chunk)
+                    .load_graph_input(&chunk)
                     .map_err(|e| format!("failed to load circuit inputs: {}", e))?;
 
                 let forward_res = circuit
@@ -1438,6 +1410,7 @@ pub(crate) fn mock(
     Ok(String::new())
 }
 
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
 pub(crate) async fn create_evm_verifier(
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
@@ -1455,7 +1428,9 @@ pub(crate) async fn create_evm_verifier(
     )?;
 
     let num_instance = settings.total_instances();
-    let num_instance: usize = num_instance.iter().sum::<usize>();
+    // create a scales array that is the same length as the number of instances, all populated with 0
+    let scales = vec![0; num_instance.len()];
+    // let poseidon_instance = settings.module_sizes.num_instances().iter().sum::<usize>();
 
     let vk = load_vk::<KZGCommitmentScheme<Bn256>, GraphCircuit>(vk_path, settings)?;
     trace!("params computed");
@@ -1464,7 +1439,10 @@ pub(crate) async fn create_evm_verifier(
         &params,
         &vk,
         halo2_solidity_verifier::BatchOpenScheme::Bdfg21,
-        num_instance,
+        &num_instance,
+        &scales,
+        0,
+        0,
     );
     let (verifier_solidity, name) = if reusable {
         (generator.render_separately()?.0, "Halo2VerifierReusable") // ignore the rendered vk artifact for now and generate it in create_evm_vka
@@ -1482,12 +1460,13 @@ pub(crate) async fn create_evm_verifier(
     Ok(String::new())
 }
 
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
 pub(crate) async fn create_evm_vka(
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
     settings_path: PathBuf,
-    sol_code_path: PathBuf,
-    abi_path: PathBuf,
+    vka_path: PathBuf,
+    decimals: usize,
 ) -> Result<String, EZKLError> {
     let settings = GraphSettings::load(&settings_path)?;
     let commitment: Commitments = settings.run_args.commitment.into();
@@ -1497,133 +1476,52 @@ pub(crate) async fn create_evm_vka(
         commitment,
     )?;
 
-    let num_instance = settings.total_instances();
-    let num_instance: usize = num_instance.iter().sum::<usize>();
+    let num_poseidon_instance = settings.module_sizes.num_instances().iter().sum::<usize>();
+    let num_fixed_point_instance = settings
+        .model_instance_shapes
+        .iter()
+        .map(|x| x.iter().product::<usize>())
+        .collect_vec();
 
+    let scales = settings.get_model_instance_scales();
     let vk = load_vk::<KZGCommitmentScheme<Bn256>, GraphCircuit>(vk_path, settings)?;
     trace!("params computed");
+    // assert that the decimals must be less than or equal to 38 to prevent overflow
+    if decimals > 38 {
+        return Err("decimals must be less than or equal to 38".into());
+    }
 
     let generator = halo2_solidity_verifier::SolidityGenerator::new(
         &params,
         &vk,
         halo2_solidity_verifier::BatchOpenScheme::Bdfg21,
-        num_instance,
+        &num_fixed_point_instance,
+        &scales,
+        decimals,
+        num_poseidon_instance,
     );
 
-    let vk_solidity = generator.render_separately()?.1;
+    let vka_words: Vec<[u8; 32]> = generator.render_separately_vka_words()?.1;
+    let serialized_vka_words = bincode::serialize(&vka_words).or_else(|e| {
+        Err(EZKLError::from(format!(
+            "Failed to serialize vka words: {}",
+            e
+        )))
+    })?;
 
-    File::create(sol_code_path.clone())?.write_all(vk_solidity.as_bytes())?;
+    File::create(vka_path.clone())?.write_all(&serialized_vka_words)?;
 
-    // fetch abi of the contract
-    let (abi, _, _) = get_contract_artifacts(sol_code_path, "Halo2VerifyingArtifact", 0).await?;
-    // save abi to file
-    serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
+    // Load in the vka words and deserialize them and check that they match the original
+    let bytes = std::fs::read(vka_path)?;
+    let vka_buf: Vec<[u8; 32]> = bincode::deserialize(&bytes)
+        .map_err(|e| EZKLError::from(format!("Failed to deserialize vka words: {e}")))?;
+    if vka_buf != vka_words {
+        return Err("vka words do not match".into());
+    };
 
     Ok(String::new())
 }
-
-pub(crate) async fn create_evm_data_attestation(
-    settings_path: PathBuf,
-    sol_code_path: PathBuf,
-    abi_path: PathBuf,
-    input: String,
-    witness: Option<PathBuf>,
-) -> Result<String, EZKLError> {
-    #[allow(unused_imports)]
-    use crate::graph::{DataSource, VarVisibility};
-    use crate::{graph::Visibility, pfsys::get_proof_commitments};
-
-    let settings = GraphSettings::load(&settings_path)?;
-
-    let visibility = VarVisibility::from_args(&settings.run_args)?;
-    trace!("params computed");
-
-    // if input is not provided, we just instantiate dummy input data
-    let data =
-        GraphData::from_str(&input).unwrap_or_else(|_| GraphData::new(DataSource::File(vec![])));
-
-    debug!("data attestation data: {:?}", data);
-
-    // The number of input and output instances we attest to for the single call data attestation
-    let mut input_len = None;
-    let mut output_len = None;
-
-    if let Some(DataSource::OnChain(source)) = data.output_data {
-        if visibility.output.is_private() {
-            return Err("private output data on chain is not supported on chain".into());
-        }
-        output_len = Some(source.call.decimals.len());
-    };
-
-    if let DataSource::OnChain(source) = data.input_data {
-        if visibility.input.is_private() {
-            return Err("private input data on chain is not supported on chain".into());
-        }
-        input_len = Some(source.call.decimals.len());
-    };
-
-    // If both model inputs and outputs are attested to then we
-
-    // Read the settings file. Look if either the run_ars.input_visibility, run_args.output_visibility or run_args.param_visibility is KZGCommit
-    // if so, then we need to load the witness
-
-    let commitment_bytes = if settings.run_args.input_visibility == Visibility::KZGCommit
-        || settings.run_args.output_visibility == Visibility::KZGCommit
-        || settings.run_args.param_visibility == Visibility::KZGCommit
-    {
-        let witness = GraphWitness::from_path(witness.unwrap_or(DEFAULT_WITNESS.into()))?;
-        let commitments = witness.get_polycommitments();
-        let proof_first_bytes = get_proof_commitments::<
-            KZGCommitmentScheme<Bn256>,
-            _,
-            EvmTranscript<G1Affine, _, _, _>,
-        >(&commitments);
-
-        Some(proof_first_bytes.unwrap())
-    } else {
-        None
-    };
-
-    let output: String = fix_da_sol(
-        commitment_bytes,
-        input_len.is_none() && output_len.is_none(),
-    )?;
-    let mut f = File::create(sol_code_path.clone())?;
-    let _ = f.write(output.as_bytes());
-    // fetch abi of the contract
-    let (abi, _, _) = get_contract_artifacts(sol_code_path, "DataAttestation", 0).await?;
-    // save abi to file
-    serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
-
-    Ok(String::new())
-}
-
-pub(crate) async fn deploy_da_evm(
-    data: String,
-    settings_path: PathBuf,
-    sol_code_path: PathBuf,
-    rpc_url: String,
-    addr_path: PathBuf,
-    runs: usize,
-    private_key: Option<String>,
-) -> Result<String, EZKLError> {
-    let contract_address = deploy_da_verifier_via_solidity(
-        settings_path,
-        data,
-        sol_code_path,
-        &rpc_url,
-        runs,
-        private_key.as_deref(),
-    )
-    .await?;
-    info!("Contract deployed at: {}", contract_address);
-
-    let mut f = File::create(addr_path)?;
-    write!(f, "{:#?}", contract_address)?;
-
-    Ok(String::new())
-}
-
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
 pub(crate) async fn deploy_evm(
     sol_code_path: PathBuf,
     rpc_url: String,
@@ -1635,7 +1533,6 @@ pub(crate) async fn deploy_evm(
     let contract_name = match contract {
         ContractType::Verifier { reusable: false } => "Halo2Verifier",
         ContractType::Verifier { reusable: true } => "Halo2VerifierReusable",
-        ContractType::VerifyingKeyArtifact => "Halo2VerifyingArtifact",
     };
     let contract_address = deploy_contract_via_solidity(
         sol_code_path,
@@ -1653,24 +1550,60 @@ pub(crate) async fn deploy_evm(
     Ok(String::new())
 }
 
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
+pub(crate) async fn register_vka(
+    rpc_url: String,
+    rv_addr: H160Flag,
+    vka_path: PathBuf,
+    vka_digest_path: PathBuf,
+    private_key: Option<String>,
+) -> Result<String, EZKLError> {
+    // Load the vka, which is bincode serialized, from the vka_path
+    let bytes = std::fs::read(vka_path)?;
+    let vka_buf: Vec<[u8; 32]> = bincode::deserialize(&bytes)
+        .map_err(|e| EZKLError::from(format!("Failed to deserialize vka words: {e}")))?;
+    let vka_digest = register_vka_via_rv(
+        rpc_url.as_ref(),
+        private_key.as_deref(),
+        rv_addr.into(),
+        &vka_buf,
+    )
+    .await?;
+
+    info!("VKA digest: {:#?}", vka_digest);
+
+    let mut f = File::create(vka_digest_path)?;
+    write!(f, "{:#?}", vka_digest)?;
+    Ok(String::new())
+}
+
 /// Encodes the calldata for the EVM verifier (both aggregated and single proof)
+/// TODO: Add a "RV address param" which will query the "RegisteredVKA" events to fetch the
+/// VKA from the vka_digest.
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
 pub(crate) fn encode_evm_calldata(
     proof_path: PathBuf,
     calldata_path: PathBuf,
-    addr_vk: Option<H160Flag>,
+    vka_path: Option<PathBuf>,
 ) -> Result<Vec<u8>, EZKLError> {
     let snark = Snark::load::<IPACommitmentScheme<G1Affine>>(&proof_path)?;
 
     let flattened_instances = snark.instances.into_iter().flatten();
 
-    let encoded = halo2_solidity_verifier::encode_calldata(
-        addr_vk
-            .as_ref()
-            .map(|x| alloy::primitives::Address::from(*x).0)
-            .map(|x| x.0),
-        &snark.proof,
-        &flattened_instances.collect::<Vec<_>>(),
-    );
+    // Load the vka, which is bincode serialized, from the vka_path
+    let vka_buf: Option<Vec<[u8; 32]>> =
+        match vka_path {
+            Some(path) => {
+                let bytes = std::fs::read(path)?;
+                Some(bincode::deserialize(&bytes).map_err(|e| {
+                    EZKLError::from(format!("Failed to deserialize vka words: {e}"))
+                })?)
+            }
+            None => None,
+        };
+
+    let vka: Option<&[[u8; 32]]> = vka_buf.as_deref();
+    let encoded = encode_calldata(vka, &snark.proof, &flattened_instances.collect::<Vec<_>>());
 
     log::debug!("Encoded calldata: {:?}", encoded);
 
@@ -1679,35 +1612,26 @@ pub(crate) fn encode_evm_calldata(
     Ok(encoded)
 }
 
+/// TODO: Add an optional vka_digest param that will allow us to fetch the associated VKA
+/// from the RegisteredVKA events on the RV.
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
 pub(crate) async fn verify_evm(
     proof_path: PathBuf,
     addr_verifier: H160Flag,
     rpc_url: String,
-    addr_da: Option<H160Flag>,
-    addr_vk: Option<H160Flag>,
+    vka_path: Option<PathBuf>,
+    encoded_calldata: Option<PathBuf>,
 ) -> Result<String, EZKLError> {
-    use crate::eth::verify_proof_with_data_attestation;
-
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
 
-    let result = if let Some(addr_da) = addr_da {
-        verify_proof_with_data_attestation(
-            proof.clone(),
-            addr_verifier.into(),
-            addr_da.into(),
-            addr_vk.map(|s| s.into()),
-            &rpc_url,
-        )
-        .await?
-    } else {
-        verify_proof_via_solidity(
-            proof.clone(),
-            addr_verifier.into(),
-            addr_vk.map(|s| s.into()),
-            &rpc_url,
-        )
-        .await?
-    };
+    let result = verify_proof_via_solidity(
+        proof.clone(),
+        addr_verifier.into(),
+        vka_path.map(|s| s.into()),
+        rpc_url.as_ref(),
+        encoded_calldata.map(|s| s.into()),
+    )
+    .await?;
 
     info!("Solidity verification result: {}", result);
 
@@ -1718,6 +1642,7 @@ pub(crate) async fn verify_evm(
     Ok(String::new())
 }
 
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
 pub(crate) async fn create_evm_aggregate_verifier(
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
@@ -1743,8 +1668,8 @@ pub(crate) async fn create_evm_aggregate_verifier(
         .sum();
 
     let num_instance = AggregationCircuit::num_instance(num_instance);
+    let scales = vec![0; num_instance.len()];
     assert_eq!(num_instance.len(), 1);
-    let num_instance = num_instance[0];
 
     let agg_vk = load_vk::<KZGCommitmentScheme<Bn256>, AggregationCircuit>(vk_path, ())?;
 
@@ -1752,7 +1677,10 @@ pub(crate) async fn create_evm_aggregate_verifier(
         &params,
         &agg_vk,
         halo2_solidity_verifier::BatchOpenScheme::Bdfg21,
-        num_instance,
+        &num_instance,
+        &scales,
+        0,
+        0,
     );
 
     let acc_encoding = halo2_solidity_verifier::AccumulatorEncoding::new(
@@ -1838,41 +1766,6 @@ pub(crate) fn setup(
     };
     save_vk::<G1Affine>(&vk_path, pk.get_vk())?;
     save_pk::<G1Affine>(&pk_path, &pk)?;
-    Ok(String::new())
-}
-
-pub(crate) async fn setup_test_evm_data(
-    data_path: String,
-    compiled_circuit_path: PathBuf,
-    test_data: PathBuf,
-    rpc_url: String,
-    input_source: TestDataSource,
-    output_source: TestDataSource,
-) -> Result<String, EZKLError> {
-    use crate::graph::TestOnChainData;
-
-    let mut data = GraphData::from_str(&data_path)?;
-    let mut circuit = GraphCircuit::load(compiled_circuit_path)?;
-
-    // if both input and output are from files fail
-    if matches!(input_source, TestDataSource::File) && matches!(output_source, TestDataSource::File)
-    {
-        return Err("Both input and output cannot be from files".into());
-    }
-
-    let test_on_chain_data = TestOnChainData {
-        data: test_data.clone(),
-        rpc: rpc_url,
-        data_sources: TestSources {
-            input: input_source,
-            output: output_source,
-        },
-    };
-
-    circuit
-        .populate_on_chain_test_data(&mut data, test_on_chain_data)
-        .await?;
-
     Ok(String::new())
 }
 

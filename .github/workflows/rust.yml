@@ -24,10 +24,31 @@ jobs:
     permissions:
       contents: read
     runs-on: large-self-hosted
+    env:
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Configure Git credentials
+        run: |
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
+            exit 1
+          fi
+          
+          # For libgit2 (what Cargo uses internally)
+          git config --global credential.helper store
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
+          chmod 600 ~/.git-credentials
+          
+          # Also set URL replacement with oauth2 format
+          git config --global \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
+            "https://github.com/"
+        env:
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -44,10 +65,31 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-latest
+    env:
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Configure Git credentials
+        run: |
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
+            exit 1
+          fi
+          
+          # For libgit2 (what Cargo uses internally)
+          git config --global credential.helper store
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
+          chmod 600 ~/.git-credentials
+          
+          # Also set URL replacement with oauth2 format
+          git config --global \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
+            "https://github.com/"
+        env:
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -60,10 +102,31 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-latest
+    env:
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Configure Git credentials
+        run: |
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
+            exit 1
+          fi
+          
+          # For libgit2 (what Cargo uses internally)
+          git config --global credential.helper store
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
+          chmod 600 ~/.git-credentials
+          
+          # Also set URL replacement with oauth2 format
+          git config --global \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
+            "https://github.com/"
+        env:
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -76,10 +139,31 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-latest-32-cores
+    env:
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Configure Git credentials
+        run: |
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
+            exit 1
+          fi
+          
+          # For libgit2 (what Cargo uses internally)
+          git config --global credential.helper store
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
+          chmod 600 ~/.git-credentials
+          
+          # Also set URL replacement with oauth2 format
+          git config --global \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
+            "https://github.com/"
+        env:
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -95,7 +179,7 @@ jobs:
       - name: Library tests
         run: cargo nextest run --lib --verbose
       - name: Library tests (original lookup)
-        run: cargo nextest run --lib --verbose --no-default-features --features ezkl
+        run: cargo nextest run --lib --verbose --no-default-features --features ezkl,eth-original-lookup
 
   # ultra-overflow-tests-gpu:
   #   runs-on: GPU
@@ -134,10 +218,31 @@ jobs:
     permissions:
       contents: read
     runs-on: non-gpu
+    env:
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Configure Git credentials
+        run: |
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
+            exit 1
+          fi
+          
+          # For libgit2 (what Cargo uses internally)
+          git config --global credential.helper store
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
+          chmod 600 ~/.git-credentials
+          
+          # Also set URL replacement with oauth2 format
+          git config --global \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
+            "https://github.com/"
+        env:
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -155,22 +260,43 @@ jobs:
       # - name: Conv overflow (wasi)
       #   run: cargo wasi test conv_col_ultra_overflow -- --include-ignored --nocapture
       - name: lookup overflow
-        run: cargo nextest run --release lookup_ultra_overflow --no-capture --no-default-features --features ezkl -- --include-ignored
+        run: cargo nextest run --release lookup_ultra_overflow --no-capture --no-default-features --features ezkl,eth-original-lookup -- --include-ignored
       - name: Matmul overflow
-        run: RUST_LOG=debug cargo nextest run --release matmul_col_ultra_overflow --no-capture --no-default-features --features ezkl -- --include-ignored
+        run: RUST_LOG=debug cargo nextest run --release matmul_col_ultra_overflow --no-capture --no-default-features --features ezkl,eth-original-lookup -- --include-ignored
       - name: Conv overflow
-        run: RUST_LOG=debug cargo nextest run --release conv_col_ultra_overflow --no-capture --no-default-features --features ezkl -- --include-ignored
+        run: RUST_LOG=debug cargo nextest run --release conv_col_ultra_overflow --no-capture --no-default-features --features ezkl,eth-original-lookup -- --include-ignored
       - name: Conv + relu overflow
-        run: cargo nextest run --release conv_relu_col_ultra_overflow --no-capture --no-default-features --features ezkl -- --include-ignored
+        run: cargo nextest run --release conv_relu_col_ultra_overflow --no-capture --no-default-features --features ezkl,eth-original-lookup -- --include-ignored
 
   ultra-overflow-tests:
     permissions:
       contents: read
     runs-on: non-gpu
+    env:
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Configure Git credentials
+        run: |
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
+            exit 1
+          fi
+          
+          # For libgit2 (what Cargo uses internally)
+          git config --global credential.helper store
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
+          chmod 600 ~/.git-credentials
+          
+          # Also set URL replacement with oauth2 format
+          git config --global \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
+            "https://github.com/"
+        env:
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -200,10 +326,31 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-latest-16-cores
+    env:
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Configure Git credentials
+        run: |
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
+            exit 1
+          fi
+          
+          # For libgit2 (what Cargo uses internally)
+          git config --global credential.helper store
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
+          chmod 600 ~/.git-credentials
+          
+          # Also set URL replacement with oauth2 format
+          git config --global \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
+            "https://github.com/"
+        env:
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -220,10 +367,31 @@ jobs:
     permissions:
       contents: read
     runs-on: non-gpu
+    env:
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Configure Git credentials
+        run: |
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
+            exit 1
+          fi
+          
+          # For libgit2 (what Cargo uses internally)
+          git config --global credential.helper store
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
+          chmod 600 ~/.git-credentials
+          
+          # Also set URL replacement with oauth2 format
+          git config --global \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
+            "https://github.com/"
+        env:
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -249,10 +417,31 @@ jobs:
     permissions:
       contents: read
     runs-on: non-gpu
+    env:
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Configure Git credentials
+        run: |
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
+            exit 1
+          fi
+          
+          # For libgit2 (what Cargo uses internally)
+          git config --global credential.helper store
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
+          chmod 600 ~/.git-credentials
+          
+          # Also set URL replacement with oauth2 format
+          git config --global \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
+            "https://github.com/"
+        env:
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -316,10 +505,31 @@ jobs:
       contents: read
     runs-on: non-gpu
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
+    env:
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Configure Git credentials
+        run: |
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
+            exit 1
+          fi
+          
+          # For libgit2 (what Cargo uses internally)
+          git config --global credential.helper store
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
+          chmod 600 ~/.git-credentials
+          
+          # Also set URL replacement with oauth2 format
+          git config --global \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
+            "https://github.com/"
+        env:
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -343,25 +553,16 @@ jobs:
           cache: "pnpm"
       - name: "Add rust-src"
         run: rustup component add rust-src --toolchain nightly-2025-02-17-x86_64-unknown-linux-gnu
-      - name: Install dependencies for js tests and in-browser-evm-verifier package
+      - name: Install dependencies for js tests and package
         run: |
           pnpm install --frozen-lockfile
-          pnpm install --dir ./in-browser-evm-verifier --frozen-lockfile
-        env:
-          CI: false
-          NODE_ENV: development
-      - name: Build wasm package for nodejs target.
-        run: |
-          wasm-pack build --target nodejs --out-dir ./in-browser-evm-verifier/nodejs . -- -Z build-std="panic_abort,std"
-      - name: Build @ezkljs/verify package
-        run: |
-          cd in-browser-evm-verifier
-          pnpm build:commonjs
-          cd ..
       # - name: Install solc
       #   run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --rev 62cdea8ff9e6efef011f77e295823b5f2dbeb3a1 --locked anvil --force
+      - name: Build wasm package for nodejs target.
+        run: |
+          wasm-pack build --target nodejs --out-dir ./tests/wasm/nodejs . -- -Z build-std="panic_abort,std"
       - name: KZG prove and verify tests (EVM + reusable verifier + col-overflow)
         run: cargo nextest run --verbose tests_evm::kzg_evm_prove_and_verify_reusable_verifier --test-threads 1
       - name: KZG prove and verify tests (EVM + kzg all)
@@ -370,20 +571,6 @@ jobs:
         run: cargo nextest run --verbose tests_evm::kzg_evm_kzg_input_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + kzg params)
         run: cargo nextest run --verbose tests_evm::kzg_evm_kzg_params_prove_and_verify --test-threads 1
-      - name: KZG prove and verify tests (EVM + on chain inputs)
-        run: cargo nextest run --verbose tests_evm::kzg_evm_on_chain_input_prove_and_verify --test-threads 1
-      - name: KZG prove and verify tests (EVM + on chain outputs)
-        run: cargo nextest run --verbose tests_evm::kzg_evm_on_chain_output_prove_and_verify --test-threads 1
-      - name: KZG prove and verify tests (EVM + on chain inputs & outputs)
-        run: cargo nextest run --verbose tests_evm::kzg_evm_on_chain_input_output_prove_and_verify --test-threads 1
-      - name: KZG prove and verify tests (EVM + on chain inputs & kzg outputs + params)
-        run: cargo nextest run --verbose tests_evm::kzg_evm_on_chain_input_kzg_output_kzg_params_prove_and_verify --test-threads 1
-      - name: KZG prove and verify tests (EVM + on chain outputs & kzg inputs + params)
-        run: cargo nextest run --verbose tests_evm::kzg_evm_on_chain_output_kzg_input_kzg_params_prove_and_verify --test-threads 1
-      - name: KZG prove and verify tests (EVM + on chain all kzg)
-        run: cargo nextest run --verbose tests_evm::kzg_evm_on_chain_all_kzg_params_prove_and_verify --test-threads 1
-      - name: KZG prove and verify tests (EVM + on chain inputs & outputs hashes)
-        run: cargo nextest run --verbose tests_evm::kzg_evm_on_chain_input_output_hashed_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM)
         run: cargo nextest run --verbose tests_evm::kzg_evm_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + hashed inputs)
@@ -432,10 +619,31 @@ jobs:
       contents: read
     runs-on: non-gpu
     needs: [build, library-tests, docs]
+    env:
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Configure Git credentials
+        run: |
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
+            exit 1
+          fi
+          
+          # For libgit2 (what Cargo uses internally)
+          git config --global credential.helper store
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
+          chmod 600 ~/.git-credentials
+          
+          # Also set URL replacement with oauth2 format
+          git config --global \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
+            "https://github.com/"
+        env:
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -548,10 +756,31 @@ jobs:
       contents: read
     runs-on: self-hosted
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
+    env:
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Configure Git credentials
+        run: |
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
+            exit 1
+          fi
+          
+          # For libgit2 (what Cargo uses internally)
+          git config --global credential.helper store
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
+          chmod 600 ~/.git-credentials
+          
+          # Also set URL replacement with oauth2 format
+          git config --global \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
+            "https://github.com/"
+        env:
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
       - uses: dtolnay/rust-toolchain@4f94fbe7e03939b0e674bcc9ca609a16088f63ff  #nightly branch, TODO: update when required
         with:
           toolchain: nightly-2025-02-17
@@ -589,10 +818,31 @@ jobs:
       contents: read
     runs-on: large-self-hosted
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
+    env:
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Configure Git credentials
+        run: |
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
+            exit 1
+          fi
+          
+          # For libgit2 (what Cargo uses internally)
+          git config --global credential.helper store
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
+          chmod 600 ~/.git-credentials
+          
+          # Also set URL replacement with oauth2 format
+          git config --global \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
+            "https://github.com/"
+        env:
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -610,10 +860,31 @@ jobs:
       contents: read
     runs-on: large-self-hosted
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
+    env:
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Configure Git credentials
+        run: |
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
+            exit 1
+          fi
+          
+          # For libgit2 (what Cargo uses internally)
+          git config --global credential.helper store
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
+          chmod 600 ~/.git-credentials
+          
+          # Also set URL replacement with oauth2 format
+          git config --global \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
+            "https://github.com/"
+        env:
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -635,10 +906,31 @@ jobs:
       contents: read
     runs-on: ubuntu-latest-32-cores
     needs: [build, library-tests, docs]
+    env:
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Configure Git credentials
+        run: |
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
+            exit 1
+          fi
+          
+          # For libgit2 (what Cargo uses internally)
+          git config --global credential.helper store
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
+          chmod 600 ~/.git-credentials
+          
+          # Also set URL replacement with oauth2 format
+          git config --global \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
+            "https://github.com/"
+        env:
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -656,10 +948,31 @@ jobs:
       contents: read
     runs-on: non-gpu
     needs: [build, library-tests, docs]
+    env:
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Configure Git credentials
+        run: |
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
+            exit 1
+          fi
+          
+          # For libgit2 (what Cargo uses internally)
+          git config --global credential.helper store
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
+          chmod 600 ~/.git-credentials
+          
+          # Also set URL replacement with oauth2 format
+          git config --global \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
+            "https://github.com/"
+        env:
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
       - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa  #v4.8.0
         with:
           python-version: "3.12"
@@ -686,10 +999,31 @@ jobs:
       contents: read
     runs-on: non-gpu
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
+    env:
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Configure Git credentials
+        run: |
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
+            exit 1
+          fi
+          
+          # For libgit2 (what Cargo uses internally)
+          git config --global credential.helper store
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
+          chmod 600 ~/.git-credentials
+          
+          # Also set URL replacement with oauth2 format
+          git config --global \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
+            "https://github.com/"
+        env:
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
       - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa  #v4.8.0
         with:
           python-version: "3.12"
@@ -719,10 +1053,31 @@ jobs:
     permissions:
       contents: read
     runs-on: large-self-hosted
+    env:
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Configure Git credentials
+        run: |
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
+            exit 1
+          fi
+          
+          # For libgit2 (what Cargo uses internally)
+          git config --global credential.helper store
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
+          chmod 600 ~/.git-credentials
+          
+          # Also set URL replacement with oauth2 format
+          git config --global \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
+            "https://github.com/"
+        env:
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
       - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa  #v4.8.0
         with:
           python-version: "3.11"
@@ -769,16 +1124,39 @@ jobs:
       - name: NBEATS tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::nbeats_
       # - name: Reusable verifier tutorial
-      # run: source .env/bin/activate; cargo nextest run py_tests::tests::reusable_
+      # run: source .env/bin/activate; cargo nextest run py_tests::tests::reusable_verifier_ --no-capture
+      - name: Reusable verifier tutorial
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::reusable_verifier_ --no-capture --test-threads 1
 
   ios-integration-tests:
     permissions:
       contents: read
     runs-on: macos-latest
+    env:
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Configure Git credentials
+        run: |
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
+            exit 1
+          fi
+          
+          # For libgit2 (what Cargo uses internally)
+          git config --global credential.helper store
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
+          chmod 600 ~/.git-credentials
+          
+          # Also set URL replacement with oauth2 format
+          git config --global \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
+            "https://github.com/"
+        env:
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -797,10 +1175,31 @@ jobs:
     runs-on: macos-latest
     needs: [ios-integration-tests]
 
+    env:
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Configure Git credentials
+        run: |
+          if [ -z "$EVM_VERIFIER_EZKL_TOKEN" ]; then
+            echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
+            exit 1
+          fi
+          
+          # For libgit2 (what Cargo uses internally)
+          git config --global credential.helper store
+          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
+          chmod 600 ~/.git-credentials
+          
+          # Also set URL replacement with oauth2 format
+          git config --global \
+            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
+            "https://github.com/"
+        env:
+          EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
