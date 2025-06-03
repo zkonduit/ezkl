@@ -231,16 +231,26 @@ jobs:
             echo "❌ EVM_VERIFIER_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-          
+
+          # Do **not** use credential.helper; in CI it is ignored for fetches.
+          git config --global --unset credential.helper || true
+
           # For libgit2 (what Cargo uses internally)
-          git config --global credential.helper store
-          echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
-          chmod 600 ~/.git-credentials
-          
-          # Also set URL replacement with oauth2 format
+          # git config --global credential.helper store
+          # echo "https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com" > ~/.git-credentials
+          # chmod 600 ~/.git-credentials
+
+
+          # Rewrite every https://github.com/... URL so that the token is
+          # embedded and always sent.
           git config --global \
-            url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
+            url."https://x-access-token:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
             "https://github.com/"
+            
+          # Also set URL replacement with oauth2 format
+          # git config --global \
+          #  url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
+          # "https://github.com/"
         env:
           EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
