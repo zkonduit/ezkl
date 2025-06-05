@@ -233,7 +233,7 @@ jobs:
           fi
 
           # Do **not** use credential.helper; in CI it is ignored for fetches.
-          git config --global --unset credential.helper || true
+          git config --system --unset credential.helper || true
 
           # For libgit2 (what Cargo uses internally)
           # git config --global credential.helper store
@@ -243,7 +243,7 @@ jobs:
 
           # Rewrite every https://github.com/... URL so that the token is
           # embedded and always sent.
-          git config --global \
+          git config --system \
             url."https://x-access-token:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
             "https://github.com/"
             
@@ -251,6 +251,7 @@ jobs:
           # git config --global \
           #  url."https://oauth2:${EVM_VERIFIER_EZKL_TOKEN}@github.com/".insteadOf \
           # "https://github.com/"
+          git ls-remote https://github.com/zkonduit/ezkl-verifier | head
       - name: Test Git credentials
         run: git ls-remote https://github.com/zkonduit/ezkl-verifier | head
 
