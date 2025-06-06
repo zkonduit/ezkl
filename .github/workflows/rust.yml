@@ -157,7 +157,7 @@ jobs:
   ultra-overflow-tests_og-lookup:
     permissions:
       contents: read
-    runs-on: non-gpu
+    runs-on: ubuntu-latest-64-cores
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
@@ -196,7 +196,7 @@ jobs:
   ultra-overflow-tests:
     permissions:
       contents: read
-    runs-on: non-gpu
+    runs-on: ubuntu-latest-64-cores
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
@@ -261,7 +261,7 @@ jobs:
   wasm32-tests:
     permissions:
       contents: read
-    runs-on: non-gpu
+    runs-on: ubuntu-latest-64-cores
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
@@ -296,7 +296,7 @@ jobs:
   mock-proving-tests:
     permissions:
       contents: read
-    runs-on: non-gpu
+    runs-on: ubuntu-latest-64-cores
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
@@ -368,7 +368,7 @@ jobs:
   prove-and-verify-evm-tests:
     permissions:
       contents: read
-    runs-on: non-gpu
+    runs-on: ubuntu-latest-64-cores
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -467,7 +467,7 @@ jobs:
   prove-and-verify-tests:
     permissions:
       contents: read
-    runs-on: non-gpu
+    runs-on: ubuntu-latest-64-cores
     needs: [build, library-tests, docs]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -721,7 +721,7 @@ jobs:
   python-tests:
     permissions:
       contents: read
-    runs-on: non-gpu
+    runs-on: ubuntu-latest-64-cores
     needs: [build, library-tests, docs]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -757,7 +757,7 @@ jobs:
   accuracy-measurement-tests:
     permissions:
       contents: read
-    runs-on: non-gpu
+    runs-on: ubuntu-latest-64-cores
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
