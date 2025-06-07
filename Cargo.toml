@@ -281,6 +281,7 @@ macos-metal = ["halo2_proofs/macos"]
 ios-metal = ["halo2_proofs/ios"]
 jemalloc = ["dep:jemallocator"]
 mimalloc = ["dep:mimalloc"]
+reusable-verifier = []
 
 
 [patch.crates-io]

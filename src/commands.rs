@@ -713,7 +713,7 @@ pub enum Commands {
         #[arg(long, default_value = DEFAULT_CALLDATA, value_hint = clap::ValueHint::FilePath)]
         calldata_path: Option<PathBuf>,
         /// The path to the serialized VKA file
-        #[arg(long, value_hint = clap::ValueHint::Other)]
+        #[cfg_attr(all(feature = "reusable-verifier", not(target_arch = "wasm32")), arg(long, value_hint = clap::ValueHint::Other))]
         vka_path: Option<PathBuf>,
     },
     /// Creates an Evm verifier for a single proof
@@ -735,13 +735,13 @@ pub enum Commands {
         /// The path to output the Solidity verifier ABI
         #[arg(long, default_value = DEFAULT_VERIFIER_ABI, value_hint = clap::ValueHint::FilePath)]
         abi_path: Option<PathBuf>,
-        /// Whether the to render the verifier as reusable or not. If true, you will need to deploy a VK artifact, passing it as part of the calldata to the verifier.
-        #[arg(long, default_value = DEFAULT_RENDER_REUSABLE, action = clap::ArgAction::SetTrue)]
+        /// Whether to render the verifier as reusable or not. If true, you will need to deploy a VK artifact, passing it as part of the calldata to the verifier.
+        #[cfg_attr(all(feature = "reusable-verifier", not(target_arch = "wasm32")), arg(short = 'R', long, default_value = DEFAULT_RENDER_REUSABLE, action = clap::ArgAction::SetTrue))]
         reusable: Option<bool>,
     },
     /// Creates an evm verifier artifact to be used by the reusable verifier
     #[command(name = "create-evm-vka")]
-    #[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
+    #[cfg(feature = "reusable-verifier")]
     CreateEvmVka {
         /// The path to SRS, if None will use ~/.ezkl/srs/kzg{logrows}.srs
         #[arg(long, value_hint = clap::ValueHint::FilePath)]
@@ -783,8 +783,8 @@ pub enum Commands {
         // logrows used for aggregation circuit
         #[arg(long, default_value = DEFAULT_AGGREGATED_LOGROWS, value_hint = clap::ValueHint::Other)]
         logrows: Option<u32>,
-        /// Whether the to render the verifier as reusable or not. If true, you will need to deploy a VK artifact, passing it as part of the calldata to the verifier.
-        #[arg(long, default_value = DEFAULT_RENDER_REUSABLE, action = clap::ArgAction::SetTrue)]
+        /// Whether to render the verifier as reusable or not. If true, you will need to deploy a VK artifact, passing it as part of the calldata to the verifier.
+        #[cfg_attr(all(feature = "reusable-verifier", not(target_arch = "wasm32")), arg(short = 'R', long, action = clap::ArgAction::SetTrue))]
         reusable: Option<bool>,
     },
     /// Verifies a proof, returning accept or reject
@@ -845,7 +845,7 @@ pub enum Commands {
         #[arg(short = 'P', long, value_hint = clap::ValueHint::Other)]
         private_key: Option<String>,
         /// Contract type to be deployed
-        #[arg(long = "contract-type", short = 'C', default_value = DEFAULT_CONTRACT_DEPLOYMENT_TYPE, value_hint = clap::ValueHint::Other)]
+        #[cfg_attr(all(feature = "reusable-verifier", not(target_arch = "wasm32")), arg(short = 'R', long, action = clap::ArgAction::SetTrue))]
         contract: ContractType,
     },
     /// Verifies a proof using a local Evm executor, returning accept or reject
@@ -862,7 +862,7 @@ pub enum Commands {
         #[arg(short = 'U', long, value_hint = clap::ValueHint::Url)]
         rpc_url: String,
         /// The path to the serialized vka file
-        #[arg(long, value_hint = clap::ValueHint::FilePath)]
+        #[cfg_attr(all(feature = "reusable-verifier", not(target_arch = "wasm32")), arg(long, value_hint = clap::ValueHint::FilePath))]
         vka_path: Option<PathBuf>,
         /// The path to the serialized encoded calldata file generated via the encode_calldata command
         #[arg(long, value_hint = clap::ValueHint::FilePath)]
@@ -870,7 +870,7 @@ pub enum Commands {
     },
     /// Registers a VKA, returning the its digest used to identify it on-chain.
     #[command(name = "register-vka")]
-    #[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
+    #[cfg(feature = "reusable-verifier")]
     RegisterVka {
         /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
         #[arg(short = 'U', long, value_hint = clap::ValueHint::Url)]

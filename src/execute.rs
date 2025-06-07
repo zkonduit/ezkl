@@ -2,7 +2,9 @@ use crate::circuit::region::RegionSettings;
 use crate::circuit::CheckMode;
 use crate::commands::CalibrationTarget;
 #[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
-use crate::eth::{deploy_contract_via_solidity, register_vka_via_rv};
+use crate::eth::deploy_contract_via_solidity;
+#[cfg(all(feature = "reusable-verifier", not(target_arch = "wasm32")))]
+use crate::eth::register_vka_via_rv;
 #[allow(unused_imports)]
 #[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
 use crate::eth::{get_contract_artifacts, verify_proof_via_solidity};
@@ -220,7 +222,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             vka_path,
         )
         .map(|e| serde_json::to_string(&e).unwrap()),
-        #[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
+        #[cfg(feature = "reusable-verifier")]
         Commands::CreateEvmVka {
             vk_path,
             srs_path,
@@ -427,7 +429,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             )
             .await
         }
-        #[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
+        #[cfg(feature = "reusable-verifier")]
         Commands::RegisterVka {
             addr_verifier,
             vka_path,
@@ -1460,7 +1462,7 @@ pub(crate) async fn create_evm_verifier(
     Ok(String::new())
 }
 
-#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
+#[cfg(feature = "reusable-verifier")]
 pub(crate) async fn create_evm_vka(
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
@@ -1550,7 +1552,7 @@ pub(crate) async fn deploy_evm(
     Ok(String::new())
 }
 
-#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
+#[cfg(all(feature = "reusable-verifier", not(target_arch = "wasm32")))]
 pub(crate) async fn register_vka(
     rpc_url: String,
     rv_addr: H160Flag,
