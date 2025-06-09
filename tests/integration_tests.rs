@@ -2078,7 +2078,7 @@ mod native_tests {
                     &vk_arg,
                     &settings_arg,
                     &sol_arg,
-                    "true",
+                    "--reusable",
                 ];
 
                 let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
@@ -2093,7 +2093,7 @@ mod native_tests {
                     rpc_arg.as_str(),
                     addr_path_arg.as_str(),
                     sol_arg.as_str(),
-                    "verifier/reusable",
+                    "--contract-type=verifier/reusable",
                 ];
 
                 let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
@@ -2274,6 +2274,15 @@ mod native_tests {
             "--no-default-features",
             "--features",
             "ezkl,solidity-verifier,eth",
+        ];
+        #[cfg(feature = "reusable-verifier")]
+        let args = [
+            "build",
+            "--profile=test-runs",
+            "--bin",
+            "ezkl",
+            "--features",
+            "reusable-verifier",
         ];
 
         let status = Command::new("cargo")

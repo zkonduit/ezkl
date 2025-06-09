@@ -741,7 +741,11 @@ pub enum Commands {
     },
     /// Creates an evm verifier artifact to be used by the reusable verifier
     #[command(name = "create-evm-vka")]
-    #[cfg(feature = "reusable-verifier")]
+    #[cfg(all(
+        feature = "eth",
+        feature = "reusable-verifier",
+        not(target_arch = "wasm32")
+    ))]
     CreateEvmVka {
         /// The path to SRS, if None will use ~/.ezkl/srs/kzg{logrows}.srs
         #[arg(long, value_hint = clap::ValueHint::FilePath)]
@@ -845,7 +849,7 @@ pub enum Commands {
         #[arg(short = 'P', long, value_hint = clap::ValueHint::Other)]
         private_key: Option<String>,
         /// Contract type to be deployed
-        #[cfg_attr(all(feature = "reusable-verifier", not(target_arch = "wasm32")), arg(short = 'R', long, action = clap::ArgAction::SetTrue))]
+        #[cfg_attr(all(feature = "reusable-verifier", not(target_arch = "wasm32")), arg(long = "contract-type", short = 'C', default_value = DEFAULT_CONTRACT_DEPLOYMENT_TYPE, value_hint = clap::ValueHint::Other))]
         contract: ContractType,
     },
     /// Verifies a proof using a local Evm executor, returning accept or reject

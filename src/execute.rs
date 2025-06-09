@@ -222,7 +222,11 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             vka_path,
         )
         .map(|e| serde_json::to_string(&e).unwrap()),
-        #[cfg(feature = "reusable-verifier")]
+        #[cfg(all(
+            feature = "eth",
+            feature = "reusable-verifier",
+            not(target_arch = "wasm32")
+        ))]
         Commands::CreateEvmVka {
             vk_path,
             srs_path,
