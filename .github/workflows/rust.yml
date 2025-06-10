@@ -408,6 +408,9 @@ jobs:
         run: rustup target add wasm32-unknown-unknown
       - name: Add rust-src
         run: rustup component add rust-src --toolchain nightly-2025-02-17-x86_64-unknown-linux-gnu
+      - name: Create webdriver.json to disable timeouts
+        run: |
+          echo '{ "goog:chromeOptions": { "args": [ "disable-timeouts-for-profiling" ] } }' > webdriver.json
       - name: Run wasm verifier tests
         # on mac:
         #   AR=/opt/homebrew/opt/llvm/bin/llvm-ar CC=/opt/homebrew/opt/llvm/bin/clang wasm-pack test --firefox --headless -- -Z build-std="panic_abort,std" --features web
