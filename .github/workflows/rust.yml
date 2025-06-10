@@ -366,7 +366,7 @@ jobs:
   wasm32-tests:
     permissions:
       contents: read
-    runs-on: non-gpu
+    runs-on: ubuntu-latest-64-cores
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
@@ -411,7 +411,7 @@ jobs:
       - name: Run wasm verifier tests
         # on mac:
         #   AR=/opt/homebrew/opt/llvm/bin/llvm-ar CC=/opt/homebrew/opt/llvm/bin/clang wasm-pack test --firefox --headless -- -Z build-std="panic_abort,std" --features web
-        run: WASM_BINDGEN_TEST_THREADS=1 wasm-pack test --chrome --headless -- -Z build-std="panic_abort,std" --features web
+        run: WASM_BINDGEN_TEST_THREADS=2 wasm-pack test --chrome --headless -- -Z build-std="panic_abort,std" --features web
 
   mock-proving-tests:
     permissions:
