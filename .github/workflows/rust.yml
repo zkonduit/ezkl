@@ -411,9 +411,7 @@ jobs:
       - name: Run wasm verifier tests
         # on mac:
         #   AR=/opt/homebrew/opt/llvm/bin/llvm-ar CC=/opt/homebrew/opt/llvm/bin/clang wasm-pack test --firefox --headless -- -Z build-std="panic_abort,std" --features web
-        run: WASM_BINDGEN_TEST_THREADS=2 wasm-pack test --chrome --headless -- -Z build-std="panic_abort,std" --features web
-        env:
-         WASM_BINDGEN_TEST_TIMEOUT: 600  # 10 minutes
+        run: WASM_BINDGEN_TEST_THREADS=2 WASM_BINDGEN_TEST_TIMEOUT=600 wasm-pack test --chrome --headless -- -Z build-std="panic_abort,std" --features web
 
 
   wasm32-tests-beta:
