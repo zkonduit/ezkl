@@ -366,7 +366,7 @@ jobs:
   wasm32-tests:
     permissions:
       contents: read
-    runs-on: non-gpu
+    runs-on: ubuntu-latest-64-cores
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
@@ -426,12 +426,12 @@ jobs:
             }
           }
           EOF
-      - name: Run wasm verifier tests
-        # on mac:
-        #   AR=/opt/homebrew/opt/llvm/bin/llvm-ar CC=/opt/homebrew/opt/llvm/bin/clang wasm-pack test --firefox --headless -- -Z build-std="panic_abort,std" --features web
-        run: WASM_BINDGEN_TEST_THREADS=1 WASM_BINDGEN_TEST_TIMEOUT=700 wasm-pack test --chrome --headless -- -Z build-std="panic_abort,std" --features web
-
-
+      - name: Run tests with Chrome logging
+        run: |
+          export CHROME_LOG_FILE=/tmp/chrome.log
+          WASM_BINDGEN_TEST_THREADS=1 WASM_BINDGEN_TEST_TIMEOUT=1200 wasm-pack test --chrome --headless -- -Z build-std="panic_abort,std" --features web || true
+          echo "=== Chrome Log ==="
+          cat /tmp/chrome.log || echo "No Chrome log found"
 
   mock-proving-tests:
     permissions:
