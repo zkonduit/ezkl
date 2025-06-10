@@ -410,18 +410,7 @@ jobs:
         run: rustup component add rust-src --toolchain nightly-2025-02-17-x86_64-unknown-linux-gnu
       - name: Create webdriver.json to disable timeouts
         run: |
-          cat > webdriver.json << 'EOF'
-          {
-            "goog:chromeOptions": {
-              "args": ["--headless", "--disable-gpu", "--disable-dev-shm-usage", "--no-sandbox", "--disable-setuid-sandbox"]
-            },
-            "timeouts": {
-              "implicit": 0,
-              "pageLoad": 300000,
-              "script": 1800000
-            }
-          }
-          EOF
+          echo '{"args": ["--headless", "--disable-gpu", "--disable-dev-shm-usage", "--no-sandbox"]}' > webdriver.json
       - name: Run wasm verifier tests
         run: |
           ulimit -n 65536
