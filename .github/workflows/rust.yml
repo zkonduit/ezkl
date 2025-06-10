@@ -429,8 +429,7 @@ jobs:
           WASM_BINDGEN_TEST_TIMEOUT=1800 \
           CHROMEDRIVER_ARGS="--log-level=INFO" \
           wasm-pack test --chrome --headless -- -Z build-std="panic_abort,std" --features web -- --nocapture
-        env:
-          RUST_LOG: debug
+     
 
   mock-proving-tests:
     permissions:
