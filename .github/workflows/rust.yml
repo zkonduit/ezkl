@@ -990,7 +990,7 @@ jobs:
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --rev 62cdea8ff9e6efef011f77e295823b5f2dbeb3a1 --locked anvil --force
       - name: Build python ezkl
-        run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings --profile=test-runs
+        run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings,reusable-verifier --profile=test-runs
       - name: Run pytest
         run: source .env/bin/activate; pip install pytest-asyncio; pytest -vv
 
@@ -1039,7 +1039,7 @@ jobs:
       - name: Setup Virtual Env and Install python dependencies
         run: python -m venv .env --clear; source .env/bin/activate; pip install -r requirements.txt;
       - name: Build python ezkl
-        run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings --profile=test-runs
+        run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings,reusable-verifier --profile=test-runs
       - name: Public inputs
         run: source .env/bin/activate; cargo nextest run --verbose tests::accuracy_measurement_public_inputs_
       - name: fixed params
@@ -1099,7 +1099,7 @@ jobs:
       - name: Setup Virtual Env and Install python dependencies
         run: python -m venv .env --clear; source .env/bin/activate; pip install -r requirements.txt; python -m ensurepip --upgrade
       - name: Build python ezkl
-        run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings --profile=test-runs
+        run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings,reusable-verifier --profile=test-runs
       - name: Cat and Dog notebook
         run: source .env/bin/activate; cargo nextest run py_tests::tests::cat_and_dog_notebook_
       - name: All notebooks

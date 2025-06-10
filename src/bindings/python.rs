@@ -1676,6 +1676,7 @@ fn create_evm_verifier(
     })
 }
 
+#[cfg(feature = "reusable-verifier")]
 /// Creates an Evm VK artifact. This command generated a VK with circuit specific meta data encoding in memory for use by the reusable H2 verifier.
 /// This is useful for deploying verifier that were otherwise too big to fit on chain and required aggregation.
 ///
@@ -1766,6 +1767,7 @@ fn deploy_evm(
     })
 }
 
+#[cfg(feature = "reusable-verifier")]
 /// Registers a VKA on the EZKL reusable verifier contract
 ///
 /// Arguments
@@ -1993,11 +1995,13 @@ fn ezkl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(compile_circuit, m)?)?;
     m.add_function(wrap_pyfunction!(verify_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_verifier, m)?)?;
+    #[cfg(feature = "reusable-verifier")]
     m.add_function(wrap_pyfunction!(create_evm_vka, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_evm, m)?)?;
     m.add_function(wrap_pyfunction!(verify_evm, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_verifier_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(encode_evm_calldata, m)?)?;
+    #[cfg(feature = "reusable-verifier")]
     m.add_function(wrap_pyfunction!(register_vka, m)?)?;
     Ok(())
 }
