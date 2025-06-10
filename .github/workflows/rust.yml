@@ -413,37 +413,24 @@ jobs:
           cat > webdriver.json << 'EOF'
           {
             "goog:chromeOptions": {
-              "args": [
-                "--headless",
-                "--disable-gpu",
-                "--disable-dev-shm-usage",
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-web-security",
-                "--disable-features=VizDisplayCompositor",
-                "--window-size=1920,1080",
-                "--disable-blink-features=AutomationControlled",
-                "--disable-extensions",
-                "--disable-background-networking",
-                "--disable-background-timer-throttling",
-                "--disable-renderer-backgrounding",
-                "--disable-features=TranslateUI",
-                "--disable-ipc-flooding-protection"
-              ]
+              "args": ["--headless", "--disable-gpu", "--disable-dev-shm-usage", "--no-sandbox", "--disable-setuid-sandbox"]
             },
             "timeouts": {
               "implicit": 0,
               "pageLoad": 300000,
-              "script": 300000
+              "script": 1800000
             }
           }
           EOF
-      - name: Run tests with Chrome logging
+      - name: Run wasm verifier tests
         run: |
-          export CHROME_LOG_FILE=/tmp/chrome.log
-          WASM_BINDGEN_TEST_THREADS=1 WASM_BINDGEN_TEST_TIMEOUT=1200 wasm-pack test --chrome --headless -- -Z build-std="panic_abort,std" --features web || true
-          echo "=== Chrome Log ==="
-          cat /tmp/chrome.log || echo "No Chrome log found"
+          ulimit -n 65536
+          WASM_BINDGEN_TEST_THREADS=1 \
+          WASM_BINDGEN_TEST_TIMEOUT=1800 \
+          CHROMEDRIVER_ARGS="--log-level=INFO" \
+          wasm-pack test --chrome --headless -- -Z build-std="panic_abort,std" --features web --nocapture
+        env:
+          RUST_LOG: debug
 
   mock-proving-tests:
     permissions:
