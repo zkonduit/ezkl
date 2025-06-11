@@ -366,7 +366,7 @@ jobs:
   wasm32-tests:
     permissions:
       contents: read
-    runs-on: non-gpu
+    runs-on: ubuntu-latest-64-cores
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
