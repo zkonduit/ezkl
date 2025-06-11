@@ -1474,6 +1474,7 @@ pub(crate) async fn create_evm_vka(
     vka_path: PathBuf,
     decimals: usize,
 ) -> Result<String, EZKLError> {
+    log::warn!("Reusable verifier support is experimental and may change in the future. Use at your own risk.");
     let settings = GraphSettings::load(&settings_path)?;
     let commitment: Commitments = settings.run_args.commitment.into();
     let params = load_params_verifier::<KZGCommitmentScheme<Bn256>>(
@@ -1564,6 +1565,7 @@ pub(crate) async fn register_vka(
     vka_digest_path: PathBuf,
     private_key: Option<String>,
 ) -> Result<String, EZKLError> {
+    log::warn!("Reusable verifier support is experimental and may change in the future. Use at your own risk.");
     // Load the vka, which is bincode serialized, from the vka_path
     let bytes = std::fs::read(vka_path)?;
     let vka_buf: Vec<[u8; 32]> = bincode::deserialize(&bytes)
