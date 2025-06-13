@@ -849,7 +849,8 @@ pub enum Commands {
         #[arg(short = 'P', long, value_hint = clap::ValueHint::Other)]
         private_key: Option<String>,
         /// Contract type to be deployed
-        #[cfg_attr(all(feature = "reusable-verifier", not(target_arch = "wasm32")), arg(long = "contract-type", short = 'C', default_value = DEFAULT_CONTRACT_DEPLOYMENT_TYPE, value_hint = clap::ValueHint::Other))]
+        #[cfg(all(feature = "reusable-verifier", not(target_arch = "wasm32")))]
+        #[arg(long = "contract-type", short = 'C', default_value = DEFAULT_CONTRACT_DEPLOYMENT_TYPE, value_hint = clap::ValueHint::Other)]
         contract: ContractType,
     },
     /// Verifies a proof using a local Evm executor, returning accept or reject

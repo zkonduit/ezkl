@@ -404,6 +404,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             addr_path,
             optimizer_runs,
             private_key,
+            #[cfg(all(feature = "reusable-verifier", not(target_arch = "wasm32")))]
             contract,
         } => {
             deploy_evm(
@@ -412,7 +413,10 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
                 addr_path.unwrap_or(DEFAULT_CONTRACT_ADDRESS.into()),
                 optimizer_runs,
                 private_key,
+                #[cfg(all(feature = "reusable-verifier", not(target_arch = "wasm32")))]
                 contract,
+                #[cfg(not(all(feature = "reusable-verifier", not(target_arch = "wasm32"))))]
+                ContractType::default(),
             )
             .await
         }
