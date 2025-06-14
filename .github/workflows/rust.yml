@@ -510,7 +510,7 @@ jobs:
     permissions:
       contents: read
     runs-on: non-gpu
-    needs: [build, library-tests, docs, python-tests, python-integration-tests]
+    # needs: [build, library-tests, docs, python-tests, python-integration-tests]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
@@ -569,6 +569,8 @@ jobs:
       - name: Build wasm package for nodejs target.
         run: |
           wasm-pack build --target nodejs --out-dir ./tests/wasm/nodejs . -- -Z build-std="panic_abort,std"
+      - name: KZG prove and verify tests (EVM)
+        run: cargo nextest run --verbose tests_evm::kzg_evm_prove_and_verify_:: --test-threads 1
       - name: KZG prove and verify tests (EVM + reusable verifier + col-overflow)
         run: cargo nextest run --verbose tests_evm::kzg_evm_prove_and_verify_reusable_verifier --features reusable-verifier --test-threads 1
       - name: KZG prove and verify tests (EVM + kzg all)
@@ -577,8 +579,6 @@ jobs:
         run: cargo nextest run --verbose tests_evm::kzg_evm_kzg_input_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + kzg params)
         run: cargo nextest run --verbose tests_evm::kzg_evm_kzg_params_prove_and_verify --test-threads 1
-      - name: KZG prove and verify tests (EVM)
-        run: cargo nextest run --verbose tests_evm::kzg_evm_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + hashed inputs)
         run: cargo nextest run --verbose tests_evm::kzg_evm_hashed_input_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + hashed params)
