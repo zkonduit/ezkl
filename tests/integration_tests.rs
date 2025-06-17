@@ -1017,7 +1017,7 @@ mod native_tests {
 
             });
 
-            seq!(N in 0..4 {
+            seq!(N in 0..=98 {
                 #(#[test_case(TESTS[N])])*
                 fn kzg_evm_prove_and_verify_reusable_verifier_(test: &str) {
                     crate::native_tests::init_binary();
