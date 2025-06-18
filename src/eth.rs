@@ -3,7 +3,7 @@ use crate::pfsys::{encode_calldata, Snark};
 use alloy::contract::CallBuilder;
 use alloy::core::primitives::Address as H160;
 use alloy::core::primitives::Bytes;
-use alloy::core::primitives::U256;
+use alloy::core::primitives::I256;
 use alloy::dyn_abi::abi::TokenSeq;
 // use alloy::providers::Middleware;
 use alloy::json_abi::JsonAbi;
@@ -279,7 +279,7 @@ pub async fn verify_proof_via_solidity(
         // From result[96..], iterate through 32 byte chunks converting them to U256
         let rescaled_instances = result.to_vec()[96..]
             .chunks_exact(32)
-            .map(|chunk| U256::from_be_slice(chunk).to_string())
+            .map(|chunk| I256::try_from_be_slice(chunk).unwrap().to_string())
             .collect::<Vec<_>>();
         if let Some(pretty) = &proof.pretty_public_inputs {
             // 1️⃣ collect reference decimals --------------------------------------
@@ -459,8 +459,12 @@ fn scaled_matches(instance: &str, expected: &str) -> bool {
     let (inst_int, inst_frac) = inst_dec.split_once('.').unwrap_or((&inst_dec, ""));
     let (exp_int, exp_frac) = expected.split_once('.').unwrap_or((expected, ""));
 
+    // Normalize both integer parts to handle "-" vs "-0"
+    let normalized_inst_int = if inst_int == "-" { "-0" } else { inst_int };
+    let normalized_exp_int = if exp_int == "-" { "-0" } else { exp_int };
+
     // integer part must be identical
-    if inst_int != exp_int {
+    if normalized_inst_int != normalized_exp_int {
         return false;
     }
 
@@ -486,9 +490,17 @@ fn scaled_matches(instance: &str, expected: &str) -> bool {
         }
         if carry {
             // 0.999… → 1.000…
-            return exp_int
-                == &(num::BigUint::parse_bytes(exp_int.as_bytes(), 10).unwrap() + 1u32)
-                    .to_string()
+            // Handle negative numbers in the carry case
+            let is_negative = normalized_inst_int.starts_with('-');
+            let abs_int = normalized_inst_int.trim_start_matches('-');
+            let incremented =
+                (num::BigUint::parse_bytes(abs_int.as_bytes(), 10).unwrap() + 1u32).to_string();
+            let expected_after_carry = if is_negative {
+                format!("-{}", incremented)
+            } else {
+                incremented
+            };
+            return normalized_exp_int == expected_after_carry
                 && exp_frac.chars().all(|c| c == '0');
         }
         rounded.into_iter().collect::<String>() == exp_frac
