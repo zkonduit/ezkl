@@ -2585,7 +2585,7 @@ dependencies = [
 [[package]]
 name = "halo2_solidity_verifier"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/ezkl-verifier?branch=main#10d3971a506d81c99be53f563b644c93b01cd9ed"
+source = "git+https://github.com/zkonduit/ezkl-verifier?branch=main#bec77937d344c5e0ea3673d0e62714279562935e"
 dependencies = [
  "askama",
  "blake2b_simd",

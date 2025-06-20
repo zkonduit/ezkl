@@ -1020,6 +1020,10 @@ mod native_tests {
             seq!(N in 0..=98 {
                 #(#[test_case(TESTS[N])])*
                 fn kzg_evm_prove_and_verify_reusable_verifier_(test: &str) {
+                    // too many instances for "idolmodel", "linear_svc"
+                    if test == "idolmodel" || test == "linear_svc" {
+                        return;
+                    }
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
@@ -1029,6 +1033,11 @@ mod native_tests {
                     // default vis
                     let reusable_verifier_address: String = kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "private", "private", "public", &mut REUSABLE_VERIFIER_ADDR.lock().unwrap(), false);
                     // public/public vis
+                    let reusable_verifier_address: String = if test == "bitshfit" {
+                        kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "public", "private", "private", &mut Some(reusable_verifier_address), false)
+                    } else {
+                        kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "public", "private", "public", &mut Some(reusable_verifier_address), false)
+                    };
                     let reusable_verifier_address: String = kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "public", "private", "public", &mut Some(reusable_verifier_address), false);
                     // hashed input
                     let reusable_verifier_address: String = kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "hashed", "private", "public", &mut Some(reusable_verifier_address), false);
@@ -1049,8 +1058,8 @@ mod native_tests {
 
                 #(#[test_case(TESTS[N])])*
                 fn kzg_evm_prove_and_verify_reusable_verifier_with_overflow_(test: &str) {
-                    // verifier too big to fit on chain with overflow calibration target
-                    if test == "1l_eltwise_div" || test == "lenet_5" || test == "ltsf" || test == "lstm_large" {
+                    // verifier too big to fit on chain with overflow calibration target or num instances exceed 0x10000
+                    if test == "1l_eltwise_div" || test == "lenet_5" || test == "ltsf" || test == "lstm_large" || test == "idolmodel" || test == "linear_svc" {
                         return;
                     }
                     crate::native_tests::init_binary();

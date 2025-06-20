@@ -433,26 +433,42 @@ pub async fn get_contract_artifacts(
 ///
 /// `"1541748046875000000"` → `"1.541748046875000000"`
 /// `"273690402507781982"`  → `"0.273690402507781982"`
+/// `"-892333984375000000"` → `"-0.892333984375000000"`
 fn to_decimal_18(s: &str) -> String {
+    let is_negative = s.starts_with('-');
+    let s = if is_negative { &s[1..] } else { s };
     let s = s.trim_start_matches('0');
+
     if s.is_empty() {
         return "0".into();
     }
+
     if s.len() <= 18 {
         // pad on the left so we always have exactly 18 fraction digits
-        return format!("0.{:0>18}", s);
+        let result = format!("0.{:0>18}", s);
+        return if is_negative {
+            format!("-{}", result)
+        } else {
+            result
+        };
     }
-    let split = s.len() - 18;
-    format!("{}.{}", &s[..split], &s[split..]) // ← correct slice here
-}
 
-/// “Banker’s‐round” comparison:  compare the **decimal** produced
+    let split = s.len() - 18;
+    let result = format!("{}.{}", &s[..split], &s[split..]);
+    if is_negative {
+        format!("-{}", result)
+    } else {
+        result
+    }
+}
+/// "Banker's‐round" comparison:  compare the **decimal** produced
 /// by `instance` to the reference string `expected`.
 ///
-/// *  All digits present in `expected` (integer part **and** fraction)
+/// *  Only the first 18 digits of the expected fraction part are compared.
+/// *  All digits present in the truncated `expected` (integer part **and** first 18 fraction digits)
 ///    must match exactly.
 /// *  Excess digits in `instance` are ignored **unless** the very first
-///    excess digit ≥ 5; in that case we round the last compared digit
+///    excess digit ≥ 5; in that case we round the last compared digit
 ///    and check again.
 fn scaled_matches(instance: &str, expected: &str) -> bool {
     let inst_dec = to_decimal_18(instance);
@@ -468,12 +484,44 @@ fn scaled_matches(instance: &str, expected: &str) -> bool {
         return false;
     }
 
+    // If expected has more than 18 decimal places, round it to 18 places
+    let exp_frac_truncated = if exp_frac.len() > 18 {
+        let truncated = &exp_frac[..18];
+        let next_digit = exp_frac.chars().nth(18).unwrap_or('0');
+
+        if next_digit >= '6' {
+            // Need to round up the 18th digit
+            let mut rounded = truncated.chars().collect::<Vec<_>>();
+            let mut carry = true;
+            for d in rounded.iter_mut().rev() {
+                if !carry {
+                    break;
+                }
+                let v = d.to_digit(10).unwrap() + 1;
+                *d = char::from_digit(v % 10, 10).unwrap();
+                carry = v == 10;
+            }
+            if carry {
+                // All 18 digits were 9s - this would carry to integer part
+                // For now, return the original truncated (this edge case may need special handling)
+                truncated.to_string()
+            } else {
+                rounded.into_iter().collect::<String>()
+            }
+        } else {
+            truncated.to_string()
+        }
+    } else {
+        exp_frac.to_string()
+    };
+    let exp_frac_truncated = exp_frac_truncated.as_str();
+
     // fraction‑part comparison with optional rounding
-    let cmp_len = exp_frac.len();
+    let cmp_len = exp_frac_truncated.len();
     let inst_cmp = &inst_frac[..cmp_len.min(inst_frac.len())];
     let trailing = inst_frac.chars().nth(cmp_len).unwrap_or('0');
 
-    if inst_cmp == exp_frac {
+    if inst_cmp == exp_frac_truncated {
         true // exact match
     } else if trailing >= '5' {
         // need to round
@@ -501,9 +549,9 @@ fn scaled_matches(instance: &str, expected: &str) -> bool {
                 incremented
             };
             return normalized_exp_int == expected_after_carry
-                && exp_frac.chars().all(|c| c == '0');
+                && exp_frac_truncated.chars().all(|c| c == '0');
         }
-        rounded.into_iter().collect::<String>() == exp_frac
+        rounded.into_iter().collect::<String>() == exp_frac_truncated
     } else {
         false
     }
