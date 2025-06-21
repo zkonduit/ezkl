@@ -1139,6 +1139,7 @@ pub(crate) async fn calibrate(
 
     let mut num_failed = 0;
     let mut num_passed = 0;
+    let mut failure_reasons = vec![];
 
     for ((input_scale, param_scale), scale_rebase_multiplier) in range_grid {
         pb.set_message(format!(
@@ -1171,6 +1172,13 @@ pub(crate) async fn calibrate(
             Ok(c) => c,
             Err(e) => {
                 error!("circuit creation from run args failed: {:?}", e);
+                failure_reasons.push(format!(
+                    "i-scale: {}, p-scale: {}, rebase-(x): {}, reason: {}",
+                    input_scale.to_string().blue(),
+                    param_scale.to_string().blue(),
+                    scale_rebase_multiplier.to_string().yellow(),
+                    e
+                ));
                 pb.inc(1);
                 num_failed += 1;
                 continue;
@@ -1215,6 +1223,13 @@ pub(crate) async fn calibrate(
                 error!("forward pass failed: {:?}", e);
                 pb.inc(1);
                 num_failed += 1;
+                failure_reasons.push(format!(
+                    "i-scale: {}, p-scale: {}, rebase-(x): {}, reason: {}",
+                    input_scale.to_string().blue(),
+                    param_scale.to_string().blue(),
+                    scale_rebase_multiplier.to_string().yellow(),
+                    e
+                ));
                 continue;
             }
         }
@@ -1280,7 +1295,14 @@ pub(crate) async fn calibrate(
                 found_settings.as_json()?.to_colored_json_auto()?
             );
             num_passed += 1;
-        } else {
+        } else if let Err(res) = res {
+            failure_reasons.push(format!(
+                "i-scale: {}, p-scale: {}, rebase-(x): {}, reason: {}",
+                input_scale.to_string().blue(),
+                param_scale.to_string().blue(),
+                scale_rebase_multiplier.to_string().yellow(),
+                res.to_string().red()
+            ));
             num_failed += 1;
         }
 
@@ -1290,6 +1312,13 @@ pub(crate) async fn calibrate(
     pb.finish_with_message("Calibration Done.");
 
     if found_params.is_empty() {
+        if !failure_reasons.is_empty() {
+            error!("Calibration failed for the following reasons:");
+            for reason in failure_reasons {
+                error!("{}", reason);
+            }
+        }
+
         return Err("calibration failed, could not find any suitable parameters given the calibration dataset".into());
     }
 
