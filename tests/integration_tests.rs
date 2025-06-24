@@ -1027,13 +1027,9 @@ mod native_tests {
                     init_logger();
                     log::error!("Running kzg_evm_prove_and_verify_reusable_verifier_ for test: {}", test);
                     // default vis
-                    let reusable_verifier_address: String = kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "private", "private", "public", &mut REUSABLE_VERIFIER_ADDR.lock().unwrap(), false);
+                    let reusable_verifier_address: String = kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "public", "private", "private", &mut REUSABLE_VERIFIER_ADDR.lock().unwrap(), false);
                     // public/public vis
-                    let reusable_verifier_address: String = if test == "bitshift" {
-                        kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "public", "private", "private", &mut Some(reusable_verifier_address), false)
-                    } else {
-                        kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "public", "private", "public", &mut Some(reusable_verifier_address), false)
-                    };
+                    let reusable_verifier_address: String = kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "public", "private", "public", &mut Some(reusable_verifier_address), false);
                     // hashed input
                     let reusable_verifier_address: String = kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "hashed", "private", "public", &mut Some(reusable_verifier_address), false);
 
