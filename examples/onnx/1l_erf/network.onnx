@@ -1,13 +1,18 @@
-pytorch2.0.0:n
+pytorch2.6.0:
 
-inputoutput/Erf"Erf	torch_jitZ!
-input
-
+inputoutput/Erf"Erf
+main_graphZ)
+input 
+
 
 batch_size
-b"
-output
-
+
+
+b*
+output 
+
 
 batch_size
-B
+
+
+B

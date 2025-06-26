@@ -1,7 +1,8 @@
-pytorch1.13.1:‰
+pytorch2.6.0:Š
 5
 inputoutput/layer/Softmax"Softmax*
-axis 	torch_jitZ!
+axis 
+main_graphZ!
 input
 
 

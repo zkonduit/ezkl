@@ -1,4 +1,4 @@
-pytorch1.13.1:¿
+pytorch2.6.0:À
 š
 input
 layer.weight
@@ -8,9 +8,9 @@ layer.biasoutput/layer/Conv"Conv*
 group *
 kernel_shape@@ *
 pads@@@@ *
-strides@@ 	torch_jit*&Blayer.weightJ´‚¾(È¾F
-Õ¾*B
-layer.biasJPW»¾Z)
+strides@@ 
+main_graph*&Blayer.weightJíä#¾-QÝ>8¯	¿*B
+layer.biasJû…e¾Z)
 input 
 
 

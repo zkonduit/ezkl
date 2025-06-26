@@ -1,8 +1,9 @@
-pytorch1.13.1:¨
+pytorch2.6.0:©
 4
 input
 inputoutput/Concat"Concat*
-axis 	torch_jitZ1
+axis 
+main_graphZ1
 input(
 &"
 

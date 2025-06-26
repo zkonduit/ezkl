@@ -5,10 +5,6 @@ from sklearn.datasets import load_iris
 from sklearn.model_selection import train_test_split
 from xgboost import XGBClassifier as Gbc
 import torch
-import ezkl
-import os
-from torch import nn
-import xgboost as xgb
 from hummingbird.ml import convert
 
 NUM_CLASSES = 3
