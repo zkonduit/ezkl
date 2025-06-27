@@ -1,12 +1,5 @@
 use crate::{
-    circuit::modules::{
-        polycommit::PolyCommitChip,
-        poseidon::{
-            spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH},
-            PoseidonChip,
-        },
-        Module,
-    },
+    circuit::modules::polycommit::PolyCommitChip,
     fieldutils::{felt_to_integer_rep, integer_rep_to_felt},
     graph::{quantize_float, scale_to_multiplier, GraphCircuit, GraphSettings},
 };
@@ -15,6 +8,7 @@ use halo2_proofs::{
     plonk::*,
     poly::kzg::commitment::{KZGCommitmentScheme, ParamsKZG},
 };
+use halo2_solidity_verifier::Evm;
 use halo2curves::{
     bn256::{Bn256, Fr, G1Affine},
     ff::PrimeField,
@@ -225,15 +219,9 @@ pub fn bufferToVecOfFelt(
 pub fn poseidonHash(
     message: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Result<wasm_bindgen::Clamped<Vec<u8>>, JsError> {
-    let message: Vec<Fr> = serde_json::from_slice(&message[..])
-        .map_err(|e| JsError::new(&format!("Failed to deserialize message: {}", e)))?;
-
-    let output = PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE>::run(message.clone())
-        .map_err(|e| JsError::new(&format!("{}", e)))?;
-
-    Ok(wasm_bindgen::Clamped(serde_json::to_vec(&output).map_err(
-        |e| JsError::new(&format!("Failed to serialize poseidon hash output: {}", e)),
-    )?))
+    super::universal::poseidon_hash(message.0)
+        .map_err(JsError::from)
+        .map(|x| wasm_bindgen::Clamped(x.clone()))
 }
 
 /// Generate a witness file from input.json, compiled model and a settings.json file.
@@ -277,6 +265,33 @@ pub fn verify(
     srs: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Result<bool, JsError> {
     super::universal::verify(proof_js.0, vk.0, settings.0, srs.0).map_err(JsError::from)
+}
+
+/// Verify proof in browser evm using wasm
+#[wasm_bindgen]
+#[allow(non_snake_case)]
+pub fn verifyEVM(
+    proof_js: wasm_bindgen::Clamped<Vec<u8>>,
+    bytecode_verifier: Vec<u8>,
+    bytecode_vka: Option<Vec<u8>>,
+) -> Result<bool, JsError> {
+    let mut evm = Evm::unlimited();
+    let decoded_verifier = utf8_bytes_to_hex_decoded(&bytecode_verifier)?;
+    let (verifier_address, _) = evm.create(decoded_verifier);
+    // if bytecode_vk is Some, then create the vk contract
+    let vk_address = if let Some(bytecode_vka) = bytecode_vka {
+        let decoded_vka = utf8_bytes_to_hex_decoded(&bytecode_vka)?;
+        let (address, _) = evm.create(decoded_vka);
+        Some(address.as_slice().to_vec())
+        // check if bytecode_verifier is none and if so then generate the
+        // reusable verifier
+    } else {
+        None
+    };
+    let calldata = encode_verifier_calldata(proof_js.0, vk_address).map_err(JsError::from);
+    let output = evm.call(verifier_address, calldata?).1;
+    let true_word = [vec![0; 31], vec![1]].concat();
+    Ok(output == true_word)
 }
 
 /// Verify aggregate proof in browser using wasm
@@ -370,4 +385,14 @@ pub fn u8_array_to_u128_le(arr: [u8; 16]) -> u128 {
         n |= b as u128;
     }
     n
+}
+///
+pub fn utf8_bytes_to_hex_decoded(input: &[u8]) -> Result<Vec<u8>, JsError> {
+    let string = std::str::from_utf8(input)?.trim();
+    let hex_string = if string.starts_with("0x") {
+        &string[2..]
+    } else {
+        string
+    };
+    hex::decode(hex_string).map_err(JsError::from)
 }

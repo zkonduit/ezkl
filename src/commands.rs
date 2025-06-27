@@ -1,3 +1,4 @@
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
 use alloy::primitives::Address as H160;
 use clap::{Command, Parser, Subcommand};
 use clap_complete::{generate, Generator, Shell};
@@ -11,7 +12,6 @@ use tosubcommand::{ToFlags, ToSubcommand};
 use crate::{pfsys::ProofType, Commitments, RunArgs};
 
 use crate::circuit::CheckMode;
-use crate::graph::TestDataSource;
 use crate::pfsys::TranscriptType;
 
 /// The default path to the .json data file
@@ -42,20 +42,14 @@ pub const DEFAULT_SPLIT: &str = "false";
 pub const DEFAULT_VERIFIER_ABI: &str = "verifier_abi.json";
 /// Default verifier abi for aggregated proofs
 pub const DEFAULT_VERIFIER_AGGREGATED_ABI: &str = "verifier_aggr_abi.json";
-/// Default verifier abi for data attestation
-pub const DEFAULT_VERIFIER_DA_ABI: &str = "verifier_da_abi.json";
 /// Default solidity code
 pub const DEFAULT_SOL_CODE: &str = "evm_deploy.sol";
 /// Default calldata path
 pub const DEFAULT_CALLDATA: &str = "calldata.bytes";
 /// Default solidity code for aggregated proofs
 pub const DEFAULT_SOL_CODE_AGGREGATED: &str = "evm_deploy_aggr.sol";
-/// Default solidity code for data attestation
-pub const DEFAULT_SOL_CODE_DA: &str = "evm_deploy_da.sol";
 /// Default contract address
 pub const DEFAULT_CONTRACT_ADDRESS: &str = "contract.address";
-/// Default contract address for data attestation
-pub const DEFAULT_CONTRACT_ADDRESS_DA: &str = "contract_da.address";
 /// Default contract address for vk
 pub const DEFAULT_CONTRACT_ADDRESS_VK: &str = "contract_vk.address";
 /// Default check mode
@@ -78,8 +72,8 @@ pub const DEFAULT_DISABLE_SELECTOR_COMPRESSION: &str = "false";
 pub const DEFAULT_RENDER_REUSABLE: &str = "false";
 /// Default contract deployment type
 pub const DEFAULT_CONTRACT_DEPLOYMENT_TYPE: &str = "verifier";
-/// Default VK sol path
-pub const DEFAULT_VK_SOL: &str = "vk.sol";
+/// Default VKA calldata path
+pub const DEFAULT_VKA: &str = "vka.bytes";
 /// Default VK abi path
 pub const DEFAULT_VK_ABI: &str = "vk.abi";
 /// Default scale rebase multipliers for calibration
@@ -92,6 +86,10 @@ pub const DEFAULT_ONLY_RANGE_CHECK_REBASE: &str = "false";
 pub const DEFAULT_COMMITMENT: &str = "kzg";
 /// Default seed used to generate random data
 pub const DEFAULT_SEED: &str = "21242";
+/// Default number of decimals for instances rescaling on-chain.
+pub const DEFAULT_DECIMALS: &str = "18";
+/// Default path for the vka digest file
+pub const DEFAULT_VKA_DIGEST: &str = "vka.digest";
 
 #[cfg(feature = "python-bindings")]
 /// Converts TranscriptType into a PyObject (Required for TranscriptType to be compatible with Python)
@@ -187,8 +185,6 @@ pub enum ContractType {
         /// Can also be used as an alternative to aggregation for verifiers that are otherwise too large to fit on-chain.
         reusable: bool,
     },
-    /// Deploys a verifying key artifact that the reusable verifier loads into memory during runtime. Encodes the circuit specific data that was otherwise hardcoded onto the stack.
-    VerifyingKeyArtifact,
 }
 
 impl Default for ContractType {
@@ -207,7 +203,6 @@ impl std::fmt::Display for ContractType {
                     "verifier/reusable".to_string()
                 }
                 ContractType::Verifier { reusable: false } => "verifier".to_string(),
-                ContractType::VerifyingKeyArtifact => "vka".to_string(),
             }
         )
     }
@@ -224,7 +219,6 @@ impl From<&str> for ContractType {
         match s {
             "verifier" => ContractType::Verifier { reusable: false },
             "verifier/reusable" => ContractType::Verifier { reusable: true },
-            "vka" => ContractType::VerifyingKeyArtifact,
             _ => {
                 log::error!("Invalid value for ContractType");
                 log::warn!("Defaulting to verifier");
@@ -234,24 +228,25 @@ impl From<&str> for ContractType {
     }
 }
 
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, PartialOrd)]
 /// wrapper for H160 to make it easy to parse into flag vals
 pub struct H160Flag {
     inner: H160,
 }
-
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
 impl From<H160Flag> for H160 {
     fn from(val: H160Flag) -> H160 {
         val.inner
     }
 }
-
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
 impl ToFlags for H160Flag {
     fn to_flags(&self) -> Vec<String> {
         vec![format!("{:#x}", self.inner)]
     }
 }
-
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
 impl From<&str> for H160Flag {
     fn from(s: &str) -> Self {
         Self {
@@ -299,7 +294,6 @@ impl IntoPy<PyObject> for ContractType {
         match self {
             ContractType::Verifier { reusable: true } => "verifier/reusable".to_object(py),
             ContractType::Verifier { reusable: false } => "verifier".to_object(py),
-            ContractType::VerifyingKeyArtifact => "vka".to_object(py),
         }
     }
 }
@@ -312,7 +306,6 @@ impl<'source> FromPyObject<'source> for ContractType {
         match strval.to_lowercase().as_str() {
             "verifier" => Ok(ContractType::Verifier { reusable: false }),
             "verifier/reusable" => Ok(ContractType::Verifier { reusable: true }),
-            "vka" => Ok(ContractType::VerifyingKeyArtifact),
             _ => Err(PyValueError::new_err("Invalid value for ContractType")),
         }
     }
@@ -669,30 +662,6 @@ pub enum Commands {
         #[arg(long, default_value = DEFAULT_DISABLE_SELECTOR_COMPRESSION, action = clap::ArgAction::SetTrue)]
         disable_selector_compression: Option<bool>,
     },
-    /// Deploys a test contact that the data attester reads from and creates a data attestation formatted input.json file that contains call data information
-    #[command(arg_required_else_help = true)]
-    SetupTestEvmData {
-        /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
-        #[arg(short = 'D', long, value_hint = clap::ValueHint::FilePath)]
-        data: Option<String>,
-        /// The path to the compiled model file (generated using the compile-circuit command)
-        #[arg(short = 'M', long, value_hint = clap::ValueHint::FilePath)]
-        compiled_circuit: Option<PathBuf>,
-        /// For testing purposes only. The optional path to the .json data file that will be generated that contains the OnChain data storage information
-        /// derived from the file information in the data .json file.
-        /// Should include both the network input (possibly private) and the network output (public input to the proof)
-        #[arg(short = 'T', long, value_hint = clap::ValueHint::FilePath)]
-        test_data: PathBuf,
-        /// RPC URL for an Ethereum node
-        #[arg(short = 'U', long, value_hint = clap::ValueHint::Url)]
-        rpc_url: String,
-        /// where the input data come from
-        #[arg(long, default_value = "on-chain", value_hint = clap::ValueHint::Other)]
-        input_source: TestDataSource,
-        /// where the output data come from
-        #[arg(long, default_value = "on-chain", value_hint = clap::ValueHint::Other)]
-        output_source: TestDataSource,
-    },
     /// Swaps the positions in the transcript that correspond to commitments
     SwapProofCommitments {
         /// The path to the proof file
@@ -735,6 +704,7 @@ pub enum Commands {
     },
     /// Encodes a proof into evm calldata
     #[command(name = "encode-evm-calldata")]
+    #[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
     EncodeEvmCalldata {
         /// The path to the proof file (generated using the prove command)
         #[arg(long, default_value = DEFAULT_PROOF, value_hint = clap::ValueHint::FilePath)]
@@ -742,12 +712,13 @@ pub enum Commands {
         /// The path to save the calldata to
         #[arg(long, default_value = DEFAULT_CALLDATA, value_hint = clap::ValueHint::FilePath)]
         calldata_path: Option<PathBuf>,
-        /// The path to the verification key address (only used if the vk is rendered as a separate contract)
-        #[arg(long, value_hint = clap::ValueHint::Other)]
-        addr_vk: Option<H160Flag>,
+        /// The path to the serialized VKA file
+        #[cfg_attr(all(feature = "reusable-verifier", not(target_arch = "wasm32")), arg(long, value_hint = clap::ValueHint::Other))]
+        vka_path: Option<PathBuf>,
     },
     /// Creates an Evm verifier for a single proof
     #[command(name = "create-evm-verifier")]
+    #[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
     CreateEvmVerifier {
         /// The path to SRS, if None will use ~/.ezkl/srs/kzg{logrows}.srs
         #[arg(long, value_hint = clap::ValueHint::FilePath)]
@@ -764,12 +735,17 @@ pub enum Commands {
         /// The path to output the Solidity verifier ABI
         #[arg(long, default_value = DEFAULT_VERIFIER_ABI, value_hint = clap::ValueHint::FilePath)]
         abi_path: Option<PathBuf>,
-        /// Whether the to render the verifier as reusable or not. If true, you will need to deploy a VK artifact, passing it as part of the calldata to the verifier.
-        #[arg(long, default_value = DEFAULT_RENDER_REUSABLE, action = clap::ArgAction::SetTrue)]
+        /// Whether to render the verifier as reusable or not. If true, you will need to deploy a VK artifact, passing it as part of the calldata to the verifier.
+        #[cfg_attr(all(feature = "reusable-verifier", not(target_arch = "wasm32")), arg(short = 'R', long, default_value = DEFAULT_RENDER_REUSABLE, action = clap::ArgAction::SetTrue))]
         reusable: Option<bool>,
     },
-    /// Creates an Evm verifier artifact for a single proof to be used by the reusable verifier
+    /// Creates an evm verifier artifact to be used by the reusable verifier
     #[command(name = "create-evm-vka")]
+    #[cfg(all(
+        feature = "eth",
+        feature = "reusable-verifier",
+        not(target_arch = "wasm32")
+    ))]
     CreateEvmVka {
         /// The path to SRS, if None will use ~/.ezkl/srs/kzg{logrows}.srs
         #[arg(long, value_hint = clap::ValueHint::FilePath)]
@@ -780,39 +756,18 @@ pub enum Commands {
         /// The path to load the desired verification key file
         #[arg(long, default_value = DEFAULT_VK, value_hint = clap::ValueHint::FilePath)]
         vk_path: Option<PathBuf>,
-        /// The path to output the Solidity code
-        #[arg(long, default_value = DEFAULT_VK_SOL, value_hint = clap::ValueHint::FilePath)]
-        sol_code_path: Option<PathBuf>,
-        /// The path to output the Solidity verifier ABI
-        #[arg(long, default_value = DEFAULT_VK_ABI, value_hint = clap::ValueHint::FilePath)]
-        abi_path: Option<PathBuf>,
-    },
-    /// Creates an Evm verifier that attests to on-chain inputs for a single proof
-    #[command(name = "create-evm-da")]
-    CreateEvmDa {
-        /// The path to load circuit settings .json file from (generated using the gen-settings command)
-        #[arg(short = 'S', long, default_value = DEFAULT_SETTINGS, value_hint = clap::ValueHint::FilePath)]
-        settings_path: Option<PathBuf>,
-        /// The path to output the Solidity code
-        #[arg(long, default_value = DEFAULT_SOL_CODE_DA, value_hint = clap::ValueHint::FilePath)]
-        sol_code_path: Option<PathBuf>,
-        /// The path to output the Solidity verifier ABI
-        #[arg(long, default_value = DEFAULT_VERIFIER_DA_ABI, value_hint = clap::ValueHint::FilePath)]
-        abi_path: Option<PathBuf>,
-        /// The path to the .json data file, which should
-        /// contain the necessary calldata and account addresses
-        /// needed to read from all the on-chain
-        /// view functions that return the data that the network
-        /// ingests as inputs.
-        #[arg(short = 'D', long, default_value = DEFAULT_DATA, value_hint = clap::ValueHint::FilePath)]
-        data: Option<String>,
-        /// The path to the witness file. This is needed for proof swapping for kzg commitments.
-        #[arg(short = 'W', long, default_value = DEFAULT_WITNESS, value_hint = clap::ValueHint::FilePath)]
-        witness: Option<PathBuf>,
+        /// The path to output the vka calldata
+        #[arg(long, default_value = DEFAULT_VKA, value_hint = clap::ValueHint::FilePath)]
+        vka_path: Option<PathBuf>,
+        /// The number of decimals we want to use for the rescaling of the instances into on-chain floats
+        /// Default is 18, which is the number of decimals used by most ERC20 tokens
+        #[arg(long, default_value = DEFAULT_DECIMALS, value_hint = clap::ValueHint::Other)]
+        decimals: Option<usize>,
     },
 
     /// Creates an Evm verifier for an aggregate proof
     #[command(name = "create-evm-verifier-aggr")]
+    #[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
     CreateEvmVerifierAggr {
         /// The path to SRS, if None will use ~/.ezkl/srs/kzg{logrows}.srs
         #[arg(long, value_hint = clap::ValueHint::FilePath)]
@@ -832,8 +787,8 @@ pub enum Commands {
         // logrows used for aggregation circuit
         #[arg(long, default_value = DEFAULT_AGGREGATED_LOGROWS, value_hint = clap::ValueHint::Other)]
         logrows: Option<u32>,
-        /// Whether the to render the verifier as reusable or not. If true, you will need to deploy a VK artifact, passing it as part of the calldata to the verifier.
-        #[arg(long, default_value = DEFAULT_RENDER_REUSABLE, action = clap::ArgAction::SetTrue)]
+        /// Whether to render the verifier as reusable or not. If true, you will need to deploy a VK artifact, passing it as part of the calldata to the verifier.
+        #[cfg_attr(all(feature = "reusable-verifier", not(target_arch = "wasm32")), arg(short = 'R', long, action = clap::ArgAction::SetTrue))]
         reusable: Option<bool>,
     },
     /// Verifies a proof, returning accept or reject
@@ -876,6 +831,7 @@ pub enum Commands {
         commitment: Option<Commitments>,
     },
     /// Deploys an evm contract (verifier, reusable verifier, or vk artifact) that is generated by ezkl
+    #[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
     DeployEvm {
         /// The path to the Solidity code (generated using the create-evm-verifier command)
         #[arg(long, default_value = DEFAULT_SOL_CODE, value_hint = clap::ValueHint::FilePath)]
@@ -893,36 +849,13 @@ pub enum Commands {
         #[arg(short = 'P', long, value_hint = clap::ValueHint::Other)]
         private_key: Option<String>,
         /// Contract type to be deployed
+        #[cfg(all(feature = "reusable-verifier", not(target_arch = "wasm32")))]
         #[arg(long = "contract-type", short = 'C', default_value = DEFAULT_CONTRACT_DEPLOYMENT_TYPE, value_hint = clap::ValueHint::Other)]
         contract: ContractType,
     },
-    /// Deploys an evm verifier that allows for data attestation
-    #[command(name = "deploy-evm-da")]
-    DeployEvmDa {
-        /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
-        #[arg(short = 'D', long, default_value = DEFAULT_DATA, value_hint = clap::ValueHint::FilePath)]
-        data: Option<String>,
-        /// The path to load circuit settings .json file from (generated using the gen-settings command)
-        #[arg(long, default_value = DEFAULT_SETTINGS, value_hint = clap::ValueHint::FilePath)]
-        settings_path: Option<PathBuf>,
-        /// The path to the Solidity code
-        #[arg(long, default_value = DEFAULT_SOL_CODE_DA, value_hint = clap::ValueHint::FilePath)]
-        sol_code_path: Option<PathBuf>,
-        /// RPC URL for an Ethereum node
-        #[arg(short = 'U', long, value_hint = clap::ValueHint::Url)]
-        rpc_url: String,
-        #[arg(long, default_value = DEFAULT_CONTRACT_ADDRESS_DA, value_hint = clap::ValueHint::FilePath)]
-        /// The path to output the contract address
-        addr_path: Option<PathBuf>,
-        /// The optimizer runs to set on the verifier. (Lower values optimize for deployment, while higher values optimize for execution)
-        #[arg(long, default_value = DEFAULT_OPTIMIZER_RUNS, value_hint = clap::ValueHint::Other)]
-        optimizer_runs: usize,
-        /// Private secp256K1 key in hex format, 64 chars, no 0x prefix, of the account signing transactions. If None the private key will be generated by Anvil
-        #[arg(short = 'P', long, value_hint = clap::ValueHint::Other)]
-        private_key: Option<String>,
-    },
     /// Verifies a proof using a local Evm executor, returning accept or reject
     #[command(name = "verify-evm")]
+    #[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
     VerifyEvm {
         /// The path to the proof file (generated using the prove command)
         #[arg(long, default_value = DEFAULT_PROOF, value_hint = clap::ValueHint::FilePath)]
@@ -933,12 +866,32 @@ pub enum Commands {
         /// RPC URL for an Ethereum node
         #[arg(short = 'U', long, value_hint = clap::ValueHint::Url)]
         rpc_url: String,
-        /// does the verifier use data attestation ?
-        #[arg(long, value_hint = clap::ValueHint::Other)]
-        addr_da: Option<H160Flag>,
-        // is the vk rendered seperately, if so specify an address
-        #[arg(long, value_hint = clap::ValueHint::Other)]
-        addr_vk: Option<H160Flag>,
+        /// The path to the serialized vka file
+        #[cfg_attr(all(feature = "reusable-verifier", not(target_arch = "wasm32")), arg(long, value_hint = clap::ValueHint::FilePath))]
+        vka_path: Option<PathBuf>,
+        /// The path to the serialized encoded calldata file generated via the encode_calldata command
+        #[arg(long, value_hint = clap::ValueHint::FilePath)]
+        encoded_calldata: Option<PathBuf>,
+    },
+    /// Registers a VKA, returning the its digest used to identify it on-chain.
+    #[command(name = "register-vka")]
+    #[cfg(feature = "reusable-verifier")]
+    RegisterVka {
+        /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
+        #[arg(short = 'U', long, value_hint = clap::ValueHint::Url)]
+        rpc_url: String,
+        /// The path to the reusable verifier contract's address
+        #[arg(long, default_value = DEFAULT_CONTRACT_ADDRESS, value_hint = clap::ValueHint::Other)]
+        addr_verifier: H160Flag,
+        /// The path to the serialized VKA file
+        #[arg(long, default_value = DEFAULT_VKA, value_hint = clap::ValueHint::FilePath)]
+        vka_path: Option<PathBuf>,
+        /// The path to output the VKA digest to
+        #[arg(long, default_value = DEFAULT_VKA_DIGEST, value_hint = clap::ValueHint::FilePath)]
+        vka_digest_path: Option<PathBuf>,
+        /// Private secp256K1 key in hex format, 64 chars, no 0x prefix, of the account signing transactions. If None the private key will be generated by Anvil
+        #[arg(short = 'P', long, value_hint = clap::ValueHint::Other)]
+        private_key: Option<String>,
     },
     #[cfg(not(feature = "no-update"))]
     /// Updates ezkl binary to version specified (or latest if not specified)

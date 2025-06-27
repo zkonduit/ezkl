@@ -19,8 +19,7 @@ use maybe_rayon::{
     slice::ParallelSliceMut,
 };
 use serde::{Deserialize, Serialize};
-use std::io::BufRead;
-use std::io::Write;
+use std::io::{BufRead, Write};
 use std::path::PathBuf;
 pub use val::*;
 pub use var::*;
@@ -58,7 +57,7 @@ pub trait TensorType: Clone + Debug {
 }
 
 macro_rules! tensor_type {
-    ($rust_type:ty, $tensor_type:ident, $zero:expr_2021, $one:expr_2021) => {
+    ($rust_type:ty, $tensor_type:ident, $zero:expr, $one:expr) => {
         impl TensorType for $rust_type {
             fn zero() -> Option<Self> {
                 Some($zero)
@@ -322,19 +321,51 @@ impl<T: Clone + TensorType + PrimeField> Tensor<T> {
         let mut buf_reader = std::io::BufReader::new(reader);
 
         let mut inner = Vec::new();
-        while let Ok(true) = buf_reader.has_data_left() {
+        loop {
+            // Check if there's more data available
+            let has_data = match buf_reader.fill_buf() {
+                Ok(buffer) => !buffer.is_empty(),
+                Err(e) => {
+                    return Err(TensorError::FileLoadError(format!(
+                        "IO error while checking for data: {}",
+                        e
+                    )));
+                }
+            };
+
+            // If no data left, we're done
+            if !has_data {
+                break;
+            }
+
+            // Try to read a complete T::Repr
             let mut repr = T::Repr::default();
+
             match buf_reader.read_exact(repr.as_mut()) {
                 Ok(_) => {
-                    inner.push(T::from_repr(repr).unwrap());
+                    // Successfully read a complete representation
+                    let tensor = T::from_repr(repr);
+
+                    // Check if the conversion was successful
+                    if tensor.is_some().into() {
+                        // Unwrap the value safely (we already checked it's Some)
+                        inner.push(tensor.unwrap());
+                    } else {
+                        return Err(TensorError::FileLoadError(
+                            "Failed to convert representation to tensor".to_string(),
+                        ));
+                    }
                 }
                 Err(_) => {
+                    // Any error during read_exact is treated as a failure
+                    // This matches the original implementation
                     return Err(TensorError::FileLoadError(
                         "Failed to read tensor".to_string(),
                     ));
                 }
             }
         }
+
         Ok(Tensor::new(Some(&inner), &[inner.len()]).unwrap())
     }
 }
