@@ -26,11 +26,11 @@ use itertools::Itertools;
 use tosubcommand::ToFlags;
 
 #[cfg(any(not(feature = "ezkl"), target_arch = "wasm32"))]
-use self::input::{FileSource, GraphData};
+use self::input::GraphData;
 
 use self::errors::GraphError;
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-use self::input::{FileSource, GraphData};
+use self::input::GraphData;
 use self::modules::{GraphModules, ModuleConfigs, ModuleForwardResult, ModuleSizes};
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
@@ -956,13 +956,13 @@ impl GraphCircuit {
         let shapes = self.model().graph.input_shapes()?;
         let scales = self.model().graph.get_input_scales();
         let input_types = self.model().graph.get_input_types()?;
-        self.load_file_data(data.input_data.values(), &shapes, scales, input_types)
+        self.load_file_data(&data.input_data, &shapes, scales, input_types)
     }
 
     ///
     pub fn load_file_data(
         &mut self,
-        file_data: &FileSource,
+        file_data: &DataSource,
         shapes: &Vec<Vec<usize>>,
         scales: Vec<crate::Scale>,
         input_types: Vec<InputType>,

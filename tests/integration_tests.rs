@@ -3,7 +3,7 @@
 mod native_tests {
 
     // use ezkl::circuit::table::RESERVED_BLINDING_ROWS_PAD;
-    use ezkl::graph::input::{FileSource, GraphData};
+    use ezkl::graph::input::GraphData;
     use ezkl::graph::GraphSettings;
     use ezkl::pfsys::Snark;
     use ezkl::Commitments;
@@ -163,12 +163,7 @@ mod native_tests {
             let data = GraphData::from_path(format!("{}/{}/input.json", test_dir, test).into())
                 .expect("failed to load input data");
 
-            let duplicated_input_data: FileSource = data
-                .input_data
-                .values()
-                .iter()
-                .map(|data| (0..num_batches).flat_map(|_| data.clone()).collect())
-                .collect();
+            let duplicated_input_data = data.input_data;
 
             let duplicated_data = GraphData::new(duplicated_input_data.into());
 
