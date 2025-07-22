@@ -163,7 +163,9 @@ mod native_tests {
             let data = GraphData::from_path(format!("{}/{}/input.json", test_dir, test).into())
                 .expect("failed to load input data");
 
-            let duplicated_input_data = data.input_data;
+            let duplicated_input_data = (0..num_batches)
+                .map(|_| data.input_data.clone().into_iter()).flatten()
+                .collect::<Vec<_>>();
 
             let duplicated_data = GraphData::new(duplicated_input_data.into());
 
