@@ -429,16 +429,6 @@ mod tests {
     }
 }
 
-#[cfg(feature = "python-bindings")]
-impl ToPyObject for CallToAccount {
-    fn to_object(&self, py: Python) -> PyObject {
-        let dict = PyDict::new(py);
-        dict.set_item("account", &self.address).unwrap();
-        dict.set_item("call_data", &self.call_data).unwrap();
-        dict.set_item("decimals", &self.decimals).unwrap();
-        dict.to_object(py)
-    }
-}
 
 #[cfg(feature = "python-bindings")]
 impl ToPyObject for DataSource {
