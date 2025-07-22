@@ -2240,6 +2240,7 @@ mod native_tests {
         assert!(status.success());
     }
 
+    #[allow(unused_variables)]
     fn build_ezkl() {
         #[cfg(feature = "icicle")]
         let args = [
