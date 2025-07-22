@@ -1266,7 +1266,8 @@ pub(crate) fn calibrate(
                 num_rows: new_settings.num_rows,
                 total_assignments: new_settings.total_assignments,
                 total_const_size: new_settings.total_const_size,
-                total_dynamic_col_size: new_settings.total_dynamic_col_size,
+                dynamic_lookup_params: new_settings.dynamic_lookup_params,
+                shuffle_params: new_settings.shuffle_params,
                 ..settings.clone()
             };
 

@@ -12,6 +12,8 @@ use crate::circuit::Input;
 use crate::circuit::InputType;
 use crate::circuit::Unknown;
 use crate::fieldutils::IntegerRep;
+use crate::graph::DynamicLookupParams;
+use crate::graph::ShuffleParams;
 use crate::tensor::ValType;
 use crate::{
     circuit::{lookup::LookupOp, BaseConfig as PolyConfig, CheckMode, Op},
@@ -100,12 +102,10 @@ pub type NodeGraph = BTreeMap<usize, NodeType>;
 pub struct DummyPassRes {
     /// number of rows use
     pub num_rows: usize,
-    /// num dynamic lookups
-    pub num_dynamic_lookups: usize,
-    /// max dynamic lookup input len
-    pub max_dynamic_input_len: usize,
-    /// dynamic lookup col size
-    pub dynamic_lookup_col_coord: usize,
+    /// dynamic lookup parameters
+    pub dynamic_lookup_params: DynamicLookupParams,
+    /// shuffle parameters
+    pub shuffle_params: ShuffleParams,
     /// num shuffles
     pub num_shuffles: usize,
     /// shuffle
@@ -585,16 +585,13 @@ impl Model {
             num_rows: res.num_rows,
             total_assignments: res.linear_coord,
             required_lookups: res.lookup_ops.into_iter().collect(),
-            max_dynamic_input_len: res.max_dynamic_input_len,
             required_range_checks: res.range_checks.into_iter().collect(),
             model_output_scales: self.graph.get_output_scales()?,
             model_input_scales: self.graph.get_input_scales(),
             input_types: self.get_input_types().ok(),
             output_types: Some(self.get_output_types()),
-            num_dynamic_lookups: res.num_dynamic_lookups,
-            total_dynamic_col_size: res.dynamic_lookup_col_coord,
-            num_shuffles: res.num_shuffles,
-            total_shuffle_col_size: res.shuffle_col_coord,
+            dynamic_lookup_params: res.dynamic_lookup_params,
+            shuffle_params: res.shuffle_params,
             total_const_size: res.total_const_size,
             check_mode,
             version: env!("CARGO_PKG_VERSION").to_string(),
@@ -1523,15 +1520,21 @@ impl Model {
         let res = DummyPassRes {
             num_rows: region.row(),
             linear_coord: region.linear_coord(),
-            max_dynamic_input_len: region.max_dynamic_input_len(),
+            dynamic_lookup_params: DynamicLookupParams {
+                total_dynamic_col_size: region.dynamic_lookup_col_coord(),
+                max_dynamic_input_len: region.max_dynamic_input_len(),
+                num_dynamic_lookups: region.dynamic_lookup_index(),
+            },
+            shuffle_params: ShuffleParams {
+                num_shuffles: region.shuffle_index(),
+                total_shuffle_col_size: region.shuffle_col_coord(),
+            },
             total_const_size: region.total_constants(),
             lookup_ops: region.used_lookups(),
             range_checks: region.used_range_checks(),
             max_lookup_inputs: region.max_lookup_inputs(),
             min_lookup_inputs: region.min_lookup_inputs(),
             max_range_size: region.max_range_size(),
-            num_dynamic_lookups: region.dynamic_lookup_index(),
-            dynamic_lookup_col_coord: region.dynamic_lookup_col_coord(),
             num_shuffles: region.shuffle_index(),
             shuffle_col_coord: region.shuffle_col_coord(),
             outputs,

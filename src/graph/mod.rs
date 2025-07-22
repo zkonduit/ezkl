@@ -413,6 +413,27 @@ fn insert_polycommit_pydict(
     Ok(())
 }
 
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+/// Parameters for dynamic lookups
+/// serde should flatten this struct
+pub struct DynamicLookupParams {
+    /// total dynamic column size
+    pub total_dynamic_col_size: usize,
+    /// max dynamic column input length
+    pub max_dynamic_input_len: usize,
+    /// number of dynamic lookups
+    pub num_dynamic_lookups: usize,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+/// Parameters for shuffle operations
+pub struct ShuffleParams {
+    /// number of shuffles
+    pub num_shuffles: usize,
+    /// total shuffle column size
+    pub total_shuffle_col_size: usize,
+}
+
 /// model parameters
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct GraphSettings {
@@ -424,16 +445,12 @@ pub struct GraphSettings {
     pub total_assignments: usize,
     /// total const size
     pub total_const_size: usize,
-    /// total dynamic column size
-    pub total_dynamic_col_size: usize,
-    /// max dynamic column input length
-    pub max_dynamic_input_len: usize,
-    /// number of dynamic lookups
-    pub num_dynamic_lookups: usize,
-    /// number of shuffles
-    pub num_shuffles: usize,
-    /// total shuffle column size
-    pub total_shuffle_col_size: usize,
+    /// dynamic lookup parameters, flattened for backwards compatibility
+    #[serde(flatten)]
+    pub dynamic_lookup_params: DynamicLookupParams,
+    /// shuffle parameters, flattened for backwards compatibility
+    #[serde(flatten)]
+    pub shuffle_params: ShuffleParams,
     /// the shape of public inputs to the model (in order of appearance)
     pub model_instance_shapes: Vec<Vec<usize>>,
     /// model output scales
@@ -495,15 +512,16 @@ impl GraphSettings {
     }
 
     fn dynamic_lookup_and_shuffle_logrows(&self) -> u32 {
-        (self.total_dynamic_col_size as f64 + self.total_shuffle_col_size as f64)
+        (self.dynamic_lookup_params.total_dynamic_col_size as f64
+            + self.shuffle_params.total_shuffle_col_size as f64)
             .log2()
             .ceil() as u32
     }
 
     /// calculate the number of rows required for the dynamic lookup and shuffle
     pub fn dynamic_lookup_and_shuffle_logrows_with_blinding(&self) -> u32 {
-        (self.total_dynamic_col_size as f64
-            + self.total_shuffle_col_size as f64
+        (self.dynamic_lookup_params.total_dynamic_col_size as f64
+            + self.shuffle_params.total_shuffle_col_size as f64
             + RESERVED_BLINDING_ROWS as f64)
             .log2()
             .ceil() as u32
@@ -511,13 +529,14 @@ impl GraphSettings {
 
     /// calculate the number of rows required for the dynamic lookup and shuffle
     pub fn min_dynamic_lookup_and_shuffle_logrows_with_blinding(&self) -> u32 {
-        (self.max_dynamic_input_len as f64 + RESERVED_BLINDING_ROWS as f64)
+        (self.dynamic_lookup_params.max_dynamic_input_len as f64 + RESERVED_BLINDING_ROWS as f64)
             .log2()
             .ceil() as u32
     }
 
     fn dynamic_lookup_and_shuffle_col_size(&self) -> usize {
-        self.total_dynamic_col_size + self.total_shuffle_col_size
+        self.dynamic_lookup_params.total_dynamic_col_size
+            + self.shuffle_params.total_shuffle_col_size
     }
 
     /// calculate the number of rows required for the module constraints
@@ -653,12 +672,12 @@ impl GraphSettings {
 
     /// requires dynamic lookup
     pub fn requires_dynamic_lookup(&self) -> bool {
-        self.num_dynamic_lookups > 0
+        self.dynamic_lookup_params.num_dynamic_lookups > 0
     }
 
     /// requires dynamic shuffle
     pub fn requires_shuffle(&self) -> bool {
-        self.num_shuffles > 0
+        self.shuffle_params.num_shuffles > 0
     }
 
     /// any kzg visibility
