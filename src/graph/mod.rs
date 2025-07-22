@@ -2158,6 +2158,12 @@ pub mod tests {
         let deserialized: GraphSettings = serde_json::from_str(&json_str).unwrap();
         assert_eq!(original, deserialized);
 
+
+        // now do JSON bytes
+        let json_bytes = serde_json::to_vec(&original).unwrap();
+        let deserialized_from_bytes: GraphSettings = serde_json::from_slice(&json_bytes).unwrap();
+        assert_eq!(original, deserialized_from_bytes);
+
         // Test 2: Bincode serialization roundtrip
         let bincode_data = bincode::serialize(&original).unwrap();
         let bincode_deserialized: GraphSettings = bincode::deserialize(&bincode_data).unwrap();

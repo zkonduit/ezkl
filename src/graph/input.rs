@@ -7,8 +7,6 @@ use halo2curves::bn256::Fr as Fp;
 #[cfg(feature = "python-bindings")]
 use pyo3::prelude::*;
 #[cfg(feature = "python-bindings")]
-use pyo3::types::PyDict;
-#[cfg(feature = "python-bindings")]
 use pyo3::ToPyObject;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::io::BufReader;
@@ -430,12 +428,6 @@ mod tests {
 }
 
 
-#[cfg(feature = "python-bindings")]
-impl ToPyObject for DataSource {
-    fn to_object(&self, py: Python) -> PyObject {
-        self.0.to_object(py)
-    }
-}
 
 #[cfg(feature = "python-bindings")]
 use crate::pfsys::field_to_string;
