@@ -396,7 +396,7 @@ jobs:
       # - name: Install solc
       #   run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --rev c128f990af6d3f6837f354ccd9c9f84a7bdeb77b --locked anvil --force
+        run: cargo install --git https://github.com/foundry-rs/foundry --rev 56b806a3ba7866a3b061093bebd0fa2ace97f1fc --locked anvil --force
       - name: Build wasm package for nodejs target.
         run: |
           wasm-pack build --target nodejs --out-dir ./tests/wasm/nodejs . -- -Z build-std="panic_abort,std"
@@ -670,7 +670,7 @@ jobs:
       # - name: Install solc
       #   run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --rev c128f990af6d3f6837f354ccd9c9f84a7bdeb77b --locked anvil --force
+        run: cargo install --git https://github.com/foundry-rs/foundry --rev 56b806a3ba7866a3b061093bebd0fa2ace97f1fc --locked anvil --force
       - name: KZG prove and verify aggr tests
         run: cargo nextest run  --verbose tests_evm::kzg_evm_aggr_prove_and_verify_::t --test-threads 4 -- --include-ignored
 
@@ -729,7 +729,7 @@ jobs:
       - name: Setup Virtual Env and Install python dependencies
         run: python -m venv .env --clear; source .env/bin/activate; pip install -r requirements.txt;
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --rev c128f990af6d3f6837f354ccd9c9f84a7bdeb77b --locked anvil --force
+        run: cargo install --git https://github.com/foundry-rs/foundry --rev 56b806a3ba7866a3b061093bebd0fa2ace97f1fc --locked anvil --force
       - name: Build python ezkl
         run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings,reusable-verifier --profile=test-runs
       - name: Run pytest
@@ -802,7 +802,7 @@ jobs:
       # - name: Install solc
       #   run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --rev c128f990af6d3f6837f354ccd9c9f84a7bdeb77b --locked anvil --force
+        run: cargo install --git https://github.com/foundry-rs/foundry --rev 56b806a3ba7866a3b061093bebd0fa2ace97f1fc --locked anvil --force
       - name: Install pip
         run: python -m ensurepip --upgrade
       - name: Setup Virtual Env and Install python dependencies
