@@ -187,12 +187,17 @@ impl From<ProofType> for StrategyType {
 }
 
 #[cfg(feature = "python-bindings")]
-impl ToPyObject for ProofType {
-    fn to_object(&self, py: Python) -> PyObject {
-        match self {
-            ProofType::Single => "Single".to_object(py),
-            ProofType::ForAggr => "ForAggr".to_object(py),
-        }
+impl<'py> pyo3::IntoPyObject<'py> for ProofType {
+    type Target = pyo3::PyAny;
+    type Output = pyo3::Bound<'py, Self::Target>;
+    type Error = pyo3::PyErr;
+
+    fn into_pyobject(self, py: pyo3::Python<'py>) -> Result<Self::Output, Self::Error> {
+        let result = match self {
+            ProofType::Single => "Single",
+            ProofType::ForAggr => "ForAggr",
+        };
+        Ok(result.into_pyobject(py)?.into_any())
     }
 }
 
@@ -245,12 +250,17 @@ impl std::fmt::Display for StrategyType {
 }
 #[cfg(feature = "python-bindings")]
 /// Converts StrategyType into a PyObject (Required for StrategyType to be compatible with Python)
-impl pyo3::IntoPy<PyObject> for StrategyType {
-    fn into_py(self, py: Python) -> PyObject {
-        match self {
-            StrategyType::Single => "single".to_object(py),
-            StrategyType::Accum => "accum".to_object(py),
-        }
+impl<'py> pyo3::IntoPyObject<'py> for StrategyType {
+    type Target = pyo3::PyAny;
+    type Output = pyo3::Bound<'py, Self::Target>;
+    type Error = pyo3::PyErr;
+
+    fn into_pyobject(self, py: pyo3::Python<'py>) -> Result<Self::Output, Self::Error> {
+        let result = match self {
+            StrategyType::Single => "single",
+            StrategyType::Accum => "accum",
+        };
+        Ok(result.into_pyobject(py)?.into_any())
     }
 }
 #[cfg(feature = "python-bindings")]
@@ -304,15 +314,6 @@ impl ToFlags for TranscriptType {
     }
 }
 
-#[cfg(feature = "python-bindings")]
-impl ToPyObject for TranscriptType {
-    fn to_object(&self, py: Python) -> PyObject {
-        match self {
-            TranscriptType::Poseidon => "Poseidon".to_object(py),
-            TranscriptType::EVM => "EVM".to_object(py),
-        }
-    }
-}
 
 #[cfg(feature = "python-bindings")]
 ///
@@ -401,14 +402,18 @@ where
 }
 
 #[cfg(feature = "python-bindings")]
-use pyo3::{types::PyDict, PyObject, Python, ToPyObject};
+use pyo3::{types::PyDict, IntoPyObject, Python};
 #[cfg(feature = "python-bindings")]
-impl<F: PrimeField + SerdeObject + Serialize, C: CurveAffine + Serialize> ToPyObject for Snark<F, C>
+impl<'py, F: PrimeField + SerdeObject + Serialize, C: CurveAffine + Serialize> IntoPyObject<'py> for Snark<F, C>
 where
     C::Scalar: Serialize + DeserializeOwned,
     C::ScalarExt: Serialize + DeserializeOwned,
 {
-    fn to_object(&self, py: Python) -> PyObject {
+    type Target = pyo3::PyAny;
+    type Output = pyo3::Bound<'py, Self::Target>;
+    type Error = pyo3::PyErr;
+
+    fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
         let dict = PyDict::new(py);
         let field_elems: Vec<Vec<String>> = self
             .instances
@@ -418,9 +423,9 @@ where
         dict.set_item("instances", field_elems).unwrap();
         let hex_proof = hex::encode(&self.proof);
         dict.set_item("proof", format!("0x{}", hex_proof)).unwrap();
-        dict.set_item("transcript_type", self.transcript_type.to_object(py))
+        dict.set_item("transcript_type", self.transcript_type.into_pyobject(py)?)
             .unwrap();
-        dict.to_object(py)
+        Ok(dict.into_any())
     }
 }
 

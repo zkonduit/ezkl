@@ -61,7 +61,7 @@ use pyo3::types::PyDict;
 #[cfg(feature = "python-bindings")]
 use pyo3::types::PyDictMethods;
 #[cfg(feature = "python-bindings")]
-use pyo3::ToPyObject;
+use pyo3::IntoPyObject;
 
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
@@ -319,8 +319,12 @@ impl GraphWitness {
 }
 
 #[cfg(feature = "python-bindings")]
-impl ToPyObject for GraphWitness {
-    fn to_object(&self, py: Python) -> PyObject {
+impl<'py> IntoPyObject<'py> for GraphWitness {
+    type Target = pyo3::PyAny;
+    type Output = pyo3::Bound<'py, Self::Target>;
+    type Error = pyo3::PyErr;
+
+    fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
         // Create a Python dictionary
         let dict = PyDict::new(py);
         let dict_inputs = PyDict::new(py);
@@ -383,7 +387,7 @@ impl ToPyObject for GraphWitness {
             dict.set_item("processed_outputs", dict_outputs).unwrap();
         }
 
-        dict.to_object(py)
+        Ok(dict.into_any())
     }
 }
 

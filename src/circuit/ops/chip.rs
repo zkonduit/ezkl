@@ -8,8 +8,9 @@ use halo2_proofs::{
 use log::debug;
 #[cfg(feature = "python-bindings")]
 use pyo3::{
-    conversion::{FromPyObject, IntoPy},
+    conversion::FromPyObject,
     exceptions::PyValueError,
+    IntoPyObject,
     prelude::*,
 };
 use serde::{Deserialize, Serialize};
@@ -86,12 +87,17 @@ impl CheckMode {
 
 #[cfg(feature = "python-bindings")]
 /// Converts CheckMode into a PyObject (Required for CheckMode to be compatible with Python)
-impl IntoPy<PyObject> for CheckMode {
-    fn into_py(self, py: Python) -> PyObject {
-        match self {
-            CheckMode::SAFE => "safe".to_object(py),
-            CheckMode::UNSAFE => "unsafe".to_object(py),
-        }
+impl<'py> IntoPyObject<'py> for CheckMode {
+    type Target = pyo3::PyAny;
+    type Output = pyo3::Bound<'py, Self::Target>;
+    type Error = pyo3::PyErr;
+
+    fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
+        let result = match self {
+            CheckMode::SAFE => "safe",
+            CheckMode::UNSAFE => "unsafe",
+        };
+        Ok(result.into_pyobject(py)?.into_any())
     }
 }
 
