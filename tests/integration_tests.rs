@@ -143,7 +143,7 @@ mod native_tests {
         }
     }
 
-    fn mk_data_batches_(test_dir: &str, test: &str, output_dir: &str, _num_batches: usize) {
+    fn mk_data_batches_(test_dir: &str, test: &str, output_dir: &str, num_batches: usize) {
         let path: std::path::PathBuf = format!("{}/{}", test_dir, test).into();
         if !path.exists() {
             panic!("test_dir does not exist")
@@ -163,9 +163,12 @@ mod native_tests {
             let data = GraphData::from_path(format!("{}/{}/input.json", test_dir, test).into())
                 .expect("failed to load input data");
 
-            let duplicated_input_data = data.input_data.clone();
+            let duplicated_input_data = data.input_data.into_iter().map(|input| {
+                (0..num_batches)
+                    .map(move |_| input.clone()).flatten().collect::<Vec<_>>()
+            }).collect::<Vec<_>>();
 
-            let duplicated_data = GraphData::new(duplicated_input_data.into());
+            let duplicated_data = GraphData::new(duplicated_input_data);
 
             let res =
                 duplicated_data.save(format!("{}/{}/input.json", test_dir, output_dir).into());
