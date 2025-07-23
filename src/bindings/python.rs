@@ -1691,7 +1691,7 @@ fn create_evm_verifier(
 ))]
 #[gen_stub_pyfunction]
 fn create_evm_vka(
-    py: Python,
+    py: Python<'_>,
     vk_path: PathBuf,
     settings_path: PathBuf,
     vka_path: PathBuf,
