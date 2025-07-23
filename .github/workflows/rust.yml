@@ -144,7 +144,7 @@ jobs:
   ultra-overflow-tests_og-lookup:
     permissions:
       contents: read
-    runs-on: non-gpu
+    runs-on: non-gpu,non-sgx
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
@@ -180,7 +180,7 @@ jobs:
   ultra-overflow-tests:
     permissions:
       contents: read
-    runs-on: non-gpu
+    runs-on: non-gpu,non-sgx
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
@@ -286,7 +286,7 @@ jobs:
   mock-proving-tests:
     permissions:
       contents: read
-    runs-on: non-gpu
+    runs-on: non-gpu,non-sgx
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
@@ -356,7 +356,7 @@ jobs:
   prove-and-verify-evm-tests:
     permissions:
       contents: read
-    runs-on: non-gpu
+    runs-on: non-gpu,non-sgx
     # needs: [build, library-tests, docs, python-tests, python-integration-tests]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -459,7 +459,7 @@ jobs:
   prove-and-verify-tests:
     permissions:
       contents: read
-    runs-on: non-gpu
+    runs-on: non-gpu,non-sgx
     needs: [build, library-tests, docs]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -709,7 +709,7 @@ jobs:
   python-tests:
     permissions:
       contents: read
-    runs-on: non-gpu
+    runs-on: non-gpu,non-sgx
     needs: [build, library-tests, docs]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -744,7 +744,7 @@ jobs:
   accuracy-measurement-tests:
     permissions:
       contents: read
-    runs-on: non-gpu
+    runs-on: non-gpu,non-sgx
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
