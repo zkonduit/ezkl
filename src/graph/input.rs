@@ -7,9 +7,7 @@ use halo2curves::bn256::Fr as Fp;
 #[cfg(feature = "python-bindings")]
 use pyo3::prelude::*;
 #[cfg(feature = "python-bindings")]
-use pyo3::types::PyDict;
-#[cfg(feature = "python-bindings")]
-use pyo3::ToPyObject;
+use pyo3::IntoPyObject;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::io::BufReader;
 use std::io::BufWriter;
@@ -429,34 +427,29 @@ mod tests {
     }
 }
 
-#[cfg(feature = "python-bindings")]
-impl ToPyObject for CallToAccount {
-    fn to_object(&self, py: Python) -> PyObject {
-        let dict = PyDict::new(py);
-        dict.set_item("account", &self.address).unwrap();
-        dict.set_item("call_data", &self.call_data).unwrap();
-        dict.set_item("decimals", &self.decimals).unwrap();
-        dict.to_object(py)
-    }
-}
 
-#[cfg(feature = "python-bindings")]
-impl ToPyObject for DataSource {
-    fn to_object(&self, py: Python) -> PyObject {
-        self.0.to_object(py)
-    }
-}
 
 #[cfg(feature = "python-bindings")]
 use crate::pfsys::field_to_string;
 
 #[cfg(feature = "python-bindings")]
-impl ToPyObject for FileSourceInner {
-    fn to_object(&self, py: Python) -> PyObject {
+impl<'py> IntoPyObject<'py> for FileSourceInner {
+    type Target = pyo3::PyAny;
+    type Output = pyo3::Bound<'py, Self::Target>;
+    type Error = pyo3::PyErr;
+
+    fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
         match self {
-            FileSourceInner::Field(data) => field_to_string(data).to_object(py),
-            FileSourceInner::Bool(data) => data.to_object(py),
-            FileSourceInner::Float(data) => data.to_object(py),
+            FileSourceInner::Field(data) => {
+                let s = field_to_string(&data);
+                Ok(pyo3::types::PyString::new(py, &s).into_any())
+            },
+            FileSourceInner::Bool(data) => {
+                Ok(pyo3::types::PyBool::new(py, data).as_any().clone())
+            },
+            FileSourceInner::Float(data) => {
+                Ok(pyo3::types::PyFloat::new(py, data).into_any())
+            },
         }
     }
 }

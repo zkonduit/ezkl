@@ -4626,7 +4626,7 @@ pub(crate) fn rescale<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
     let mut rescaled_inputs = vec![];
     for (i, ri) in values.iter().enumerate() {
         if scales[i].1 == 1 {
-            rescaled_inputs.push(ri.clone().clone());
+            rescaled_inputs.push((*ri).clone());
             continue;
         }
 

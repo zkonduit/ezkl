@@ -31,9 +31,9 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-02-17
+          toolchain: nightly-2025-06-16
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3
@@ -55,9 +55,9 @@ jobs:
           persist-credentials: false
 
 
-      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-02-17
+          toolchain: nightly-2025-06-16
           override: true
           components: rustfmt, clippy
       - name: Build
@@ -73,9 +73,9 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-02-17
+          toolchain: nightly-2025-06-16
           override: true
           components: rustfmt, clippy
       - name: Docs
@@ -91,9 +91,9 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-02-17
+          toolchain: nightly-2025-06-16
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -116,9 +116,9 @@ jobs:
   #     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
   # with:
   #   persist-credentials: false
-  #     - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+  #     - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
   #       with:
-  #         toolchain: nightly-2025-02-17
+  #         toolchain: nightly-2025-06-16
   #         override: true
   #         components: rustfmt, clippy
   #     - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -144,7 +144,7 @@ jobs:
   ultra-overflow-tests_og-lookup:
     permissions:
       contents: read
-    runs-on: non-gpu
+    runs-on: non-gpu,non-sgx
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
@@ -152,9 +152,9 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-02-17
+          toolchain: nightly-2025-06-16
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -180,20 +180,22 @@ jobs:
   ultra-overflow-tests:
     permissions:
       contents: read
-    runs-on: non-gpu
+    runs-on: non-gpu,non-sgx
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      
 
-      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-02-17
+          toolchain: nightly-2025-06-16
           override: true
           components: rustfmt, clippy
+
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
         with:
           crate: cargo-nextest
@@ -220,15 +222,16 @@ jobs:
     runs-on: ubuntu-latest-16-cores
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      
 
-      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-02-17
+          toolchain: nightly-2025-06-16
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -244,15 +247,18 @@ jobs:
     runs-on: ubuntu-latest-64-cores
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      # add `atomics` and `bulk-memory` to RUSTFLAGS to enable wasm-bindgen tests
+      RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory"
+
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      
 
-      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-02-17
+          toolchain: nightly-2025-06-16
           override: true
           components: rustfmt, clippy
       - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa  #v0.4.0
@@ -265,7 +271,7 @@ jobs:
       - name: Install wasm32-unknown-unknown
         run: rustup target add wasm32-unknown-unknown
       - name: Add rust-src
-        run: rustup component add rust-src --toolchain nightly-2025-02-17-x86_64-unknown-linux-gnu
+        run: rustup component add rust-src --toolchain nightly-2025-06-16-x86_64-unknown-linux-gnu
       - name: Create webdriver.json to disable timeouts
         run: |
           echo '{"args": ["--headless", "--disable-gpu", "--disable-dev-shm-usage", "--no-sandbox"]}' > webdriver.json
@@ -280,7 +286,7 @@ jobs:
   mock-proving-tests:
     permissions:
       contents: read
-    runs-on: non-gpu
+    runs-on: non-gpu,non-sgx
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
@@ -288,10 +294,10 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      
-      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-02-17
+          toolchain: nightly-2025-06-16
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -350,21 +356,27 @@ jobs:
   prove-and-verify-evm-tests:
     permissions:
       contents: read
-    runs-on: non-gpu
+    runs-on: non-gpu,non-sgx
     # needs: [build, library-tests, docs, python-tests, python-integration-tests]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory"
+
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      
 
-      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-02-17
+          toolchain: nightly-2025-06-16
           override: true
           components: rustfmt, clippy
+      - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa  #v0.4.0
+        with:
+          # Pin to version 0.12.1
+          version: "v0.12.1"
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
         with:
           crate: cargo-nextest
@@ -382,14 +394,14 @@ jobs:
           node-version: "18.12.1"
           cache: "pnpm"
       - name: "Add rust-src"
-        run: rustup component add rust-src --toolchain nightly-2025-02-17-x86_64-unknown-linux-gnu
+        run: rustup component add rust-src --toolchain nightly-2025-06-16-x86_64-unknown-linux-gnu
       - name: Install dependencies for js tests and package
         run: |
           pnpm install --frozen-lockfile
       # - name: Install solc
       #   run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --rev 62cdea8ff9e6efef011f77e295823b5f2dbeb3a1 --locked anvil --force
+        run: cargo install --git https://github.com/foundry-rs/foundry --rev 56b806a3ba7866a3b061093bebd0fa2ace97f1fc --locked anvil --force
       - name: Build wasm package for nodejs target.
         run: |
           wasm-pack build --target nodejs --out-dir ./tests/wasm/nodejs . -- -Z build-std="panic_abort,std"
@@ -419,9 +431,9 @@ jobs:
   #     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
   #       with:
   #         persist-credentials: false
-  #     - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+  #     - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
   #       with:
-  #         toolchain: nightly-2025-02-17
+  #         toolchain: nightly-2025-06-16
   #         override: true
   #         components: rustfmt, clippy
   #     - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa  #v0.4.0
@@ -429,7 +441,7 @@ jobs:
   #         # Pin to version 0.12.1
   #         version: 'v0.12.1'
   #     - name: Add rust-src
-  #       run: rustup component add rust-src --toolchain nightly-2025-02-17
+  #       run: rustup component add rust-src --toolchain nightly-2025-06-16
   #     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
   #       with:
   #         persist-credentials: false
@@ -447,19 +459,21 @@ jobs:
   prove-and-verify-tests:
     permissions:
       contents: read
-    runs-on: non-gpu
+    runs-on: non-gpu,non-sgx
     needs: [build, library-tests, docs]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory"
+
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      
 
-      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-02-17
+          toolchain: nightly-2025-06-16
           override: true
           components: rustfmt, clippy
       - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa  #v0.4.0
@@ -470,7 +484,7 @@ jobs:
         run: rustup target add wasm32-unknown-unknown
 
       - name: Add rust-src
-        run: rustup component add rust-src --toolchain nightly-2025-02-17-x86_64-unknown-linux-gnu
+        run: rustup component add rust-src --toolchain nightly-2025-06-16-x86_64-unknown-linux-gnu
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
@@ -535,13 +549,13 @@ jobs:
   #     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
   # with:
   #   persist-credentials: false
-  #     - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+  #     - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
   #       with:
-  #         toolchain: nightly-2025-02-17
+  #         toolchain: nightly-2025-06-16
   #         override: true
   #         components: rustfmt, clippy
   #     - name: Add rust-src
-  #       run: rustup component add rust-src --toolchain nightly-2025-02-17-x86_64-unknown-linux-gnu
+  #       run: rustup component add rust-src --toolchain nightly-2025-06-16-x86_64-unknown-linux-gnu
   #     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
   #     - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
   #       with:
@@ -571,15 +585,16 @@ jobs:
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      
+
 
       - uses: dtolnay/rust-toolchain@4f94fbe7e03939b0e674bcc9ca609a16088f63ff  #nightly branch, TODO: update when required
         with:
-          toolchain: nightly-2025-02-17
+          toolchain: nightly-2025-06-16
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -597,9 +612,9 @@ jobs:
   #     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
   # with:
   #   persist-credentials: false
-  #     - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+  #     - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
   #       with:
-  #         toolchain: nightly-2025-02-17
+  #         toolchain: nightly-2025-06-16
   #         override: true
   #         components: rustfmt, clippy
   #     - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -616,15 +631,16 @@ jobs:
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      
 
-      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-02-17
+          toolchain: nightly-2025-06-16
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -641,15 +657,16 @@ jobs:
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      
 
-      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-02-17
+          toolchain: nightly-2025-06-16
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -659,7 +676,7 @@ jobs:
       # - name: Install solc
       #   run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --rev 62cdea8ff9e6efef011f77e295823b5f2dbeb3a1 --locked anvil --force
+        run: cargo install --git https://github.com/foundry-rs/foundry --rev 56b806a3ba7866a3b061093bebd0fa2ace97f1fc --locked anvil --force
       - name: KZG prove and verify aggr tests
         run: cargo nextest run  --verbose tests_evm::kzg_evm_aggr_prove_and_verify_::t --test-threads 4 -- --include-ignored
 
@@ -670,15 +687,16 @@ jobs:
     needs: [build, library-tests, docs]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      
 
-      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-02-17
+          toolchain: nightly-2025-06-16
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -691,22 +709,23 @@ jobs:
   python-tests:
     permissions:
       contents: read
-    runs-on: non-gpu
+    runs-on: non-gpu,non-sgx
     needs: [build, library-tests, docs]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      
+
 
       - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa  #v4.8.0
         with:
           python-version: "3.12"
-      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-02-17
+          toolchain: nightly-2025-06-16
           override: true
           components: rustfmt, clippy
       - name: Install cmake
@@ -716,7 +735,7 @@ jobs:
       - name: Setup Virtual Env and Install python dependencies
         run: python -m venv .env --clear; source .env/bin/activate; pip install -r requirements.txt;
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --rev 62cdea8ff9e6efef011f77e295823b5f2dbeb3a1 --locked anvil --force
+        run: cargo install --git https://github.com/foundry-rs/foundry --rev 56b806a3ba7866a3b061093bebd0fa2ace97f1fc --locked anvil --force
       - name: Build python ezkl
         run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings,reusable-verifier --profile=test-runs
       - name: Run pytest
@@ -725,22 +744,23 @@ jobs:
   accuracy-measurement-tests:
     permissions:
       contents: read
-    runs-on: non-gpu
+    runs-on: non-gpu,non-sgx
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      
+
 
       - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa  #v4.8.0
         with:
           python-version: "3.12"
-      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-02-17
+          toolchain: nightly-2025-06-16
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -766,18 +786,19 @@ jobs:
     runs-on: large-self-hosted
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      
+
 
       - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa  #v4.8.0
         with:
           python-version: "3.11"
-      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-02-17
+          toolchain: nightly-2025-06-16
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -787,7 +808,7 @@ jobs:
       # - name: Install solc
       #   run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --rev 62cdea8ff9e6efef011f77e295823b5f2dbeb3a1 --locked anvil --force
+        run: cargo install --git https://github.com/foundry-rs/foundry --rev 56b806a3ba7866a3b061093bebd0fa2ace97f1fc --locked anvil --force
       - name: Install pip
         run: python -m ensurepip --upgrade
       - name: Setup Virtual Env and Install python dependencies
@@ -828,15 +849,16 @@ jobs:
     runs-on: macos-latest
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      
 
-      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-02-17
+          toolchain: nightly-2025-06-16
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -844,7 +866,7 @@ jobs:
           crate: cargo-nextest
           locked: true
       - name: Run ios tests
-        run: CARGO_BUILD_TARGET=aarch64-apple-darwin RUSTUP_TOOLCHAIN=nightly-2025-02-17-aarch64-apple-darwin cargo test --test ios_integration_tests --features ios-bindings-test --no-default-features
+        run: CARGO_BUILD_TARGET=aarch64-apple-darwin RUSTUP_TOOLCHAIN=nightly-2025-06-16-aarch64-apple-darwin cargo test --test ios_integration_tests --features ios-bindings-test --no-default-features
 
   swift-package-tests:
     permissions:
@@ -854,14 +876,15 @@ jobs:
 
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
 
-      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-02-17
+          toolchain: nightly-2025-06-16
           override: true
           components: rustfmt, clippy
       - name: Build EzklCoreBindings

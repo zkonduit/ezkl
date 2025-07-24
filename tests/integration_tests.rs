@@ -163,9 +163,12 @@ mod native_tests {
             let data = GraphData::from_path(format!("{}/{}/input.json", test_dir, test).into())
                 .expect("failed to load input data");
 
-            let duplicated_input_data = data.input_data;
+            let duplicated_input_data = data.input_data.into_iter().map(|input| {
+                (0..num_batches)
+                    .map(move |_| input.clone()).flatten().collect::<Vec<_>>()
+            }).collect::<Vec<_>>();
 
-            let duplicated_data = GraphData::new(duplicated_input_data.into());
+            let duplicated_data = GraphData::new(duplicated_input_data);
 
             let res =
                 duplicated_data.save(format!("{}/{}/input.json", test_dir, output_dir).into());
@@ -2238,6 +2241,7 @@ mod native_tests {
         assert!(status.success());
     }
 
+    #[allow(unused_variables)]
     fn build_ezkl() {
         #[cfg(feature = "icicle")]
         let args = [

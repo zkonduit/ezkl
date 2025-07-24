@@ -93,16 +93,6 @@ impl From<PyG1> for G1 {
     }
 }
 
-impl pyo3::ToPyObject for PyG1 {
-    fn to_object(&self, py: pyo3::Python) -> pyo3::PyObject {
-        let g1_dict = pyo3::types::PyDict::new(py);
-
-        g1_dict.set_item("x", self.x.to_object(py)).unwrap();
-        g1_dict.set_item("y", self.y.to_object(py)).unwrap();
-        g1_dict.set_item("z", self.z.to_object(py)).unwrap();
-        g1_dict.into()
-    }
-}
 
 /// pyclass containing the struct used for G1
 #[pyclass]
@@ -135,15 +125,6 @@ impl From<PyG1Affine> for G1Affine {
     }
 }
 
-impl pyo3::ToPyObject for PyG1Affine {
-    fn to_object(&self, py: pyo3::Python) -> pyo3::PyObject {
-        let g1_dict = pyo3::types::PyDict::new(py);
-
-        g1_dict.set_item("x", self.x.to_object(py)).unwrap();
-        g1_dict.set_item("y", self.y.to_object(py)).unwrap();
-        g1_dict.into()
-    }
-}
 
 /// Python class containing the struct used for run_args
 ///
@@ -884,7 +865,7 @@ fn gen_srs(srs_path: PathBuf, logrows: usize) -> PyResult<()> {
 ))]
 #[gen_stub_pyfunction]
 fn get_srs(
-    py: Python,
+    py: Python<'_>,
     settings_path: Option<PathBuf>,
     logrows: Option<u32>,
     srs_path: Option<PathBuf>,
@@ -1101,7 +1082,7 @@ fn gen_witness(
             let err_str = format!("Failed to generate witness: {}", e);
             PyRuntimeError::new_err(err_str)
         })?;
-    Python::with_gil(|py| Ok(output.to_object(py)))
+    Python::with_gil(|py| Ok(output.into_pyobject(py).unwrap().into()))
 }
 
 /// Mocks the prover
@@ -1283,7 +1264,7 @@ fn prove(
         PyRuntimeError::new_err(err_str)
     })?;
 
-    Python::with_gil(|py| Ok(snark.to_object(py)))
+    Python::with_gil(|py| Ok(snark.into_pyobject(py).unwrap().into()))
 }
 
 /// Verifies a given proof
@@ -1649,7 +1630,7 @@ fn encode_evm_calldata<'a>(
 ))]
 #[gen_stub_pyfunction]
 fn create_evm_verifier(
-    py: Python,
+    py: Python<'_>,
     vk_path: PathBuf,
     settings_path: PathBuf,
     sol_code_path: PathBuf,
@@ -1710,7 +1691,7 @@ fn create_evm_verifier(
 ))]
 #[gen_stub_pyfunction]
 fn create_evm_vka(
-    py: Python,
+    py: Python<'_>,
     vk_path: PathBuf,
     settings_path: PathBuf,
     vka_path: PathBuf,
@@ -1740,7 +1721,7 @@ fn create_evm_vka(
 ))]
 #[gen_stub_pyfunction]
 fn deploy_evm(
-    py: Python,
+    py: Python<'_>,
     addr_path: PathBuf,
     rpc_url: String,
     sol_code_path: PathBuf,
@@ -1924,7 +1905,7 @@ fn verify_evm<'a>(
 ))]
 #[gen_stub_pyfunction]
 fn create_evm_verifier_aggr(
-    py: Python,
+    py: Python<'_>,
     aggregation_settings: Vec<PathBuf>,
     vk_path: PathBuf,
     sol_code_path: PathBuf,

@@ -93,12 +93,17 @@ pub const DEFAULT_VKA_DIGEST: &str = "vka.digest";
 
 #[cfg(feature = "python-bindings")]
 /// Converts TranscriptType into a PyObject (Required for TranscriptType to be compatible with Python)
-impl IntoPy<PyObject> for TranscriptType {
-    fn into_py(self, py: Python) -> PyObject {
-        match self {
-            TranscriptType::Poseidon => "poseidon".to_object(py),
-            TranscriptType::EVM => "evm".to_object(py),
-        }
+impl<'py> IntoPyObject<'py> for TranscriptType {
+    type Target = pyo3::PyAny;
+    type Output = pyo3::Bound<'py, Self::Target>;
+    type Error = pyo3::PyErr;
+
+    fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
+        let result = match self {
+            TranscriptType::Poseidon => "poseidon",
+            TranscriptType::EVM => "evm",
+        };
+        Ok(result.into_pyobject(py)?.into_any())
     }
 }
 #[cfg(feature = "python-bindings")]
@@ -257,17 +262,22 @@ impl From<&str> for H160Flag {
 
 #[cfg(feature = "python-bindings")]
 /// Converts CalibrationTarget into a PyObject (Required for CalibrationTarget to be compatible with Python)
-impl IntoPy<PyObject> for CalibrationTarget {
-    fn into_py(self, py: Python) -> PyObject {
-        match self {
+impl<'py> IntoPyObject<'py> for CalibrationTarget {
+    type Target = pyo3::PyAny;
+    type Output = pyo3::Bound<'py, Self::Target>;
+    type Error = pyo3::PyErr;
+
+    fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
+        let result = match self {
             CalibrationTarget::Resources { col_overflow: true } => {
-                "resources/col-overflow".to_object(py)
+                "resources/col-overflow"
             }
             CalibrationTarget::Resources {
                 col_overflow: false,
-            } => "resources".to_object(py),
-            CalibrationTarget::Accuracy => "accuracy".to_object(py),
-        }
+            } => "resources",
+            CalibrationTarget::Accuracy => "accuracy",
+        };
+        Ok(result.into_pyobject(py)?.into_any())
     }
 }
 
@@ -289,12 +299,17 @@ impl<'source> FromPyObject<'source> for CalibrationTarget {
 
 #[cfg(feature = "python-bindings")]
 /// Converts ContractType into a PyObject (Required for ContractType to be compatible with Python)
-impl IntoPy<PyObject> for ContractType {
-    fn into_py(self, py: Python) -> PyObject {
-        match self {
-            ContractType::Verifier { reusable: true } => "verifier/reusable".to_object(py),
-            ContractType::Verifier { reusable: false } => "verifier".to_object(py),
-        }
+impl<'py> IntoPyObject<'py> for ContractType {
+    type Target = pyo3::PyAny;
+    type Output = pyo3::Bound<'py, Self::Target>;
+    type Error = pyo3::PyErr;
+
+    fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
+        let result = match self {
+            ContractType::Verifier { reusable: true } => "verifier/reusable",
+            ContractType::Verifier { reusable: false } => "verifier",
+        };
+        Ok(result.into_pyobject(py)?.into_any())
     }
 }
 

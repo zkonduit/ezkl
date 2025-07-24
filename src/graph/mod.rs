@@ -61,7 +61,7 @@ use pyo3::types::PyDict;
 #[cfg(feature = "python-bindings")]
 use pyo3::types::PyDictMethods;
 #[cfg(feature = "python-bindings")]
-use pyo3::ToPyObject;
+use pyo3::IntoPyObject;
 
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
@@ -319,8 +319,12 @@ impl GraphWitness {
 }
 
 #[cfg(feature = "python-bindings")]
-impl ToPyObject for GraphWitness {
-    fn to_object(&self, py: Python) -> PyObject {
+impl<'py> IntoPyObject<'py> for GraphWitness {
+    type Target = pyo3::PyAny;
+    type Output = pyo3::Bound<'py, Self::Target>;
+    type Error = pyo3::PyErr;
+
+    fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
         // Create a Python dictionary
         let dict = PyDict::new(py);
         let dict_inputs = PyDict::new(py);
@@ -383,7 +387,7 @@ impl ToPyObject for GraphWitness {
             dict.set_item("processed_outputs", dict_outputs).unwrap();
         }
 
-        dict.to_object(py)
+        Ok(dict.into_any())
     }
 }
 
@@ -435,7 +439,7 @@ pub struct ShuffleParams {
 }
 
 /// model parameters
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct GraphSettings {
     /// run args
     pub run_args: RunArgs,
@@ -445,11 +449,9 @@ pub struct GraphSettings {
     pub total_assignments: usize,
     /// total const size
     pub total_const_size: usize,
-    /// dynamic lookup parameters, flattened for backwards compatibility
-    #[serde(flatten)]
+    /// dynamic lookup parameters, flattened for backwards compatibility, serialize and deserialize flattened for backwards compatibility
     pub dynamic_lookup_params: DynamicLookupParams,
     /// shuffle parameters, flattened for backwards compatibility
-    #[serde(flatten)]
     pub shuffle_params: ShuffleParams,
     /// the shape of public inputs to the model (in order of appearance)
     pub model_instance_shapes: Vec<Vec<usize>>,
@@ -475,6 +477,434 @@ pub struct GraphSettings {
     pub input_types: Option<Vec<InputType>>,
     /// Model outputs types (if any)
     pub output_types: Option<Vec<InputType>>,
+}
+
+impl Serialize for GraphSettings {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        if serializer.is_human_readable() {
+            // JSON format - use flattened fields for backwards compatibility
+            use serde::ser::SerializeStruct;
+            let mut state = serializer.serialize_struct("GraphSettings", 21)?;
+            state.serialize_field("run_args", &self.run_args)?;
+            state.serialize_field("num_rows", &self.num_rows)?;
+            state.serialize_field("total_assignments", &self.total_assignments)?;
+            state.serialize_field("total_const_size", &self.total_const_size)?;
+
+            // Flatten DynamicLookupParams fields
+            state.serialize_field(
+                "total_dynamic_col_size",
+                &self.dynamic_lookup_params.total_dynamic_col_size,
+            )?;
+            state.serialize_field(
+                "max_dynamic_input_len",
+                &self.dynamic_lookup_params.max_dynamic_input_len,
+            )?;
+            state.serialize_field(
+                "num_dynamic_lookups",
+                &self.dynamic_lookup_params.num_dynamic_lookups,
+            )?;
+
+            // Flatten ShuffleParams fields
+            state.serialize_field("num_shuffles", &self.shuffle_params.num_shuffles)?;
+            state.serialize_field(
+                "total_shuffle_col_size",
+                &self.shuffle_params.total_shuffle_col_size,
+            )?;
+
+            state.serialize_field("model_instance_shapes", &self.model_instance_shapes)?;
+            state.serialize_field("model_output_scales", &self.model_output_scales)?;
+            state.serialize_field("model_input_scales", &self.model_input_scales)?;
+            state.serialize_field("module_sizes", &self.module_sizes)?;
+            state.serialize_field("required_lookups", &self.required_lookups)?;
+            state.serialize_field("required_range_checks", &self.required_range_checks)?;
+            state.serialize_field("check_mode", &self.check_mode)?;
+            state.serialize_field("version", &self.version)?;
+            state.serialize_field("num_blinding_factors", &self.num_blinding_factors)?;
+            state.serialize_field("timestamp", &self.timestamp)?;
+            state.serialize_field("input_types", &self.input_types)?;
+            state.serialize_field("output_types", &self.output_types)?;
+            state.end()
+        } else {
+            // Binary format (bincode) - use nested struct format
+            use serde::ser::SerializeTuple;
+            let mut state = serializer.serialize_tuple(18)?;
+            state.serialize_element(&self.run_args)?;
+            state.serialize_element(&self.num_rows)?;
+            state.serialize_element(&self.total_assignments)?;
+            state.serialize_element(&self.total_const_size)?;
+            state.serialize_element(&self.dynamic_lookup_params)?;
+            state.serialize_element(&self.shuffle_params)?;
+            state.serialize_element(&self.model_instance_shapes)?;
+            state.serialize_element(&self.model_output_scales)?;
+            state.serialize_element(&self.model_input_scales)?;
+            state.serialize_element(&self.module_sizes)?;
+            state.serialize_element(&self.required_lookups)?;
+            state.serialize_element(&self.required_range_checks)?;
+            state.serialize_element(&self.check_mode)?;
+            state.serialize_element(&self.version)?;
+            state.serialize_element(&self.num_blinding_factors)?;
+            state.serialize_element(&self.timestamp)?;
+            state.serialize_element(&self.input_types)?;
+            state.serialize_element(&self.output_types)?;
+            state.end()
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for GraphSettings {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::{self, MapAccess, Visitor};
+        use std::fmt;
+
+        #[derive(Deserialize)]
+        #[serde(field_identifier, rename_all = "snake_case")]
+        enum Field {
+            RunArgs,
+            NumRows,
+            TotalAssignments,
+            TotalConstSize,
+            // Flattened DynamicLookupParams fields
+            TotalDynamicColSize,
+            MaxDynamicInputLen,
+            NumDynamicLookups,
+            // Flattened ShuffleParams fields
+            NumShuffles,
+            TotalShuffleColSize,
+            ModelInstanceShapes,
+            ModelOutputScales,
+            ModelInputScales,
+            ModuleSizes,
+            RequiredLookups,
+            RequiredRangeChecks,
+            CheckMode,
+            Version,
+            NumBlindingFactors,
+            Timestamp,
+            InputTypes,
+            OutputTypes,
+            // Legacy nested struct fields for backwards compatibility
+            DynamicLookupParams,
+            ShuffleParams,
+        }
+
+        struct GraphSettingsVisitor;
+
+        impl<'de> Visitor<'de> for GraphSettingsVisitor {
+            type Value = GraphSettings;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("struct GraphSettings")
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<GraphSettings, V::Error>
+            where
+                V: MapAccess<'de>,
+            {
+                let mut run_args = None;
+                let mut num_rows = None;
+                let mut total_assignments = None;
+                let mut total_const_size = None;
+                let mut total_dynamic_col_size = None;
+                let mut max_dynamic_input_len = None;
+                let mut num_dynamic_lookups = None;
+                let mut num_shuffles = None;
+                let mut total_shuffle_col_size = None;
+                let mut model_instance_shapes = None;
+                let mut model_output_scales = None;
+                let mut model_input_scales = None;
+                let mut module_sizes = None;
+                let mut required_lookups = None;
+                let mut required_range_checks = None;
+                let mut check_mode = None;
+                let mut version = None;
+                let mut num_blinding_factors = None;
+                let mut timestamp = None;
+                let mut input_types = None;
+                let mut output_types = None;
+
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        Field::RunArgs => {
+                            if run_args.is_some() {
+                                return Err(de::Error::duplicate_field("run_args"));
+                            }
+                            run_args = Some(map.next_value()?);
+                        }
+                        Field::NumRows => {
+                            if num_rows.is_some() {
+                                return Err(de::Error::duplicate_field("num_rows"));
+                            }
+                            num_rows = Some(map.next_value()?);
+                        }
+                        Field::TotalAssignments => {
+                            if total_assignments.is_some() {
+                                return Err(de::Error::duplicate_field("total_assignments"));
+                            }
+                            total_assignments = Some(map.next_value()?);
+                        }
+                        Field::TotalConstSize => {
+                            if total_const_size.is_some() {
+                                return Err(de::Error::duplicate_field("total_const_size"));
+                            }
+                            total_const_size = Some(map.next_value()?);
+                        }
+                        Field::TotalDynamicColSize => {
+                            if total_dynamic_col_size.is_some() {
+                                return Err(de::Error::duplicate_field("total_dynamic_col_size"));
+                            }
+                            total_dynamic_col_size = Some(map.next_value()?);
+                        }
+                        Field::MaxDynamicInputLen => {
+                            if max_dynamic_input_len.is_some() {
+                                return Err(de::Error::duplicate_field("max_dynamic_input_len"));
+                            }
+                            max_dynamic_input_len = Some(map.next_value()?);
+                        }
+                        Field::NumDynamicLookups => {
+                            if num_dynamic_lookups.is_some() {
+                                return Err(de::Error::duplicate_field("num_dynamic_lookups"));
+                            }
+                            num_dynamic_lookups = Some(map.next_value()?);
+                        }
+                        Field::NumShuffles => {
+                            if num_shuffles.is_some() {
+                                return Err(de::Error::duplicate_field("num_shuffles"));
+                            }
+                            num_shuffles = Some(map.next_value()?);
+                        }
+                        Field::TotalShuffleColSize => {
+                            if total_shuffle_col_size.is_some() {
+                                return Err(de::Error::duplicate_field("total_shuffle_col_size"));
+                            }
+                            total_shuffle_col_size = Some(map.next_value()?);
+                        }
+                        Field::ModelInstanceShapes => {
+                            if model_instance_shapes.is_some() {
+                                return Err(de::Error::duplicate_field("model_instance_shapes"));
+                            }
+                            model_instance_shapes = Some(map.next_value()?);
+                        }
+                        Field::ModelOutputScales => {
+                            if model_output_scales.is_some() {
+                                return Err(de::Error::duplicate_field("model_output_scales"));
+                            }
+                            model_output_scales = Some(map.next_value()?);
+                        }
+                        Field::ModelInputScales => {
+                            if model_input_scales.is_some() {
+                                return Err(de::Error::duplicate_field("model_input_scales"));
+                            }
+                            model_input_scales = Some(map.next_value()?);
+                        }
+                        Field::ModuleSizes => {
+                            if module_sizes.is_some() {
+                                return Err(de::Error::duplicate_field("module_sizes"));
+                            }
+                            module_sizes = Some(map.next_value()?);
+                        }
+                        Field::RequiredLookups => {
+                            if required_lookups.is_some() {
+                                return Err(de::Error::duplicate_field("required_lookups"));
+                            }
+                            required_lookups = Some(map.next_value()?);
+                        }
+                        Field::RequiredRangeChecks => {
+                            if required_range_checks.is_some() {
+                                return Err(de::Error::duplicate_field("required_range_checks"));
+                            }
+                            required_range_checks = Some(map.next_value()?);
+                        }
+                        Field::CheckMode => {
+                            if check_mode.is_some() {
+                                return Err(de::Error::duplicate_field("check_mode"));
+                            }
+                            check_mode = Some(map.next_value()?);
+                        }
+                        Field::Version => {
+                            if version.is_some() {
+                                return Err(de::Error::duplicate_field("version"));
+                            }
+                            version = Some(map.next_value()?);
+                        }
+                        Field::NumBlindingFactors => {
+                            if num_blinding_factors.is_some() {
+                                return Err(de::Error::duplicate_field("num_blinding_factors"));
+                            }
+                            num_blinding_factors = map.next_value()?;
+                        }
+                        Field::Timestamp => {
+                            if timestamp.is_some() {
+                                return Err(de::Error::duplicate_field("timestamp"));
+                            }
+                            timestamp = Some(map.next_value()?);
+                        }
+                        Field::InputTypes => {
+                            if input_types.is_some() {
+                                return Err(de::Error::duplicate_field("input_types"));
+                            }
+                            input_types = map.next_value()?;
+                        }
+                        Field::OutputTypes => {
+                            if output_types.is_some() {
+                                return Err(de::Error::duplicate_field("output_types"));
+                            }
+                            output_types = map.next_value()?;
+                        }
+                        // Handle legacy nested struct fields for backwards compatibility
+                        Field::DynamicLookupParams => {
+                            let legacy_params: DynamicLookupParams = map.next_value()?;
+                            if total_dynamic_col_size.is_none() {
+                                total_dynamic_col_size = Some(legacy_params.total_dynamic_col_size);
+                            }
+                            if max_dynamic_input_len.is_none() {
+                                max_dynamic_input_len = Some(legacy_params.max_dynamic_input_len);
+                            }
+                            if num_dynamic_lookups.is_none() {
+                                num_dynamic_lookups = Some(legacy_params.num_dynamic_lookups);
+                            }
+                        }
+                        Field::ShuffleParams => {
+                            let legacy_params: ShuffleParams = map.next_value()?;
+                            if num_shuffles.is_none() {
+                                num_shuffles = Some(legacy_params.num_shuffles);
+                            }
+                            if total_shuffle_col_size.is_none() {
+                                total_shuffle_col_size = Some(legacy_params.total_shuffle_col_size);
+                            }
+                        }
+                    }
+                }
+
+                let run_args = run_args.ok_or_else(|| de::Error::missing_field("run_args"))?;
+                let num_rows = num_rows.ok_or_else(|| de::Error::missing_field("num_rows"))?;
+                let total_assignments = total_assignments
+                    .ok_or_else(|| de::Error::missing_field("total_assignments"))?;
+                let total_const_size =
+                    total_const_size.ok_or_else(|| de::Error::missing_field("total_const_size"))?;
+                let model_instance_shapes = model_instance_shapes
+                    .ok_or_else(|| de::Error::missing_field("model_instance_shapes"))?;
+                let model_output_scales = model_output_scales
+                    .ok_or_else(|| de::Error::missing_field("model_output_scales"))?;
+                let model_input_scales = model_input_scales
+                    .ok_or_else(|| de::Error::missing_field("model_input_scales"))?;
+                let module_sizes =
+                    module_sizes.ok_or_else(|| de::Error::missing_field("module_sizes"))?;
+                let required_lookups =
+                    required_lookups.ok_or_else(|| de::Error::missing_field("required_lookups"))?;
+                let required_range_checks = required_range_checks
+                    .ok_or_else(|| de::Error::missing_field("required_range_checks"))?;
+                let check_mode =
+                    check_mode.ok_or_else(|| de::Error::missing_field("check_mode"))?;
+                let version = version.ok_or_else(|| de::Error::missing_field("version"))?;
+
+                // Build the nested structs from flattened fields, with defaults if missing
+                let dynamic_lookup_params = DynamicLookupParams {
+                    total_dynamic_col_size: total_dynamic_col_size.unwrap_or_default(),
+                    max_dynamic_input_len: max_dynamic_input_len.unwrap_or_default(),
+                    num_dynamic_lookups: num_dynamic_lookups.unwrap_or_default(),
+                };
+
+                let shuffle_params = ShuffleParams {
+                    num_shuffles: num_shuffles.unwrap_or_default(),
+                    total_shuffle_col_size: total_shuffle_col_size.unwrap_or_default(),
+                };
+
+                Ok(GraphSettings {
+                    run_args,
+                    num_rows,
+                    total_assignments,
+                    total_const_size,
+                    dynamic_lookup_params,
+                    shuffle_params,
+                    model_instance_shapes,
+                    model_output_scales,
+                    model_input_scales,
+                    module_sizes,
+                    required_lookups,
+                    required_range_checks,
+                    check_mode,
+                    version,
+                    num_blinding_factors,
+                    timestamp,
+                    input_types,
+                    output_types,
+                })
+            }
+
+            fn visit_seq<V>(self, mut seq: V) -> Result<GraphSettings, V::Error>
+            where
+                V: serde::de::SeqAccess<'de>,
+            {
+                use serde::de::Error;
+
+                // For bincode compatibility, deserialize in the same order as tuple serialization
+                let run_args = seq.next_element()?.ok_or_else(|| Error::invalid_length(0, &self))?;
+                let num_rows = seq.next_element()?.ok_or_else(|| Error::invalid_length(1, &self))?;
+                let total_assignments = seq.next_element()?.ok_or_else(|| Error::invalid_length(2, &self))?;
+                let total_const_size = seq.next_element()?.ok_or_else(|| Error::invalid_length(3, &self))?;
+                let dynamic_lookup_params = seq.next_element()?.ok_or_else(|| Error::invalid_length(4, &self))?;
+                let shuffle_params = seq.next_element()?.ok_or_else(|| Error::invalid_length(5, &self))?;
+                let model_instance_shapes = seq.next_element()?.ok_or_else(|| Error::invalid_length(6, &self))?;
+                let model_output_scales = seq.next_element()?.ok_or_else(|| Error::invalid_length(7, &self))?;
+                let model_input_scales = seq.next_element()?.ok_or_else(|| Error::invalid_length(8, &self))?;
+                let module_sizes = seq.next_element()?.ok_or_else(|| Error::invalid_length(9, &self))?;
+                let required_lookups = seq.next_element()?.ok_or_else(|| Error::invalid_length(10, &self))?;
+                let required_range_checks = seq.next_element()?.ok_or_else(|| Error::invalid_length(11, &self))?;
+                let check_mode = seq.next_element()?.ok_or_else(|| Error::invalid_length(12, &self))?;
+                let version = seq.next_element()?.ok_or_else(|| Error::invalid_length(13, &self))?;
+                let num_blinding_factors = seq.next_element()?.ok_or_else(|| Error::invalid_length(14, &self))?;
+                let timestamp = seq.next_element()?.ok_or_else(|| Error::invalid_length(15, &self))?;
+                let input_types = seq.next_element()?.ok_or_else(|| Error::invalid_length(16, &self))?;
+                let output_types = seq.next_element()?.ok_or_else(|| Error::invalid_length(17, &self))?;
+
+                Ok(GraphSettings {
+                    run_args,
+                    num_rows,
+                    total_assignments,
+                    total_const_size,
+                    dynamic_lookup_params,
+                    shuffle_params,
+                    model_instance_shapes,
+                    model_output_scales,
+                    model_input_scales,
+                    module_sizes,
+                    required_lookups,
+                    required_range_checks,
+                    check_mode,
+                    version,
+                    num_blinding_factors,
+                    timestamp,
+                    input_types,
+                    output_types,
+                })
+            }
+
+        }
+
+        // Universal deserializer that works with both JSON (map) and bincode (tuple)
+        if deserializer.is_human_readable() {
+            // JSON format - use struct/map deserialization with flattened fields
+            const FIELDS: &'static [&'static str] = &[
+                "run_args", "num_rows", "total_assignments", "total_const_size",
+                "total_dynamic_col_size", "max_dynamic_input_len", "num_dynamic_lookups",
+                "num_shuffles", "total_shuffle_col_size", "model_instance_shapes",
+                "model_output_scales", "model_input_scales", "module_sizes",
+                "required_lookups", "required_range_checks", "check_mode", "version",
+                "num_blinding_factors", "timestamp", "input_types", "output_types",
+                "dynamic_lookup_params", "shuffle_params",
+            ];
+            deserializer.deserialize_struct("GraphSettings", FIELDS, GraphSettingsVisitor)
+        } else {
+            // Binary format (bincode) - use tuple deserialization
+            deserializer.deserialize_tuple(18, GraphSettingsVisitor)
+        }
+    }
 }
 
 impl GraphSettings {
@@ -1672,5 +2102,157 @@ impl Circuit<Fp> for GraphCircuit {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+/// Tests for the graph module
+pub mod tests {
+    use super::*;
+
+    #[test]
+    fn test_graph_settings_serialization_roundtrip() {
+        use crate::{CheckMode, RunArgs};
+
+        // Create a test GraphSettings with nested structs
+        let original = GraphSettings {
+            run_args: RunArgs::default(),
+            num_rows: 1000,
+            total_assignments: 500,
+            total_const_size: 100,
+            dynamic_lookup_params: DynamicLookupParams {
+                total_dynamic_col_size: 42,
+                max_dynamic_input_len: 128,
+                num_dynamic_lookups: 5,
+            },
+            shuffle_params: ShuffleParams {
+                num_shuffles: 3,
+                total_shuffle_col_size: 256,
+            },
+            model_instance_shapes: vec![vec![1, 2, 3]],
+            model_output_scales: vec![],
+            model_input_scales: vec![],
+            module_sizes: ModuleSizes::default(),
+            required_lookups: vec![],
+            required_range_checks: vec![],
+            check_mode: CheckMode::SAFE,
+            version: "1.0.0".to_string(),
+            num_blinding_factors: Some(5),
+            timestamp: Some(123456789),
+            input_types: None,
+            output_types: None,
+        };
+
+        // Test 1: JSON serialization roundtrip with flattened format
+        let json_str = serde_json::to_string_pretty(&original).unwrap();
+        println!("JSON serialized (flattened):\n{}", json_str);
+
+        // Verify the JSON contains flattened fields
+        assert!(json_str.contains("\"total_dynamic_col_size\": 42"));
+        assert!(json_str.contains("\"max_dynamic_input_len\": 128"));
+        assert!(json_str.contains("\"num_dynamic_lookups\": 5"));
+        assert!(json_str.contains("\"num_shuffles\": 3"));
+        assert!(json_str.contains("\"total_shuffle_col_size\": 256"));
+
+        // Verify the JSON does NOT contain nested structs
+        assert!(!json_str.contains("\"dynamic_lookup_params\""));
+        assert!(!json_str.contains("\"shuffle_params\""));
+
+        // Deserialize from JSON
+        let deserialized: GraphSettings = serde_json::from_str(&json_str).unwrap();
+        assert_eq!(original, deserialized);
+
+
+        // now do JSON bytes
+        let json_bytes = serde_json::to_vec(&original).unwrap();
+        let deserialized_from_bytes: GraphSettings = serde_json::from_slice(&json_bytes).unwrap();
+        assert_eq!(original, deserialized_from_bytes);
+
+        // Test 2: Bincode serialization roundtrip
+        let bincode_data = bincode::serialize(&original).unwrap();
+        let bincode_deserialized: GraphSettings = bincode::deserialize(&bincode_data).unwrap();
+        assert_eq!(original, bincode_deserialized);
+
+        // Test 3: Backwards compatibility - deserialize old nested format
+        let old_format_json = r#"{
+    "run_args": {
+        "tolerance": {
+            "val": 0.0,
+            "scale": 1.0
+        },
+        "input_scale": 0,
+        "param_scale": 0,
+        "scale_rebase_multiplier": 10,
+        "lookup_range": [
+            0,
+            0
+        ],
+        "logrows": 6,
+        "num_inner_cols": 2,
+        "variables": [
+            [
+                "batch_size",
+                1
+            ]
+        ],
+        "input_visibility": "Private",
+        "output_visibility": "Public",
+        "param_visibility": "Private",
+        "rebase_frac_zero_constants": false,
+        "check_mode": "UNSAFE",
+        "commitment": "KZG",
+        "decomp_base": 128,
+        "decomp_legs": 2,
+        "bounded_log_lookup": false,
+        "ignore_range_check_inputs_outputs": false
+    },
+    "num_rows": 236,
+    "total_assignments": 472,
+    "total_const_size": 4,
+    "total_dynamic_col_size": 0,
+    "max_dynamic_input_len": 0,
+    "num_dynamic_lookups": 0,
+    "num_shuffles": 0,
+    "total_shuffle_col_size": 0,
+    "model_instance_shapes": [
+        [
+            1,
+            4
+        ]
+    ],
+    "model_output_scales": [
+        0
+    ],
+    "model_input_scales": [
+        0
+    ],
+    "module_sizes": {
+        "polycommit": [],
+        "poseidon": [
+            0,
+            [
+                0
+            ]
+        ]
+    },
+    "required_lookups": [],
+    "required_range_checks": [
+        [
+            -1,
+            1
+        ],
+        [
+            0,
+            127
+        ]
+    ],
+    "check_mode": "UNSAFE",
+    "version": "0.0.0",
+    "num_blinding_factors": null,
+    "timestamp": 1741214578354
+}"#;
+
+        let _backwards_compatible: GraphSettings = serde_json::from_str(old_format_json).unwrap();
+
     }
 }
