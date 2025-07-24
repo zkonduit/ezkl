@@ -85,6 +85,47 @@ impl ShuffleIndex {
     }
 }
 
+/// Einsum index
+#[derive(Clone, Debug, Default)]
+pub struct EinsumIndex {
+    index: usize,
+    col_coord: usize,
+    equations: HashSet<String>,
+}
+
+impl EinsumIndex {
+    /// Create a new einsum index
+    pub fn new(index: usize, col_coord: usize) -> EinsumIndex {
+        EinsumIndex { 
+            index, 
+            col_coord,
+            equations: HashSet::new(),
+        }
+    }
+
+    /// Get the einsum index
+    pub fn index(&self) -> usize {
+        self.index
+    }
+
+    /// Get the column coord
+    pub fn col_coord(&self) -> usize {
+        self.col_coord
+    }
+
+    /// Get the equations
+    pub fn equations(&self) -> &HashSet<String> {
+        &self.equations
+    }
+
+    /// update with another einsum index
+    pub fn update(&mut self, other: &EinsumIndex) {
+        self.index += other.index;
+        self.col_coord += other.col_coord;
+        self.equations.extend(other.equations.clone());
+    }
+}
+
 #[derive(Debug, Clone)]
 /// Some settings for a region to differentiate it across the different phases of proof generation
 pub struct RegionSettings {
@@ -176,6 +217,7 @@ pub struct RegionCtx<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Ha
     num_inner_cols: usize,
     dynamic_lookup_index: DynamicLookupIndex,
     shuffle_index: ShuffleIndex,
+    einsum_index: EinsumIndex,
     statistics: RegionStatistics,
     settings: RegionSettings,
     assigned_constants: ConstantsMap<F>,
@@ -250,6 +292,16 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         self.shuffle_index.col_coord += n;
     }
 
+    /// increment the einsum index
+    pub fn increment_einsum_index(&mut self, n: usize) {
+        self.einsum_index.index += n;
+    }
+
+    /// increment the einsum column coordinate
+    pub fn increment_einsum_col_coord(&mut self, n: usize) {
+        self.einsum_index.col_coord += n;
+    }
+
     ///
     pub fn witness_gen(&self) -> bool {
         self.settings.witness_gen
@@ -283,6 +335,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             linear_coord,
             dynamic_lookup_index: DynamicLookupIndex::default(),
             shuffle_index: ShuffleIndex::default(),
+            einsum_index: EinsumIndex::default(),
             statistics: RegionStatistics::default(),
             settings: RegionSettings::all_true(decomp_base, decomp_legs),
             assigned_constants: HashMap::new(),
@@ -320,6 +373,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             row,
             dynamic_lookup_index: DynamicLookupIndex::default(),
             shuffle_index: ShuffleIndex::default(),
+            einsum_index: EinsumIndex::default(),
             statistics: RegionStatistics::default(),
             settings,
             assigned_constants: HashMap::new(),
@@ -342,6 +396,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             row,
             dynamic_lookup_index: DynamicLookupIndex::default(),
             shuffle_index: ShuffleIndex::default(),
+            einsum_index: EinsumIndex::default(),
             statistics: RegionStatistics::default(),
             settings,
             assigned_constants: HashMap::new(),
@@ -398,6 +453,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         let statistics = Arc::new(Mutex::new(self.statistics.clone()));
         let shuffle_index = Arc::new(Mutex::new(self.shuffle_index.clone()));
         let dynamic_lookup_index = Arc::new(Mutex::new(self.dynamic_lookup_index.clone()));
+        let einsum_index = Arc::new(Mutex::new(self.einsum_index.clone()));
         let constants = Arc::new(Mutex::new(self.assigned_constants.clone()));
 
         *output = output.par_enum_map(|idx, _| {
@@ -430,6 +486,9 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             // update the shuffle index
             let mut shuffle_index = shuffle_index.lock().unwrap();
             shuffle_index.update(&local_reg.shuffle_index);
+            // update the einsum index
+            let mut einsum_index = einsum_index.lock().unwrap();
+            einsum_index.update(&local_reg.einsum_index);
             // update the constants
             let mut constants = constants.lock().unwrap();
             constants.extend(local_reg.assigned_constants);
@@ -450,6 +509,10 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             .map_err(|e| CircuitError::GetShuffleError(format!("{:?}", e)))?
             .into_inner()
             .map_err(|e| CircuitError::GetShuffleError(format!("{:?}", e)))?;
+        self.einsum_index = Arc::try_unwrap(einsum_index)
+            .map_err(|e| CircuitError::GetEinsumError(format!("{:?}", e)))?
+            .into_inner()
+            .map_err(|e| CircuitError::GetEinsumError(format!("{:?}", e)))?;
         self.assigned_constants = Arc::try_unwrap(constants)
             .map_err(|e| CircuitError::GetConstantsError(format!("{:?}", e)))?
             .into_inner()
@@ -516,6 +579,12 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         self.update_max_min_lookup_range(range)
     }
 
+    /// add used einsum equation
+    pub fn add_used_einsum_equation(&mut self, equation: String) -> Result<(), CircuitError> {
+        self.einsum_index.equations.insert(equation);
+        Ok(())
+    }
+
     /// Get the offset
     pub fn row(&self) -> usize {
         self.row
@@ -549,6 +618,21 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     /// Get the shuffle column coordinate
     pub fn shuffle_col_coord(&self) -> usize {
         self.shuffle_index.col_coord
+    }
+
+    /// einsum index
+    pub fn einsum_index(&self) -> usize {
+        self.einsum_index.index
+    }
+
+    /// einsum column coordinate
+    pub fn einsum_col_coord(&self) -> usize {
+        self.einsum_index.col_coord
+    }
+
+    /// get used einsum equations
+    pub fn used_einsum_equations(&self) -> HashSet<String> {
+        self.einsum_index.equations.clone()
     }
 
     /// get used lookups
