@@ -832,6 +832,9 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     inputs: &[&ValTensor<F>],
     equation: &str,
 ) -> Result<ValTensor<F>, CircuitError> {
+    // Track the einsum equation
+    region.add_used_einsum_equation(equation.to_string())?;
+
     let mut equation = equation.split("->");
     let inputs_eq = equation.next().ok_or(CircuitError::InvalidEinsum)?;
     let output_eq = equation.next().ok_or(CircuitError::InvalidEinsum)?;

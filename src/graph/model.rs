@@ -106,6 +106,8 @@ pub struct DummyPassRes {
     pub dynamic_lookup_params: DynamicLookupParams,
     /// shuffle parameters
     pub shuffle_params: ShuffleParams,
+    /// einsum parameters
+    pub einsum_params: crate::graph::EinsumParams,
     /// num shuffles
     pub num_shuffles: usize,
     /// shuffle
@@ -592,6 +594,7 @@ impl Model {
             output_types: Some(self.get_output_types()),
             dynamic_lookup_params: res.dynamic_lookup_params,
             shuffle_params: res.shuffle_params,
+            einsum_params: res.einsum_params,
             total_const_size: res.total_const_size,
             check_mode,
             version: env!("CARGO_PKG_VERSION").to_string(),
@@ -1528,6 +1531,10 @@ impl Model {
             shuffle_params: ShuffleParams {
                 num_shuffles: region.shuffle_index(),
                 total_shuffle_col_size: region.shuffle_col_coord(),
+            },
+            einsum_params: crate::graph::EinsumParams {
+                equations: region.used_einsum_equations().into_iter().collect(),
+                total_einsum_col_size: region.einsum_col_coord(),
             },
             total_const_size: region.total_constants(),
             lookup_ops: region.used_lookups(),
