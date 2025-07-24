@@ -5709,13 +5709,13 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let abs_distance_to_prior_pow2 = l1_distance(config, region, &[&input, &prior_pow2])?;
 
     // because we round up this can be equal
-    let is_closest_to_0: ValTensor<F> = less(
+    let is_closest_to_0: ValTensor<F> = less_equal(
         config,
         region,
         &[&abs_distance_to_claimed, &abs_distance_to_next_pow2],
     )?;
 
-    let is_closest_to_1 = less(
+    let is_closest_to_1 = less_equal(
         config,
         region,
         &[&abs_distance_to_claimed, &abs_distance_to_prior_pow2],
