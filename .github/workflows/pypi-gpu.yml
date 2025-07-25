@@ -48,6 +48,7 @@ jobs:
           toolchain: nightly-2023-06-27
           override: true
           components: rustfmt, clippy
+          cache: false
 
       - name: Set Cargo.toml version to match github tag and rename ezkl to ezkl-gpu
         shell: bash

@@ -53,6 +53,7 @@ jobs:
           toolchain: nightly-2025-06-16
           override: true
           components: rustfmt, clippy
+          cache: false
 
       - name: Build wheels
         if: matrix.target == 'universal2-apple-darwin'
@@ -118,6 +119,7 @@ jobs:
           toolchain: nightly-2025-06-16
           override: true
           components: rustfmt, clippy
+          cache: false
 
       - name: Build wheels
         uses: PyO3/maturin-action@5f8a1b3b0aad13193f46c9131f9b9e663def8ce5  #v1.46.0

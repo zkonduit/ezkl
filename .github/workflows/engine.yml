@@ -33,6 +33,7 @@ jobs:
           toolchain: nightly-2025-06-16
           override: true
           components: rustfmt, clippy
+          cache: false
       - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa  #v0.4.0
         with:
           # Pin to version 0.12.1
