@@ -48,7 +48,7 @@ jobs:
           mv Cargo.lock Cargo.lock.orig
           sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.lock.orig >Cargo.lock
 
-      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
           toolchain: nightly-2025-06-16
           override: true
@@ -113,7 +113,7 @@ jobs:
           mv Cargo.lock Cargo.lock.orig
           sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.lock.orig >Cargo.lock
 
-      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
           toolchain: nightly-2025-06-16
           override: true
