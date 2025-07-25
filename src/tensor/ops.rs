@@ -329,7 +329,7 @@ pub fn resize<T: TensorType + Send + Sync>(
 
     let cartesian_coord: Vec<Vec<usize>> = new_shape
         .iter()
-        .map(|d| (0..*d))
+        .map(|d| 0..*d)
         .multi_cartesian_product()
         .collect();
 
@@ -1218,7 +1218,7 @@ pub fn intercalate_values<T: TensorType>(
     let cartesian_coord = output
         .dims()
         .iter()
-        .map(|d| (0..*d))
+        .map(|d| 0..*d)
         .multi_cartesian_product()
         .collect::<Vec<_>>();
 
@@ -1263,7 +1263,7 @@ pub fn one_hot(
     let cartesian_coord = output
         .dims()
         .iter()
-        .map(|d| (0..*d))
+        .map(|d| 0..*d)
         .multi_cartesian_product()
         .collect::<Vec<_>>();
 
@@ -1341,7 +1341,7 @@ pub fn pad<T: TensorType>(
     let cartesian_coord = image
         .dims()
         .iter()
-        .map(|d| (0..*d))
+        .map(|d| 0..*d)
         .multi_cartesian_product()
         .collect::<Vec<_>>();
 
