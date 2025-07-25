@@ -21,17 +21,19 @@ jobs:
     name: publish-wasm-bindings
     env:
       RELEASE_TAG: ${{ github.ref_name }}
+      RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory"
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
           toolchain: nightly-2025-06-16
           override: true
           components: rustfmt, clippy
+          cache: false
       - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa  #v0.4.0
         with:
           # Pin to version 0.12.1

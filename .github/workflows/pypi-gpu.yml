@@ -43,11 +43,12 @@ jobs:
             sed "s/ezkl/ezkl-gpu/" pyproject.toml.orig > pyproject.toml.tmp
             sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" pyproject.toml.tmp > pyproject.toml
 
-      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
           toolchain: nightly-2023-06-27
           override: true
           components: rustfmt, clippy
+          cache: false
 
       - name: Set Cargo.toml version to match github tag and rename ezkl to ezkl-gpu
         shell: bash
