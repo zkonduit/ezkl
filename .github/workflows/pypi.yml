@@ -50,7 +50,7 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-06-16
+          toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
           cache: false
@@ -116,7 +116,7 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-06-16
+          toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
           cache: false
