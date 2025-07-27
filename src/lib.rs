@@ -288,6 +288,10 @@ pub struct RunArgs {
     /// Higher values provide more precision but increase circuit complexity
     #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "7", value_hint = clap::ValueHint::Other))]
     pub param_scale: Scale,
+    /// Scale to rebase to when the input scale exceeds rebase_scale * multiplier. If None we rebase to the max of input_scale and param_scale
+    /// This is an advanced parameter that should be used with caution
+    #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, required = false, value_hint = clap::ValueHint::Other))]
+    pub rebase_scale: Option<Scale>,
     /// Scale rebase threshold multiplier
     /// When scale exceeds input_scale * multiplier, it is rebased to input_scale
     /// Advanced parameter that should be used with caution
@@ -378,6 +382,7 @@ impl Default for RunArgs {
             bounded_log_lookup: false,
             input_scale: 7,
             param_scale: 7,
+            rebase_scale: None,
             scale_rebase_multiplier: 1,
             lookup_range: (-32768, 32768),
             logrows: 17,
