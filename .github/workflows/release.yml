@@ -200,7 +200,7 @@ jobs:
 
       - name: Build release binary (asm)
         if: matrix.build == 'linux-gnu'
-        run: ${{ env.CARGO }} build --release ${{ env.TARGET_FLAGS }} -Z sparse-registry --features asm,mimalloc
+        run: ${{ env.CARGO }} build --release ${{ env.TARGET_FLAGS }} -Z sparse-registry --features mimalloc
 
       - name: Build release binary (metal)
         if: matrix.build == 'macos-aarch64'

@@ -250,6 +250,8 @@ pub struct VarScales {
     pub params: crate::Scale,
     /// Multiplier for scale rebasing
     pub rebase_multiplier: u32,
+    /// rebase scale factor (optional). if None, we rebase to the max of input_scale and param_scale
+    pub rebase_scale: Option<crate::Scale>,
 }
 
 impl std::fmt::Display for VarScales {
@@ -269,11 +271,21 @@ impl VarScales {
         std::cmp::min(self.input, self.params)
     }
 
+    /// Returns the scale to rebase to, if specified
+    pub fn get_rebase_scale(&self) -> crate::Scale {
+        if let Some(rebase_scale) = self.rebase_scale {
+            rebase_scale
+        } else {
+            self.get_max()
+        }
+    }
+
     /// Creates VarScales from runtime arguments
     pub fn from_args(args: &RunArgs) -> Self {
         Self {
             input: args.input_scale,
             params: args.param_scale,
+            rebase_scale: args.rebase_scale,
             rebase_multiplier: args.scale_rebase_multiplier,
         }
     }

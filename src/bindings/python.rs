@@ -142,6 +142,9 @@ struct PyRunArgs {
     #[pyo3(get, set)]
     /// int:  The denominator in the fixed point representation used when quantizing parameters
     pub param_scale: crate::Scale,
+    /// int: The scale to rebase to (optional). If None, we rebase to the max of input_scale and param_scale
+    /// This is an advanced parameter that should be used with caution
+    pub rebase_scale: Option<crate::Scale>,
     #[pyo3(get, set)]
     /// int: If the scale is ever > scale_rebase_multiplier * input_scale then the scale is rebased to input_scale (this a more advanced parameter, use with caution)
     pub scale_rebase_multiplier: u32,
@@ -208,6 +211,7 @@ impl From<PyRunArgs> for RunArgs {
             bounded_log_lookup: py_run_args.bounded_log_lookup,
             input_scale: py_run_args.input_scale,
             param_scale: py_run_args.param_scale,
+            rebase_scale: py_run_args.rebase_scale,
             num_inner_cols: py_run_args.num_inner_cols,
             scale_rebase_multiplier: py_run_args.scale_rebase_multiplier,
             lookup_range: py_run_args.lookup_range,
@@ -234,6 +238,7 @@ impl Into<PyRunArgs> for RunArgs {
             bounded_log_lookup: self.bounded_log_lookup,
             input_scale: self.input_scale,
             param_scale: self.param_scale,
+            rebase_scale: self.rebase_scale,
             num_inner_cols: self.num_inner_cols,
             scale_rebase_multiplier: self.scale_rebase_multiplier,
             lookup_range: self.lookup_range,

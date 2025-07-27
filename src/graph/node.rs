@@ -695,8 +695,8 @@ impl Node {
         opkind = opkind.homogenous_rescale(in_scales.clone())?.into();
         let mut out_scale = opkind.out_scale(in_scales.clone())?;
         // rescale the inputs if necessary to get consistent fixed points, we select the largest scale (highest precision)
-        let global_scale = scales.get_max();
-        opkind = RebaseScale::rebase(opkind, global_scale, out_scale, scales.rebase_multiplier);
+        let rebase_scale = scales.get_rebase_scale();
+        opkind = RebaseScale::rebase(opkind, rebase_scale, out_scale, scales.rebase_multiplier);
 
         out_scale = opkind.out_scale(in_scales)?;
 
