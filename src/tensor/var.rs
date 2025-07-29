@@ -1,3 +1,4 @@
+use halo2_proofs::plonk::{Phase, SecondPhase};
 use log::{debug, error, warn};
 
 use crate::circuit::{region::ConstantsMap, CheckMode};
@@ -139,6 +140,41 @@ impl VarTensor {
             let mut inner = vec![];
             for _ in 0..num_inner_cols {
                 let col = cs.advice_column();
+                cs.enable_equality(col);
+                inner.push(col);
+            }
+            advices.push(inner);
+        }
+
+        VarTensor::Advice {
+            inner: advices,
+            num_inner_cols,
+            col_size: max_rows,
+        }
+    }
+
+    pub fn new_advice_in_second_phase<F: PrimeField>(
+        cs: &mut ConstraintSystem<F>,
+        logrows: usize,
+        num_inner_cols: usize,
+        capacity: usize,
+    ) -> Self {
+        let max_rows = Self::max_rows(cs, logrows);
+        let max_assignments = Self::max_rows(cs, logrows) * num_inner_cols;
+
+        let mut modulo = (capacity / max_assignments) + 1;
+        // we add a buffer for duplicated rows (we get at most 1 duplicated row per column)
+        modulo = ((capacity + modulo) / max_assignments) + 1;
+        let mut advices = vec![];
+
+        if modulo > 1 {
+            debug!("using column duplication for {} advice blocks", modulo - 1);
+        }
+
+        for _ in 0..modulo {
+            let mut inner = vec![];
+            for _ in 0..num_inner_cols {
+                let col = cs.advice_column_in(SecondPhase);
                 cs.enable_equality(col);
                 inner.push(col);
             }

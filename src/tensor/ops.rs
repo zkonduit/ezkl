@@ -5,8 +5,8 @@ use crate::{
 };
 use itertools::Itertools;
 use maybe_rayon::{iter::ParallelIterator, prelude::IntoParallelRefIterator};
-pub use std::ops::{Add, Mul, Neg, Sub};
 use std::collections::{HashMap, HashSet};
+pub use std::ops::{Add, Mul, Neg, Sub};
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 /// Decomposition error
@@ -2524,237 +2524,245 @@ pub mod accumulated {
 
         Ok(transcript)
     }
-}
 
-fn einsum<T>(equation: &str, input_tensors: &[&Tensor<T>]) -> (Tensor<T>, HashMap<char, usize>)
-where
-    T: Clone + TensorType + Mul<Output = T> + Add<Output = T>,
-{
-    // parse equation
-    let (inputs, output) = equation.split_once("->").unwrap();
-    let inputs = inputs.split(",").collect_vec();
-    assert_eq!(inputs.len(), input_tensors.len());
+    pub fn einsum<T>(
+        equation: &str,
+        input_tensors: &[&Tensor<T>],
+    ) -> Result<(Tensor<T>, HashMap<char, usize>), TensorError>
+    where
+        T: Clone + TensorType + Mul<Output = T> + Add<Output = T> + Send + Sync,
+    {
+        // parse equation
+        let (inputs, output) = equation.split_once("->").unwrap();
+        let inputs = inputs.split(",").collect_vec();
+        assert_eq!(inputs.len(), input_tensors.len());
 
-    let mut index_to_dim: HashMap<char, usize> = HashMap::new();
-    let mut common_indices_to_inputs = HashSet::new();
-    // creates (index -> dim) map
-    inputs
-        .iter()
-        .zip(input_tensors)
-        .for_each(|(indices, tensor)| {
-            let tensor_dim = tensor.dims();
-            indices
-                .chars()
-                .zip(tensor_dim.iter())
-                .for_each(|(index, dim)| {
-                    if let std::collections::hash_map::Entry::Vacant(e) = index_to_dim.entry(index)
-                    {
-                        e.insert(*dim);
-                    } else {
-                        common_indices_to_inputs.insert(index);
-                    }
-                });
-        });
+        let mut index_to_dim: HashMap<char, usize> = HashMap::new();
+        let mut common_indices_to_inputs = HashSet::new();
+        // creates (index -> dim) map
+        inputs
+            .iter()
+            .zip(input_tensors)
+            .for_each(|(indices, tensor)| {
+                let tensor_dim = tensor.dims();
+                indices
+                    .chars()
+                    .zip(tensor_dim.iter())
+                    .for_each(|(index, dim)| {
+                        if let std::collections::hash_map::Entry::Vacant(e) =
+                            index_to_dim.entry(index)
+                        {
+                            e.insert(*dim);
+                        } else {
+                            common_indices_to_inputs.insert(index);
+                        }
+                    });
+            });
 
-    let output_index_to_dim = output
-        .chars()
-        .map(|index| {
-            if let Some(dim) = index_to_dim.get(&index) {
-                (index, *dim)
-            } else {
-                // if the index is not found in the inputs, set to 1
-                (index, 1)
-            }
-        })
-        .collect_vec();
-    let (output_index, output_dim): (Vec<char>, Vec<usize>) =
-        output_index_to_dim.iter().cloned().unzip();
+        let output_index_to_dim = output
+            .chars()
+            .map(|index| {
+                if let Some(dim) = index_to_dim.get(&index) {
+                    (index, *dim)
+                } else {
+                    // if the index is not found in the inputs, set to 1
+                    (index, 1)
+                }
+            })
+            .collect_vec();
+        let (output_index, output_dim): (Vec<char>, Vec<usize>) =
+            output_index_to_dim.iter().cloned().unzip();
 
-    let non_common_indices_to_inputs_exclusive = index_to_dim
-        .keys()
-        .filter(|c| !common_indices_to_inputs.contains(c) && !output_index.contains(c))
-        .cloned()
-        .collect_vec();
-    // find common indices that are not contained in output equation and their possible ranges
-    let common_indices_to_inputs_exclusive = common_indices_to_inputs
-        .into_iter()
-        .filter(|index| !output_index.contains(index))
-        .collect_vec();
-    let mut common_indices = common_indices_to_inputs_exclusive
-        .iter()
-        .map(|index| 0..index_to_dim[index])
-        .multi_cartesian_product();
-    let mut non_common_indices = non_common_indices_to_inputs_exclusive
-        .iter()
-        .map(|index| 0..index_to_dim[index])
-        .multi_cartesian_product();
+        let non_common_indices_to_inputs_exclusive = index_to_dim
+            .keys()
+            .filter(|c| !common_indices_to_inputs.contains(c) && !output_index.contains(c))
+            .cloned()
+            .collect_vec();
+        // find common indices that are not contained in output equation and their possible ranges
+        let common_indices_to_inputs_exclusive = common_indices_to_inputs
+            .into_iter()
+            .filter(|index| !output_index.contains(index))
+            .collect_vec();
+        let mut common_indices = common_indices_to_inputs_exclusive
+            .iter()
+            .map(|index| 0..index_to_dim[index])
+            .multi_cartesian_product();
+        let mut non_common_indices = non_common_indices_to_inputs_exclusive
+            .iter()
+            .map(|index| 0..index_to_dim[index])
+            .multi_cartesian_product();
 
-    let mut output_tensor = Tensor::<T>::new(None, &output_dim);
-    // we will iterate over output indices
-    let mut output_entries_indices = output_dim
-        .into_iter()
-        .map(|dim| 0..dim)
-        .multi_cartesian_product();
-    // ik,kj->ij
-    let mut output_entries_indices_next = output_entries_indices.next();
-    loop {
-        let mut output_entry = T::zero();
-        let output_entry_index =
-            if let Some(output_entry_index) = output_entries_indices_next.as_ref() {
-                output_entry_index.clone()
-            } else {
-                vec![0; output_tensor.dims().len()]
-            };
-        let sliced_inputs = bind_to_output_indices(
-            input_tensors,
-            &inputs,
-            &output_index,
-            output_entries_indices_next,
-            &index_to_dim,
-        );
-        // For the indices which aren't contained in output equation,
-        // iterate through the range of the common indices to input equations
-        // and iterate through the range of uncommon indices, binding all the indices
-        // of input equations.
-        let mut input_tuples = vec![];
-        let mut common_indices_next = common_indices.next();
+        let mut output_tensor = Tensor::<T>::new(None, &output_dim)?;
+        // we will iterate over output indices
+        let mut output_entries_indices = output_dim
+            .into_iter()
+            .map(|dim| 0..dim)
+            .multi_cartesian_product();
+        // ik,kj->ij
+        let mut output_entries_indices_next = output_entries_indices.next();
         loop {
-            let sliced_inputs = bind_to_common_indices(
-                &sliced_inputs,
+            // Is this safe to unwrap?
+            let mut output_entry = T::zero().unwrap();
+            let output_entry_index =
+                if let Some(output_entry_index) = output_entries_indices_next.as_ref() {
+                    output_entry_index.clone()
+                } else {
+                    vec![0; output_tensor.dims().len()]
+                };
+            let sliced_inputs = bind_to_output_indices(
+                input_tensors,
                 &inputs,
-                common_indices_next,
-                &common_indices_to_inputs_exclusive,
+                &output_index,
+                output_entries_indices_next,
+                &index_to_dim,
             );
-            // iterate over non common indices
-            let mut non_common_indices_next = non_common_indices.next();
+            // For the indices which aren't contained in output equation,
+            // iterate through the range of the common indices to input equations
+            // and iterate through the range of uncommon indices, binding all the indices
+            // of input equations.
+            let mut input_tuples = vec![];
+            let mut common_indices_next = common_indices.next();
             loop {
-                match non_common_indices_next {
-                    Some(non_common_indices) => {
-                        let input_tuple = sliced_inputs
-                            .iter()
-                            .enumerate()
-                            .map(|(i, slice)| {
-                                let mut sliced_dim = vec![];
-                                for c in inputs[i].chars() {
-                                    if let Some(pos) = non_common_indices_to_inputs_exclusive
-                                        .iter()
-                                        .position(|index| *index == c)
-                                    {
-                                        sliced_dim.push(
-                                            non_common_indices[pos]..non_common_indices[pos] + 1,
-                                        );
-                                    } else {
-                                        sliced_dim.push(0..1);
+                let sliced_inputs = bind_to_common_indices(
+                    &sliced_inputs,
+                    &inputs,
+                    common_indices_next,
+                    &common_indices_to_inputs_exclusive,
+                );
+                // iterate over non common indices
+                let mut non_common_indices_next = non_common_indices.next();
+                loop {
+                    match non_common_indices_next {
+                        Some(non_common_indices) => {
+                            let input_tuple = sliced_inputs
+                                .iter()
+                                .enumerate()
+                                .map(|(i, slice)| {
+                                    let mut sliced_dim = vec![];
+                                    for c in inputs[i].chars() {
+                                        if let Some(pos) = non_common_indices_to_inputs_exclusive
+                                            .iter()
+                                            .position(|index| *index == c)
+                                        {
+                                            sliced_dim.push(
+                                                non_common_indices[pos]
+                                                    ..non_common_indices[pos] + 1,
+                                            );
+                                        } else {
+                                            sliced_dim.push(0..1);
+                                        }
                                     }
-                                }
-                                slice.get_slice(&sliced_dim)
-                            })
-                            .collect_vec();
-                        input_tuples.push(input_tuple);
+                                    slice.get_slice(&sliced_dim)
+                                })
+                                .collect::<Result<Vec<_>, TensorError>>()?;
+                            input_tuples.push(input_tuple);
+                        }
+                        None => {
+                            input_tuples.push(sliced_inputs);
+                            break;
+                        }
                     }
-                    None => {
-                        input_tuples.push(sliced_inputs);
+                    if let Some(non_common_indices) = non_common_indices.next() {
+                        non_common_indices_next = Some(non_common_indices);
+                    } else {
                         break;
                     }
                 }
-                if let Some(non_common_indices) = non_common_indices.next() {
-                    non_common_indices_next = Some(non_common_indices);
+
+                if let Some(common_indices) = common_indices.next() {
+                    common_indices_next = Some(common_indices);
                 } else {
                     break;
                 }
             }
 
-            if let Some(common_indices) = common_indices.next() {
-                common_indices_next = Some(common_indices);
+            output_entry = output_entry
+                + input_tuples.into_iter().fold(T::zero().unwrap(), |acc, tuple| {
+                    let term = tuple
+                        .into_iter()
+                        .map(|tensor| tensor.get_scalar())
+                        .fold(T::one().unwrap(), |acc, value| acc * value);
+                    acc + term
+                });
+            output_tensor.set(&output_entry_index, output_entry);
+
+            if let Some(output_entries_indices) = output_entries_indices.next() {
+                output_entries_indices_next = Some(output_entries_indices);
             } else {
                 break;
             }
         }
+        Ok((output_tensor, index_to_dim))
+    }
 
-        output_entry = output_entry
-            + input_tuples.into_iter().fold(T::zero(), |acc, tuple| {
-                let term = tuple
-                    .into_iter()
-                    .map(|tensor| tensor.get_scalar())
-                    .fold(T::one(), |acc, value| acc * value);
-                acc + term
-            });
-        output_tensor.write(&output_entry_index, output_entry);
-
-        if let Some(output_entries_indices) = output_entries_indices.next() {
-            output_entries_indices_next = Some(output_entries_indices);
-        } else {
-            break;
+    fn bind_to_output_indices<T>(
+        input_tensors: &[&Tensor<T>],
+        input_indices: &[&str],
+        output_indices: &[char],
+        output_indices_values: Option<Vec<usize>>,
+        index_to_dim: &HashMap<char, usize>,
+    ) -> Vec<Tensor<T>>
+    where
+        T: TensorType + Mul<Output = T> + Add<Output = T> + Send + Sync,
+    {
+        match output_indices_values {
+            Some(entry_index) => {
+                // for each input equation, check the index is whether
+                // contained in output equation.
+                // 1) If yes, bound that index to the same value with output index value
+                // 2) If no, range over all possible values for the index
+                // Return the slice of each input tensor with indices bounded correctly
+                input_tensors
+                    .iter()
+                    .zip(input_indices.iter())
+                    .map(|(input_tensor, input_indices)| {
+                        let mut sliced_dim = vec![];
+                        input_indices.chars().for_each(|index| {
+                            if let Some(pos) = output_indices.iter().position(|o| *o == index) {
+                                sliced_dim.push(entry_index[pos]..entry_index[pos] + 1);
+                            } else {
+                                sliced_dim.push(0..*index_to_dim.get(&index).unwrap());
+                            }
+                        });
+                        // FIXME propagate error
+                        input_tensor.get_slice(&sliced_dim).unwrap()
+                    })
+                    .collect_vec()
+            }
+            None => input_tensors.iter().map(|&t| t.clone()).collect_vec(),
         }
     }
-    (output_tensor, index_to_dim)
-}
 
-fn bind_to_output_indices<T>(
-    input_tensors: &[&Tensor<T>],
-    input_indices: &[&str],
-    output_indices: &[char],
-    output_indices_values: Option<Vec<usize>>,
-    index_to_dim: &HashMap<char, usize>,
-) -> Vec<Tensor<T>>
-where T: TensorType + Mul<Output = T> + Add<Output = T> + std::marker::Send
-{
-    match output_indices_values {
-        Some(entry_index) => {
-            // for each input equation, check the index is whether
-            // contained in output equation.
-            // 1) If yes, bound that index to the same value with output index value
-            // 2) If no, range over all possible values for the index
-            // Return the slice of each input tensor with indices bounded correctly
-            input_tensors
+    fn bind_to_common_indices<T>(
+        input_tensors: &[Tensor<T>],
+        input_indices: &[&str],
+        common_indices: Option<Vec<usize>>,
+        common_indices_to_inputs_exclusive: &[char],
+    ) -> Vec<Tensor<T>>
+    where
+        T: TensorType + Mul<Output = T> + Add<Output = T> + Send + Sync,
+    {
+        match common_indices {
+            Some(common_indices) => input_tensors
                 .iter()
-                .zip(input_indices.iter())
-                .map(|(input_tensor, input_indices)| {
+                .enumerate()
+                .map(|(i, slice)| {
                     let mut sliced_dim = vec![];
-                    input_indices.chars().for_each(|index| {
-                        if let Some(pos) = output_indices.iter().position(|o| *o == index) {
-                            sliced_dim.push(entry_index[pos]..entry_index[pos] + 1);
+                    for (c, dim) in input_indices[i].chars().zip(slice.dims()) {
+                        if let Some(pos) = common_indices_to_inputs_exclusive
+                            .iter()
+                            .position(|index| *index == c)
+                        {
+                            sliced_dim.push(common_indices[pos]..common_indices[pos] + 1);
                         } else {
-                            sliced_dim.push(0..*index_to_dim.get(&index).unwrap());
+                            sliced_dim.push(0..*dim);
                         }
-                    });
-                    // FIXME propagate error
-                    input_tensor.get_slice(&sliced_dim).unwrap()
-                })
-                .collect_vec()
-        }
-        None => input_tensors.iter().map(|&t| t.clone()).collect_vec(),
-    }
-}
-
-fn bind_to_common_indices<T>(
-    input_tensors: &[Tensor<T>],
-    input_indices: &[&str],
-    common_indices: Option<Vec<usize>>,
-    common_indices_to_inputs_exclusive: &[char],
-) -> Vec<Tensor<T>>
-where T: TensorType + Mul<Output = T> + Add<Output = T> + std::marker::Send
-{
-    match common_indices {
-        Some(common_indices) => input_tensors
-            .iter()
-            .enumerate()
-            .map(|(i, slice)| {
-                let mut sliced_dim = vec![];
-                for (c, dim) in input_indices[i].chars().zip(slice.dims()) {
-                    if let Some(pos) = common_indices_to_inputs_exclusive
-                        .iter()
-                        .position(|index| *index == c)
-                    {
-                        sliced_dim.push(common_indices[pos]..common_indices[pos] + 1);
-                    } else {
-                        sliced_dim.push(0..*dim);
                     }
-                }
-                // FIXME propagate error
-                slice.get_slice(&sliced_dim).unwrap()
-            })
-            .collect_vec(),
-        None => input_tensors.iter().cloned().collect_vec(),
+                    // FIXME propagate error
+                    slice.get_slice(&sliced_dim).unwrap()
+                })
+                .collect_vec(),
+            None => input_tensors.iter().cloned().collect_vec(),
+        }
     }
 }

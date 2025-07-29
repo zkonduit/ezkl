@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    f64::consts::E,
-    ops::Range,
-};
+use std::{collections::HashMap, f64::consts::E, ops::Range};
 
 use halo2_proofs::circuit::Value;
 use halo2curves::ff::PrimeField;
@@ -835,14 +831,18 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     // Track the einsum equation
     region.add_used_einsum_equation(equation.to_string())?;
 
-    let einsum_config = config
-        .einsums
-        .as_ref()
-        .ok_or(CircuitError::MissingEinsumConfig)?;
+    let einsum_config = config.einsums;
 
     // Compute expected output using existing einsum logic
     // need to add this to ops
-    let (output_tensor, _) = crate::tensors::ops::einsum(equation, &input_tensors);
+    let input_tensors = input_tensors
+        .iter()
+        .map(|t| t.get_inner())
+        .collect::<Result<Vec<_>, TensorError>>()?;
+    let (output_tensor, _) = crate::tensor::ops::accumulated::einsum(
+        equation,
+        &input_tensors.iter().collect_vec()
+    )?;
 
     einsum_config.assign_with_padding(region, inputs, output_tensor, equation)?;
 

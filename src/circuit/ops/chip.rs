@@ -2,23 +2,19 @@ use std::str::FromStr;
 
 use halo2_proofs::{
     circuit::Layouter,
-    plonk::{ConstraintSystem, Constraints, Expression, Selector, TableColumn},
+    plonk::{Challenge, ConstraintSystem, Constraints, Expression, Selector, TableColumn},
     poly::Rotation,
 };
 use log::debug;
 #[cfg(feature = "python-bindings")]
-use pyo3::{
-    conversion::FromPyObject,
-    exceptions::PyValueError,
-    IntoPyObject,
-    prelude::*,
-};
+use pyo3::{conversion::FromPyObject, exceptions::PyValueError, prelude::*, IntoPyObject};
 use serde::{Deserialize, Serialize};
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use tosubcommand::ToFlags;
 
 use crate::{
     circuit::{
+        chip::einsum::analysis::EinsumAnalysis,
         ops::base::BaseOp,
         table::{Range, RangeCheck, Table},
     },
@@ -289,7 +285,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
             custom_gates: CustomGates::dummy(col_size, num_inner_cols),
             static_lookups: StaticLookups::dummy(col_size, num_inner_cols),
             dynamic_lookups: DynamicLookups::dummy(col_size, num_inner_cols),
-            einsums: Einsums::dummy(col_size, num_inner_cols),
+            einsums: einsum::Einsums::<F>::dummy(col_size, num_inner_cols),
             shuffles: Shuffles::dummy(col_size, num_inner_cols),
             range_checks: RangeChecks::dummy(col_size, num_inner_cols),
             check_mode: CheckMode::SAFE,
@@ -425,7 +421,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
             static_lookups: StaticLookups::default(),
             dynamic_lookups: DynamicLookups::default(),
             // FIXME
-            einsums: Einsums::dummy(0,0),
+            einsums: einsum::Einsums::<F>::dummy(0, 0),
             shuffles: Shuffles::default(),
             range_checks: RangeChecks::default(),
             shared_table_inputs: vec![],
@@ -696,6 +692,42 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
             debug!("assigning dynamic lookup input");
             self.dynamic_lookups.inputs = lookups.to_vec();
         }
+
+        Ok(())
+    }
+
+    /// Configures and creates einsums
+    #[allow(clippy::too_many_arguments)]
+    pub fn configure_einsums(
+        &mut self,
+        cs: &mut ConstraintSystem<F>,
+        inputs: &[VarTensor],
+        output: &VarTensor,
+        challenges: &[Challenge],
+        challenge_columns: &[VarTensor],
+        analysis: &EinsumAnalysis,
+    ) -> Result<(), CircuitError>
+    where
+        F: Field,
+    {
+        let einsums = einsum::Einsums::<F> {
+            inputs: inputs.to_vec(),
+            output: output.clone(),
+            challenges: challenges.to_vec(),
+            challenge_columns: challenge_columns.to_vec(),
+            input_contractions: einsum::Einsums::configure_contraction_tree(
+                cs,
+                analysis.max_contraction_depth,
+                analysis.max_inputs,
+            ),
+            output_contractions: einsum::Einsums::configure_output_contractions(
+                cs,
+                analysis.max_output_axes,
+            ),
+            max_inputs: analysis.max_inputs,
+            max_challenges: analysis.max_output_axes,
+        };
+        self.einsums = einsums;
 
         Ok(())
     }

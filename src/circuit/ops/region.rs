@@ -96,8 +96,8 @@ pub struct EinsumIndex {
 impl EinsumIndex {
     /// Create a new einsum index
     pub fn new(index: usize, col_coord: usize) -> EinsumIndex {
-        EinsumIndex { 
-            index, 
+        EinsumIndex {
+            index,
             col_coord,
             equations: HashSet::new(),
         }

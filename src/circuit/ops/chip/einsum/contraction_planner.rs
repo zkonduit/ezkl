@@ -2,7 +2,10 @@ use std::{collections::BTreeSet, ops::Index};
 
 use itertools::Itertools;
 
-use crate::{Error, Tensor};
+use crate::{
+    circuit::CircuitError,
+    tensor::{Tensor, TensorType},
+};
 
 #[derive(Clone, Debug)]
 pub struct TensorIndex(usize);
@@ -16,7 +19,7 @@ pub struct Contraction {
     input_indices: Vec<TensorIndex>,
 }
 
-impl<T> Index<TensorIndex> for Vec<Tensor<T>> {
+impl<T: TensorType> Index<TensorIndex> for Vec<Tensor<T>> {
     type Output = Tensor<T>;
 
     fn index(&self, index: TensorIndex) -> &Self::Output {
@@ -36,7 +39,7 @@ impl Contraction {
     }
 }
 
-pub fn input_contractions(expression: &str) -> Result<Vec<Contraction>, Error> {
+pub fn input_contractions(expression: &str) -> Result<Vec<Contraction>, CircuitError> {
     let (input_exprs, output_expr) = expression.split_once("->").unwrap();
     let input_exprs: Vec<_> = input_exprs.split(",").map(|eq| eq.to_string()).collect();
     // augment `input_exprs` with output axes
