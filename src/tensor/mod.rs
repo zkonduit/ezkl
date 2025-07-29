@@ -901,6 +901,14 @@ impl<T: Clone + TensorType> Tensor<T> {
         Ok(())
     }
 
+    /// remove axes that have dimensions 1
+    pub fn remove_trivial_axes(&self) -> Result<Self, TensorError> {
+        let mut result = self.clone();
+        let new_dims: Vec<_> = self.dims.iter().copied().filter(|dim| *dim > 1).collect();
+        result.reshape(&new_dims)?;
+        Ok(result)
+    }
+
     /// Move axis of the tensor
     /// ```
     /// use ezkl::tensor::Tensor;

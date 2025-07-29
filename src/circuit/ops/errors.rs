@@ -64,6 +64,8 @@ pub enum CircuitError {
     /// Missing product in einsum
     #[error("missing product in einsum")]
     MissingEinsumProduct,
+    #[error("missing config in einsum")]
+    MissingEinsumConfig,
     /// Mismatched lookup length
     #[error("mismatched lookup lengths: {0} and {1}")]
     MismatchedLookupLength(usize, usize),

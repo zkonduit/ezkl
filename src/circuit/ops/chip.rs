@@ -29,6 +29,8 @@ use std::{collections::BTreeMap, marker::PhantomData};
 use super::{lookup::LookupOp, region::RegionCtx, CircuitError, Op};
 use halo2curves::ff::{Field, PrimeField};
 
+mod einsum;
+
 #[allow(missing_docs)]
 /// An enum representing activating the sanity checks we can perform on the accumulated arguments
 #[derive(
@@ -271,6 +273,8 @@ pub struct BaseConfig<F: PrimeField + TensorType + PartialOrd> {
     pub range_checks: RangeChecks<F>,
     /// [Selector]s for the shuffles
     pub shuffles: Shuffles,
+    /// Einsum-specific configuration
+    pub einsums: einsum::Einsums<F>,
     /// Activate sanity checks
     pub check_mode: CheckMode,
     _marker: PhantomData<F>,
@@ -285,6 +289,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
             custom_gates: CustomGates::dummy(col_size, num_inner_cols),
             static_lookups: StaticLookups::dummy(col_size, num_inner_cols),
             dynamic_lookups: DynamicLookups::dummy(col_size, num_inner_cols),
+            einsums: Einsums::dummy(col_size, num_inner_cols),
             shuffles: Shuffles::dummy(col_size, num_inner_cols),
             range_checks: RangeChecks::dummy(col_size, num_inner_cols),
             check_mode: CheckMode::SAFE,
@@ -419,6 +424,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
             },
             static_lookups: StaticLookups::default(),
             dynamic_lookups: DynamicLookups::default(),
+            // FIXME
+            einsums: Einsums::dummy(0,0),
             shuffles: Shuffles::default(),
             range_checks: RangeChecks::default(),
             shared_table_inputs: vec![],
