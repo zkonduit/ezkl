@@ -454,6 +454,7 @@ mod native_tests {
             use crate::native_tests::TESTS_AGGR;
             use test_case::test_case;
             use crate::native_tests::aggr_prove_and_verify;
+            #[cfg(not(feature = "gpu-accelerated"))]
             use crate::native_tests::kzg_aggr_mock_prove_and_verify;
             use tempdir::TempDir;
             use ezkl::Commitments;
@@ -520,6 +521,7 @@ mod native_tests {
             use crate::native_tests::mock;
             use crate::native_tests::accuracy_measurement;
             use crate::native_tests::prove_and_verify;
+            #[cfg(not(feature = "gpu-accelerated"))]
             use crate::native_tests::run_js_tests;
             use crate::native_tests::render_circuit;
             use crate::native_tests::model_serialization_different_binaries;
@@ -995,6 +997,7 @@ mod native_tests {
             use crate::native_tests::kzg_evm_aggr_prove_and_verify;
             use tempdir::TempDir;
             use crate::native_tests::Hardfork;
+            #[cfg(not(feature = "gpu-accelerated"))]
             use crate::native_tests::run_js_tests;
             use ezkl::logger::init_logger;
             use crate::native_tests::lazy_static;
@@ -1575,6 +1578,7 @@ mod native_tests {
     }
 
     // prove-serialize-verify, the usual full path
+    #[cfg(not(feature = "gpu-accelerated"))]
     fn kzg_aggr_mock_prove_and_verify(test_dir: &str, example_name: String) {
         prove_and_verify(
             test_dir,
@@ -2231,6 +2235,7 @@ mod native_tests {
     }
 
     // run js browser evm verify tests for a given example
+    #[cfg(not(feature = "gpu-accelerated"))]
     fn run_js_tests(test_dir: &str, example_name: String, js_test: &str, vk: bool) {
         let example = format!("--example={}", example_name);
         let dir = format!("--dir={}", test_dir);
