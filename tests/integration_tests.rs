@@ -458,7 +458,7 @@ mod native_tests {
             use tempdir::TempDir;
             use ezkl::Commitments;
 
-            #[cfg(not(feature="icicle"))]
+            #[cfg(not(feature="gpu-accelerated"))]
             seq!(N in 0..=20 {
 
             #(#[test_case(TESTS_AGGR[N])])*
@@ -492,7 +492,7 @@ mod native_tests {
 
             });
 
-            #[cfg(feature="icicle")]
+            #[cfg(feature="gpu-accelerated")]
             seq!(N in 0..=2 {
             #(#[test_case(TESTS_AGGR[N])])*
             fn kzg_aggr_prove_and_verify_(test: &str) {
