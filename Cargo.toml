@@ -16,11 +16,11 @@ crate-type = ["cdylib", "rlib", "staticlib"]
 
 
 [dependencies]
-halo2_gadgets = { git = "https://github.com/zkonduit/halo2" }
+halo2_gadgets = { git = "https://github.com/zkonduit/halo2", branch= "ac/conditional-compilation-icicle2" }
 halo2curves = { git = "https://github.com/privacy-scaling-explorations/halo2curves", rev = "b753a832e92d5c86c5c997327a9cf9de86a18851", features = [
     "derive_serde",
 ] }
-halo2_proofs = { git = "https://github.com/zkonduit/halo2", package = "halo2_proofs", features = [
+halo2_proofs = { git = "https://github.com/zkonduit/halo2", package = "halo2_proofs", branch= "ac/conditional-compilation-icicle2", features = [
     "circuit-params",
 ] }
 rand = { version = "0.8", default-features = false }
@@ -102,6 +102,12 @@ getrandom = { version = "0.2.8", optional = true }
 uniffi_bindgen = { version = "=0.28.0", optional = true }
 camino = { version = "^1.1", optional = true }
 uuid = { version = "1.10.0", features = ["v4"], optional = true }
+
+# GPU / device related things
+icicle-runtime = { git = "https://github.com/ingonyama-zk/icicle", branch="emir/gate_eval_2", package="icicle-runtime", optional = true }
+
+
+
 
 [target.'cfg(not(all(target_arch = "wasm32", target_os = "unknown")))'.dependencies]
 colored = { version = "2.0.0", default-features = false, optional = true }
@@ -274,7 +280,7 @@ mv-lookup = ["halo2_proofs/mv-lookup", "snark-verifier/mv-lookup"]
 asm = ["halo2curves/asm", "halo2_proofs/asm"]
 precompute-coset = ["halo2_proofs/precompute-coset"]
 det-prove = []
-icicle = ["halo2_proofs/icicle_gpu"]
+gpu-accelerated = ["halo2_proofs/gpu-accelerated", "icicle-runtime"]
 empty-cmd = []
 no-banner = []
 no-update = []
@@ -285,8 +291,20 @@ mimalloc = ["dep:mimalloc"]
 reusable-verifier = []
 
 
+[patch.'https://github.com/zkonduit/halo2']
+halo2_proofs = { git = "https://github.com/zkonduit/halo2#c64c535e6e12c875cebddf8c7b4e794a514c3f4b", package = "halo2_proofs", branch= "ac/conditional-compilation-icicle2", features = [
+    "circuit-params",
+] }
+
+[patch.'https://github.com/zkonduit/halo2#f441c920be45f8f05d2c06a173d82e8885a5ed4d']
+halo2_proofs = { git = "https://github.com/zkonduit/halo2#c64c535e6e12c875cebddf8c7b4e794a514c3f4b", package = "halo2_proofs", branch= "ac/conditional-compilation-icicle2", features = [
+    "circuit-params",
+] }
+
+
 [patch.crates-io]
 uniffi_testing = { git = "https://github.com/ElusAegis/uniffi-rs", branch = "feat/testing-feature-build-fix" }
+
 
 [profile.release]
 # debug = true
@@ -302,3 +320,5 @@ opt-level = 3
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = ["-O4", "--flexible-inline-max-function-size", "4294967295"]
+
+

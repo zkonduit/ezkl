@@ -108,38 +108,43 @@ jobs:
       - name: Library tests (original lookup)
         run: cargo nextest run --lib --verbose --no-default-features --features ezkl,eth-original-lookup
 
-  # ultra-overflow-tests-gpu:
-  #   runs-on: GPU
-  #   env:
-  #     ENABLE_ICICLE_GPU: true
-  #   steps:
-  #     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
-  # with:
-  #   persist-credentials: false
-  #     - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
-  #       with:
-  #         toolchain: nightly-2025-05-01
-  #         override: true
-  #         components: rustfmt, clippy
-  #     - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
-  #       with:
-  #         crate: cargo-nextest
-  #         locked: true
-  #     - uses: mwilliamson/setup-wasmtime-action@bf814d7d8fc3c3a77dfe114bd9fb8a2c575f6ad6  #v2.0.0
-  #       with:
-  #         wasmtime-version: "3.0.1"
-  #     # - name: Matmul overflow (wasi)
-  #     #   run: cargo wasi test matmul_col_ultra_overflow -- --include-ignored --nocapture
-  #     # - name: Conv overflow (wasi)
-  #     #   run: cargo wasi test conv_col_ultra_overflow -- --include-ignored --nocapture
-  #     - name: lookup overflow
-  #       run: cargo nextest run lookup_ultra_overflow --no-capture --features icicle -- --include-ignored
-  #     - name: Matmul overflow
-  #       run: RUST_LOG=debug cargo nextest run matmul_col_ultra_overflow --no-capture --features icicle -- --include-ignored
-  #     - name: Conv overflow
-  #       run: RUST_LOG=debug cargo nextest run conv_col_ultra_overflow --no-capture --features icicle -- --include-ignored
-  #     - name: Conv + relu overflow
-  #       run: cargo nextest run conv_relu_col_ultra_overflow --no-capture --features icicle -- --include-ignored
+  ultra-overflow-tests-gpu:
+    permissions:
+      contents: read
+    runs-on: gpu
+    env:
+      ENABLE_ICICLE_GPU: true
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
+        with:
+          toolchain: nightly-2025-05-01
+          override: true
+          components: rustfmt, clippy
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
+        with:
+          crate: cargo-nextest
+          locked: true
+      - uses: mwilliamson/setup-wasmtime-action@bf814d7d8fc3c3a77dfe114bd9fb8a2c575f6ad6  #v2.0.0
+        with:
+          wasmtime-version: "3.0.1"
+      - name: Setup GPU dependencies
+        run: sudo ./setup-gpu.sh --yes
+      # - name: Matmul overflow (wasi)
+      #   run: cargo wasi test matmul_col_ultra_overflow -- --include-ignored --nocapture
+      # - name: Conv overflow (wasi)
+      #   run: cargo wasi test conv_col_ultra_overflow -- --include-ignored --nocapture
+      - name: lookup overflow
+        run: cargo nextest run lookup_ultra_overflow --no-capture --features gpu-accelerated -- --include-ignored
+      - name: Matmul overflow
+        run: RUST_LOG=debug cargo nextest run matmul_col_ultra_overflow --no-capture --features gpu-accelerated -- --include-ignored
+      - name: Conv overflow
+        run: RUST_LOG=debug cargo nextest run conv_col_ultra_overflow --no-capture --features gpu-accelerated -- --include-ignored
+      - name: Conv + relu overflow
+        run: cargo nextest run conv_relu_col_ultra_overflow --no-capture --features gpu-accelerated -- --include-ignored
 
   ultra-overflow-tests_og-lookup:
     permissions:
@@ -541,42 +546,46 @@ jobs:
       - name: KZG prove and verify tests (hashed outputs)
         run: cargo nextest run --verbose tests::kzg_prove_and_verify_hashed
 
-  # prove-and-verify-tests-gpu:
-  #   runs-on: GPU
-  #   env:
-  #     ENABLE_ICICLE_GPU: true
-  #   steps:
-  #     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
-  # with:
-  #   persist-credentials: false
-  #     - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
-  #       with:
-  #         toolchain: nightly-2025-05-01
-  #         override: true
-  #         components: rustfmt, clippy
-  #     - name: Add rust-src
-  #       run: rustup component add rust-src --toolchain nightly-2025-05-01-x86_64-unknown-linux-gnu
-  #     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
-  #     - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
-  #       with:
-  #         crate: cargo-nextest
-  #         locked: true
-  #     - name: KZG prove and verify tests (kzg outputs)
-  #       run: cargo nextest run --verbose tests::kzg_prove_and_verify_kzg_output --features icicle --test-threads 1
-  #     - name: KZG prove and verify tests (public outputs + column overflow)
-  #       run: cargo nextest run --verbose tests::kzg_prove_and_verify_with_overflow_::w --features icicle  --test-threads 1
-  #     - name: KZG prove and verify tests (public outputs + fixed params + column overflow)
-  #       run: cargo nextest run --verbose tests::kzg_prove_and_verify_with_overflow_fixed_params_ --features icicle  --test-threads 1
-  #     - name: KZG prove and verify tests (public outputs)
-  #       run: cargo nextest run --verbose tests::kzg_prove_and_verify_::t --features icicle  --test-threads 1
-  #     - name: KZG prove and verify tests (public outputs + column overflow)
-  #       run: cargo nextest run --verbose tests::kzg_prove_and_verify_::t --features icicle  --test-threads 1
-  #     - name: KZG prove and verify tests (public inputs)
-  #       run: cargo nextest run --verbose tests::kzg_prove_and_verify_public_input --features icicle  --test-threads 1
-  #     - name: KZG prove and verify tests (fixed params)
-  #       run: cargo nextest run --verbose tests::kzg_prove_and_verify_fixed_params --features icicle  --test-threads 1
-  #     - name: KZG prove and verify tests (hashed outputs)
-  #       run: cargo nextest run --verbose tests::kzg_prove_and_verify_hashed --features icicle  --test-threads 1
+  prove-and-verify-tests-gpu:
+    permissions:
+      contents: read
+    runs-on: gpu
+    needs: [build, library-tests, docs]
+    env:
+      ENABLE_ICICLE_GPU: true
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory"
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
+        with:
+          toolchain: nightly-2025-05-01
+          override: true
+          components: rustfmt, clippy
+      - name: Add rust-src
+        run: rustup component add rust-src --toolchain nightly-2025-05-01-x86_64-unknown-linux-gnu
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
+        with:
+          crate: cargo-nextest
+          locked: true
+      - name: Setup GPU dependencies
+        run: sudo ./setup-gpu.sh --yes
+      - name: KZG prove and verify tests (kzg outputs)
+        run: cargo nextest run --verbose tests::kzg_prove_and_verify_kzg_output --features gpu-accelerated --test-threads 1
+      - name: KZG prove and verify tests (public outputs + column overflow)
+        run: cargo nextest run --verbose tests::kzg_prove_and_verify_with_overflow_::w --features gpu-accelerated  --test-threads 1
+      - name: KZG prove and verify tests (public outputs + fixed params + column overflow)
+        run: cargo nextest run --verbose tests::kzg_prove_and_verify_with_overflow_fixed_params_ --features gpu-accelerated  --test-threads 1
+      - name: KZG prove and verify tests (public outputs)
+        run: cargo nextest run --verbose tests::kzg_prove_and_verify_::t --features gpu-accelerated  --test-threads 1
+      - name: KZG prove and verify tests (public inputs)
+        run: cargo nextest run --verbose tests::kzg_prove_and_verify_public_input --features gpu-accelerated  --test-threads 1
+      - name: KZG prove and verify tests (fixed params)
+        run: cargo nextest run --verbose tests::kzg_prove_and_verify_fixed_params --features gpu-accelerated  --test-threads 1
+      - name: KZG prove and verify tests (hashed outputs)
+        run: cargo nextest run --verbose tests::kzg_prove_and_verify_hashed --features gpu-accelerated  --test-threads 1
 
   prove-and-verify-mock-aggr-tests:
     permissions:
@@ -604,25 +613,31 @@ jobs:
       - name: Mock aggr tests (KZG)
         run: cargo nextest run --verbose tests_aggr::kzg_aggr_mock_prove_and_verify_  --test-threads 8
 
-  # prove-and-verify-aggr-tests-gpu:
-  #   runs-on: GPU
-  #   env:
-  #     ENABLE_ICICLE_GPU: true
-  #   steps:
-  #     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
-  # with:
-  #   persist-credentials: false
-  #     - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
-  #       with:
-  #         toolchain: nightly-2025-05-01
-  #         override: true
-  #         components: rustfmt, clippy
-  #     - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
-  #       with:
-  #         crate: cargo-nextest
-  #         locked: true
-  #     - name: KZG tests
-  #       run: cargo nextest run --verbose tests_aggr::kzg_aggr_prove_and_verify_  --features icicle --test-threads 1 -- --include-ignored
+  prove-and-verify-aggr-tests-gpu:
+    permissions:
+      contents: read
+    runs-on: gpu
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
+    env:
+      ENABLE_ICICLE_GPU: true
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
+        with:
+          toolchain: nightly-2025-05-01
+          override: true
+          components: rustfmt, clippy
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
+        with:
+          crate: cargo-nextest
+          locked: true
+      - name: Setup GPU dependencies
+        run: sudo ./setup-gpu.sh --yes
+      - name: KZG tests
+        run: cargo nextest run --verbose tests_aggr::kzg_aggr_prove_and_verify_  --features gpu-accelerated --test-threads 1 -- --include-ignored
 
   prove-and-verify-aggr-tests:
     permissions:
