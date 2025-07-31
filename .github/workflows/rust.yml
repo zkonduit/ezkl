@@ -136,7 +136,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential g++ gcc cmake libstdc++-dev libstdc++6-dev libclang-dev llvm-dev
+          sudo apt-get install -y build-essential g++ gcc cmake libclang-dev llvm-dev
       # - name: Matmul overflow (wasi)
       #   run: cargo wasi test matmul_col_ultra_overflow -- --include-ignored --nocapture
       # - name: Conv overflow (wasi)
@@ -579,7 +579,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential g++ gcc cmake libstdc++-dev libstdc++6-dev libclang-dev llvm-dev
+          sudo apt-get install -y build-essential g++ gcc cmake libclang-dev llvm-dev
       - name: KZG prove and verify tests (kzg outputs)
         run: cargo nextest run --verbose tests::kzg_prove_and_verify_kzg_output --features gpu-accelerated --test-threads 1
       - name: KZG prove and verify tests (public outputs + column overflow)
@@ -647,7 +647,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential g++ gcc cmake libstdc++-dev libstdc++6-dev libclang-dev llvm-dev
+          sudo apt-get install -y build-essential g++ gcc cmake libclang-dev llvm-dev
       - name: KZG tests
         run: cargo nextest run --verbose tests_aggr::kzg_aggr_prove_and_verify_  --features gpu-accelerated --test-threads 1 -- --include-ignored
 
