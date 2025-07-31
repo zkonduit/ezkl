@@ -133,6 +133,8 @@ jobs:
           wasmtime-version: "3.0.1"
       - name: Setup GPU dependencies
         run: sudo ./setup-gpu.sh --yes
+      - name: Install cmake
+        run: sudo apt-get install -y cmake
       # - name: Matmul overflow (wasi)
       #   run: cargo wasi test matmul_col_ultra_overflow -- --include-ignored --nocapture
       # - name: Conv overflow (wasi)
@@ -572,6 +574,8 @@ jobs:
           locked: true
       - name: Setup GPU dependencies
         run: sudo ./setup-gpu.sh --yes
+      - name: Install cmake
+        run: sudo apt-get install -y cmake
       - name: KZG prove and verify tests (kzg outputs)
         run: cargo nextest run --verbose tests::kzg_prove_and_verify_kzg_output --features gpu-accelerated --test-threads 1
       - name: KZG prove and verify tests (public outputs + column overflow)
@@ -636,6 +640,8 @@ jobs:
           locked: true
       - name: Setup GPU dependencies
         run: sudo ./setup-gpu.sh --yes
+      - name: Install cmake
+        run: sudo apt-get install -y cmake
       - name: KZG tests
         run: cargo nextest run --verbose tests_aggr::kzg_aggr_prove_and_verify_  --features gpu-accelerated --test-threads 1 -- --include-ignored
 
