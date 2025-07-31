@@ -134,7 +134,7 @@ jobs:
       - name: Setup GPU dependencies
         run: sudo ./setup-gpu.sh --yes
       - name: Install cmake
-        run: sudo apt-get install -y cmake
+        run: sudo apt-get install -y cmake, libclang-dev, llvm-dev, build-essential
       # - name: Matmul overflow (wasi)
       #   run: cargo wasi test matmul_col_ultra_overflow -- --include-ignored --nocapture
       # - name: Conv overflow (wasi)
@@ -575,7 +575,7 @@ jobs:
       - name: Setup GPU dependencies
         run: sudo ./setup-gpu.sh --yes
       - name: Install cmake
-        run: sudo apt-get install -y cmake
+        run: sudo apt-get install -y cmake, libclang-dev, llvm-dev, build-essential
       - name: KZG prove and verify tests (kzg outputs)
         run: cargo nextest run --verbose tests::kzg_prove_and_verify_kzg_output --features gpu-accelerated --test-threads 1
       - name: KZG prove and verify tests (public outputs + column overflow)
@@ -641,7 +641,7 @@ jobs:
       - name: Setup GPU dependencies
         run: sudo ./setup-gpu.sh --yes
       - name: Install cmake
-        run: sudo apt-get install -y cmake
+        run: sudo apt-get install -y cmake, libclang-dev, llvm-dev, build-essential
       - name: KZG tests
         run: cargo nextest run --verbose tests_aggr::kzg_aggr_prove_and_verify_  --features gpu-accelerated --test-threads 1 -- --include-ignored
 
