@@ -8,6 +8,7 @@ use halo2_proofs::circuit::{AssignedCell, Layouter, Value};
 use halo2_proofs::plonk::{Advice, Challenge, Column, ConstraintSystem, FirstPhase};
 use halo2curves::ff::{Field, PrimeField};
 use itertools::Itertools;
+use tract_onnx::tract_core::ndarray::AssignElem;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 
@@ -21,8 +22,6 @@ pub struct Einsums<F: PrimeField + TensorType + PartialOrd> {
     pub output: VarTensor,
     pub challenges: Vec<Challenge>,
     pub challenge_columns: Vec<VarTensor>,
-    pub input_contractions: Vec<ContractionConfig<F>>,
-    pub output_contractions: Vec<ContractionConfig<F>>,
     pub max_inputs: usize,
     pub max_challenges: usize,
 }
@@ -72,53 +71,32 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             .map(|_| meta.challenge_usable_after(FirstPhase))
             .collect();
 
-        // Configure contraction configs for maximum depth
-        let input_contractions = Self::configure_contraction_tree(
-            meta,
-            analysis.max_contraction_depth,
-            analysis.max_inputs,
-        );
-
-        // Configure output contractions for challenge-based compression
-        let output_contractions =
-            Self::configure_output_contractions(meta, analysis.max_output_axes);
-
         Self {
             inputs,
+            output,
             challenges,
             challenge_columns,
-            input_contractions,
-            output,
-            output_contractions,
             max_inputs: analysis.max_inputs,
             max_challenges: analysis.max_output_axes,
         }
     }
 
-    pub fn configure_output_contractions(
-        meta: &mut ConstraintSystem<F>,
-        max_output_axes: usize,
-    ) -> Vec<ContractionConfig<F>> {
-        todo!()
-    }
+    // // FIXME: Dante, do we need this?
+    // // We are currently not creating constraints for unused cells
+    // fn assign_zero_tensor(
+    //     &self,
+    //     region: &mut RegionCtx<F>,
+    //     tensor: &VarTensor,
+    // ) -> Result<ValTensor<F>, CircuitError> {
+    //     // | 0 | 1 | 2 | 3 | 4 |
+        
+    //     for column in tensor.inner.flatten() {
+    //         region.assign_elem(input);
+    //     }
+    //     todo!()
+    // }
 
-    pub fn configure_contraction_tree(
-        meta: &mut ConstraintSystem<F>,
-        max_contraction_depth: usize,
-        max_inputs: usize,
-    ) -> Vec<ContractionConfig<F>> {
-        todo!()
-    }
-
-    fn assign_zero_tensor(
-        &self,
-        region: &mut RegionCtx<F>,
-        tensor: &VarTensor,
-    ) -> Result<ValTensor<F>, CircuitError> {
-        todo!()
-    }
-
-    fn assign_with_padding(
+    pub fn assign_with_padding(
         &self,
         base_config: &BaseConfig<F>,
         region: &mut RegionCtx<F>,
@@ -167,10 +145,10 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             region.assign(&self.inputs[i], input)?;
         }
 
-        // Zero-pad unused input columns
-        for i in input_tensors.len()..self.inputs.len() {
-            self.assign_zero_tensor(region, &self.inputs[i])?;
-        }
+        // // Zero-pad unused input columns
+        // for i in input_tensors.len()..self.inputs.len() {
+        //     self.assign_zero_tensor(region, &self.inputs[i])?;
+        // }
 
         let challenge_vectors: Vec<&ValTensor<F>> = challenges
             .iter()
@@ -179,7 +157,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             .collect();
 
         let squashed_output =
-            self.assign_output(base_config, region, &output_tensor, &challenge_vectors)?;
+            assign_output_contraction(base_config, region, &output_tensor, &challenge_vectors)?;
 
         // reorder the contraction of input tensors and contract
         let reordered_input_contractions = input_contractions(&equation).unwrap();
@@ -195,9 +173,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             tensors.push(witnessed_tensor);
         }
 
-        for (contraction, config) in reordered_input_contractions
+        for contraction in reordered_input_contractions
             .iter()
-            .zip(self.input_contractions.iter())
         {
             // region.set_offset(0);
             let (input_expr, output_expr) = contraction.expression.split_once("->").unwrap();
@@ -259,7 +236,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
                 .chars()
                 .map(|c| input_axes_to_dim[&c])
                 .collect_vec();
-            let contracted_output = config.assign(
+            let contracted_output = assign_input_contraction(
                 base_config,
                 region,
                 flattened_input_tensors,
@@ -306,13 +283,10 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
 
         // Intermediate values output from the previous contraction
         // Loop over the output axes
-        for (contraction_config, powers_of_challenge) in self
-            .output_contractions
-            .iter()
-            .zip(challenge_vectors_assigned.into_iter().rev())
+        for powers_of_challenge in challenge_vectors_assigned.into_iter().rev()
         {
             // region.set_offset(initial_offset);
-            intermediate_values = contraction_config.assign_output(
+            intermediate_values = assign_output_contraction(
                 config,
                 region,
                 &intermediate_values,
@@ -324,76 +298,49 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
     }
 }
 
-/// Each `ContractionConfig` corresponds to a contraction in the einsum argument,
-/// i.e. contraction along a single axis.
-/// This consists of multiple running sum (i.e. dot product) arguments.
-/// Each `ContractionConfig` constraints element-wise multiplication and contraction between input tensors.
-#[derive(Debug, Clone, Default)]
-struct ContractionConfig<F: Field> {
-    num_dot_products: usize,
-    num_inputs: usize,
-    _marker: PhantomData<F>, // dot_products: Vec<DotProductConfig<F>>,
+fn assign_input_contraction<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    flattened_tensors: Vec<ValTensor<F>>,
+    dot_product_len: usize,
+    output_shape: &[usize],
+) -> Result<ValTensor<F>, CircuitError> {
+    let num_dot_products = output_shape.iter().product();
+    // klm
+    // Contract along k, using lm dot products of length k
+    let mut dot_product_results = vec![];
+    for chunk_idx in 0..num_dot_products {
+        let start = chunk_idx * dot_product_len;
+        let tensors: Vec<_> = flattened_tensors
+            .iter()
+            .map(|tensor| tensor.get_slice(&[start..(start + dot_product_len)]))
+            .collect::<Result<Vec<_>, TensorError>>()?;
+        let result = multi_dot(config, region, tensors.iter().collect_vec().as_slice())?
+            .get_inner_tensor()?
+            .get_scalar();
+        dot_product_results.push(result);
+    }
+    let mut tensor = ValTensor::from(dot_product_results);
+    tensor.reshape(output_shape);
+    Ok(tensor)
 }
 
-impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ContractionConfig<F> {
-    fn new(
-        _meta: &mut ConstraintSystem<F>,
-        // The number of dot products
-        num_dot_products: usize,
-        // The number of input tensors to the dot product
-        num_inputs: usize,
-    ) -> Self {
-        Self {
-            num_dot_products,
-            num_inputs,
-            _marker: PhantomData,
-        }
+fn assign_output_contraction<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    tensor: &ValTensor<F>,
+    powers_of_challenge: &ValTensor<F>,
+) -> Result<ValTensor<F>, CircuitError> {
+    let dot_product_len = powers_of_challenge.len();
+    // Split tensor and challenge vector into dot products
+    let mut dot_product_results = vec![];
+    for tensor in tensor.get_inner_tensor()?.chunks_exact(dot_product_len) {
+        let tensor = ValTensor::from(tensor.to_vec());
+        let result = dot(config, region, &[&tensor, powers_of_challenge])?
+            .get_inner_tensor()?
+            .get_scalar();
+        dot_product_results.push(result);
     }
 
-    fn assign(
-        &self,
-        config: &BaseConfig<F>,
-        region: &mut RegionCtx<F>,
-        flattened_tensors: Vec<ValTensor<F>>,
-        dot_product_len: usize,
-        output_shape: &[usize],
-    ) -> Result<ValTensor<F>, CircuitError> {
-        let mut dot_product_results = vec![];
-        for chunk_idx in 0..self.num_dot_products {
-            let start = chunk_idx * dot_product_len;
-            let tensors: Vec<_> = flattened_tensors
-                .iter()
-                .map(|tensor| tensor.get_slice(&[start..(start + dot_product_len)]))
-                .collect::<Result<Vec<_>, TensorError>>()?;
-            let result = multi_dot(config, region, tensors.iter().collect_vec().as_slice())?
-                .get_inner_tensor()?
-                .get_scalar();
-            dot_product_results.push(result);
-        }
-        let mut tensor = ValTensor::from(dot_product_results);
-        tensor.reshape(output_shape);
-        Ok(tensor)
-    }
-
-    fn assign_output(
-        &self,
-        config: &BaseConfig<F>,
-        region: &mut RegionCtx<F>,
-        tensor: &ValTensor<F>,
-        powers_of_challenge: &ValTensor<F>,
-    ) -> Result<ValTensor<F>, CircuitError> {
-        let dot_product_len = powers_of_challenge.len();
-        assert_eq!(tensor.len(), self.num_dot_products * dot_product_len);
-        // Split tensor and challenge vector into dot products
-        let mut dot_product_results = vec![];
-        for tensor in tensor.get_inner_tensor()?.chunks_exact(dot_product_len) {
-            let tensor = ValTensor::from(tensor.to_vec());
-            let result = dot(config, region, &[&tensor, powers_of_challenge])?
-                .get_inner_tensor()?
-                .get_scalar();
-            dot_product_results.push(result);
-        }
-
-        Ok(ValTensor::from(dot_product_results))
-    }
+    Ok(ValTensor::from(dot_product_results))
 }

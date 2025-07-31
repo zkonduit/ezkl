@@ -116,7 +116,7 @@ pub fn analyze_single_equation(
         .iter()
         .map(|c| input_axes_to_dim.get(&c).unwrap());
     let output_size = output_dims.product();
-    let longest_challenge_vector = output_dims.max();
+    let longest_challenge_vector = output_dims.max().unwrap();
 
     // Contraction depth is determined by the number of sequential reductions needed
     let contraction_depth = contraction_planner::input_contractions(&equation)?.len();

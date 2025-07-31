@@ -26,6 +26,7 @@ const K: usize = 16;
 #[derive(Clone)]
 struct MyCircuit {
     inputs: [ValTensor<Fr>; 2],
+    einsum: Einsum,
     _marker: PhantomData<Fr>,
 }
 
@@ -55,6 +56,30 @@ impl Circuit<Fr> for MyCircuit {
         mut config: Self::Config,
         mut layouter: impl Layouter<Fr>,
     ) -> Result<(), Error> {
+        let challenges = ();
+
+        struct Einsum {
+            equation: String,
+            input_to_dims: HashMap<char, usize>
+        }
+
+        impl Einsum {
+            fn strip_zeros(&self) -> Self;
+            fn get_challenges(
+                &self,
+                config: Self::Config,
+                mut layouter: impl Layouter<Fr>,
+            ) -> Vec<ValTensor<Value<F>>> {
+                let challenges = config.challenges.iter().map(|c| layouter.get_challenge(c));
+                let powers = output.chars().map(|c| self.input_to_dims.get(c).unwrap());
+
+                challenges.zip(powers).map(|(challenge, power)| {
+                    // Use `scan` to compute [challenge^i], i = 1..=power
+                })
+            }
+        }
+
+
         layouter.assign_region(
             || "",
             |region| {
@@ -65,6 +90,7 @@ impl Circuit<Fr> for MyCircuit {
                         &self.inputs.iter().collect_vec(),
                         Box::new(PolyOp::Einsum {
                             equation: "ab,bc->ac".to_string(),
+                            challenges,
                         }),
                     )
                     .unwrap();

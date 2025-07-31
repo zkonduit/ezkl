@@ -1,3 +1,5 @@
+use halo2_proofs::plonk::Challenge;
+
 use crate::{
     circuit::{
         layouts,
@@ -39,6 +41,7 @@ pub enum PolyOp {
     },
     Einsum {
         equation: String,
+        challenges: Tensor<F>,
     },
     Conv {
         padding: Vec<(usize, usize)>,
@@ -240,7 +243,7 @@ impl<
             }
             PolyOp::Neg => layouts::neg(config, region, values[..].try_into()?)?,
             PolyOp::Iff => layouts::iff(config, region, values[..].try_into()?)?,
-            PolyOp::Einsum { equation } => layouts::einsum(config, region, values, equation)?,
+            PolyOp::Einsum { equation, challenges } => layouts::einsum(config, region, values, equation, challenges)?,
             PolyOp::Sum { axes } => {
                 layouts::sum_axes(config, region, values[..].try_into()?, axes)?
             }
