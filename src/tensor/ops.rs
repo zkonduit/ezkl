@@ -2677,13 +2677,15 @@ pub mod accumulated {
             }
 
             output_entry = output_entry
-                + input_tuples.into_iter().fold(T::zero().unwrap(), |acc, tuple| {
-                    let term = tuple
-                        .into_iter()
-                        .map(|tensor| tensor.get_scalar())
-                        .fold(T::one().unwrap(), |acc, value| acc * value);
-                    acc + term
-                });
+                + input_tuples
+                    .into_iter()
+                    .fold(T::zero().unwrap(), |acc, tuple| {
+                        let term = tuple
+                            .into_iter()
+                            .map(|tensor| tensor.get_scalar())
+                            .fold(T::one().unwrap(), |acc, value| acc * value);
+                        acc + term
+                    });
             output_tensor.set(&output_entry_index, output_entry);
 
             if let Some(output_entries_indices) = output_entries_indices.next() {

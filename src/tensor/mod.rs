@@ -480,7 +480,7 @@ impl<T: Clone + TensorType> Tensor<T> {
         self[index].clone()
     }
 
-    /// Extracts a single value from this tensor
+    /// Extracts a single value from the tensor
     pub fn get_scalar(&self) -> T {
         assert!(self.inner.len() == 1);
         assert!(self.dims.iter().all(|dim| *dim == 1));

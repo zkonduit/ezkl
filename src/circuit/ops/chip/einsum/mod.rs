@@ -1,28 +1,25 @@
-use std::collections::HashMap;
-use std::marker::PhantomData;
-
 use crate::circuit::chip::einsum::analysis::{analyze_single_equation, EinsumAnalysis};
 use crate::circuit::chip::einsum::contraction_planner::input_contractions;
-use crate::circuit::layouts::dot;
+use crate::circuit::layouts::{dot, multi_dot, prod};
 use crate::circuit::region::RegionCtx;
 use crate::circuit::{BaseConfig, CircuitError};
-use crate::tensor::{Tensor, TensorType, ValTensor, VarTensor};
+use crate::tensor::{Tensor, TensorError, TensorType, ValTensor, ValType, VarTensor};
 use halo2_proofs::circuit::{AssignedCell, Layouter, Value};
-use halo2_proofs::plonk::{
-    Advice, Challenge, Column, ConstraintSystem, Expression, FirstPhase, SecondPhase, Selector,
-};
+use halo2_proofs::plonk::{Advice, Challenge, Column, ConstraintSystem, FirstPhase};
 use halo2curves::ff::{Field, PrimeField};
 use itertools::Itertools;
+use std::collections::HashMap;
+use std::marker::PhantomData;
 
 pub mod analysis;
 mod contraction_planner;
 
 /// A struct representing the contractions for the einsums
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Einsums<F: PrimeField + TensorType + PartialOrd> {
     pub inputs: Vec<VarTensor>,
     pub output: VarTensor,
-    pub challenges: Vec<Value<F>>,
+    pub challenges: Vec<Challenge>,
     pub challenge_columns: Vec<VarTensor>,
     pub input_contractions: Vec<ContractionConfig<F>>,
     pub output_contractions: Vec<ContractionConfig<F>>,
@@ -37,18 +34,39 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
 
     /// configure the columns based on universal Einsum analysis
     fn configure_universal(
-        equation: String,
+        // equation: String,
         meta: &mut ConstraintSystem<F>,
         analysis: &EinsumAnalysis,
     ) -> Self {
-        // Allocate maximum number of columns needed
-        let inputs: Vec<_> = (0..analysis.max_inputs)
-            .map(|_| meta.advice_column_in(FirstPhase))
-            .collect();
+        let mut inputs = vec![];
+        for _ in 0..analysis.max_inputs {
+            let max_input_size = analysis.max_input_size;
+            // FIXME calculate the no. of rows needed
+            let k = max_input_size.ilog2() + 1;
+            let input_tensor = VarTensor::new_advice(meta, k as usize, 1, max_input_size);
+            inputs.push(input_tensor);
+        }
 
-        let challenge_columns: Vec<_> = (0..analysis.max_output_axes)
-            .map(|_| meta.advice_column_in(SecondPhase))
-            .collect();
+        let output = {
+            let max_output_size = analysis.max_output_size;
+            // FIXME calculate the no. of rows needed
+            let k = max_output_size.ilog2() + 1;
+            VarTensor::new_advice_in_second_phase(meta, k as usize, 1, max_output_size)
+        };
+
+        let mut challenge_columns = vec![];
+        for _ in 0..analysis.max_output_axes {
+            let longest_challenge_vector = analysis.longest_challenge_vector;
+            // FIXME calculate the no. of rows needed
+            let k = longest_challenge_vector.ilog2() + 1;
+            let challenge_tensor = VarTensor::new_advice_in_second_phase(
+                meta,
+                k as usize,
+                1,
+                longest_challenge_vector,
+            );
+            challenge_columns.push(challenge_tensor);
+        }
 
         let challenges: Vec<_> = (0..analysis.max_output_axes)
             .map(|_| meta.challenge_usable_after(FirstPhase))
@@ -65,8 +83,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         let output_contractions =
             Self::configure_output_contractions(meta, analysis.max_output_axes);
 
-        let output = meta.advice_column_in(SecondPhase);
-
         Self {
             inputs,
             challenges,
@@ -76,7 +92,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             output_contractions,
             max_inputs: analysis.max_inputs,
             max_challenges: analysis.max_output_axes,
-            _marker: PhantomData,
         }
     }
 
@@ -95,41 +110,36 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         todo!()
     }
 
-    fn assign_tensor_to_column(
-        &self,
-        region: &mut RegionCtx<F>,
-        input: &ValTensor<F>,
-        column: &VarTensor,
-    ) -> Result<ValTensor<F>, CircuitError> {
-        todo!()
-    }
-
     fn assign_zero_tensor(
         &self,
         region: &mut RegionCtx<F>,
-        column: &VarTensor,
+        tensor: &VarTensor,
     ) -> Result<ValTensor<F>, CircuitError> {
         todo!()
     }
 
     fn assign_with_padding(
         &self,
+        base_config: &BaseConfig<F>,
         region: &mut RegionCtx<F>,
         input_tensors: &[&ValTensor<F>],
-        output_tensor: ValTensor<F>,
+        output_tensor: &ValTensor<F>,
+        challenges: &[&ValTensor<F>],
         equation: &str,
     ) -> Result<(), CircuitError> {
-        let (input_exprs, output_expr) = equation.split_once("->").unwrap();
+        let (input_exprs, _) = equation.split_once("->").unwrap();
         let input_exprs = input_exprs.split(",").collect_vec();
         assert_eq!(input_exprs.len(), input_tensors.len());
 
         // Remove trivial axes from tensors
+        let mut input_tensors = input_tensors.iter().copied().cloned().collect_vec();
+        let mut output_tensor = output_tensor.clone();
+
         input_tensors
-            .iter()
-            .copied()
+            .iter_mut()
             .map(|tensor| tensor.remove_trivial_axes())
-            .collect();
-        output_tensor.remove_trivial_axes();
+            .collect::<Result<Vec<_>, TensorError>>()?;
+        output_tensor.remove_trivial_axes()?;
 
         let mut input_axes_to_dim: HashMap<char, usize> = HashMap::new();
         input_exprs
@@ -149,25 +159,12 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
                     });
             });
 
-        // Sanitise equation to remove trivial axes
-        let equation = {
-            let inputs = input_exprs.iter().map(|input| {
-                input.chars().filter(|char| input_axes_to_dim.get(char).is_some()).collect()
-            });
-
-            let output = output_expr
-                .chars()
-                .filter(|c| input_axes_to_dim.get(c).is_some())
-                .collect();
-
-            [inputs.join(","), output].join("->")
-        };
-
-        let equation_analysis = analyze_single_equation(&equation)?;
+        let equation_analysis = analyze_single_equation(&equation, &input_axes_to_dim)?;
+        let equation = equation_analysis.equation;
 
         // Assign actual inputs
         for (i, input) in input_tensors.iter().enumerate() {
-            self.assign_tensor_to_column(region, input, &self.inputs[i])?;
+            region.assign(&self.inputs[i], input)?;
         }
 
         // Zero-pad unused input columns
@@ -175,62 +172,26 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             self.assign_zero_tensor(region, &self.inputs[i])?;
         }
 
-        // Configure active contractions only
-        let active_contractions = &self.input_contractions[..equation_analysis.contraction_depth];
-
-        // Assign challenges and witness challenge vectors
-        let assigned_challenges: Vec<Value<F>> = self
-            .challenges
+        let challenge_vectors: Vec<&ValTensor<F>> = challenges
             .iter()
+            .copied()
             .take(equation_analysis.output_axes)
             .collect();
 
-        // Create challenge vectors as powers of challenge (following prototype pattern)
-        let non_trivial_output_dims = equation_analysis
-            .output_indices
-            .iter()
-            .map(|c| *input_axes_to_dim.get(c).unwrap())
-            .collect::<Vec<_>>();
-
-        let challenge_vectors: Vec<Tensor<Value<F>>> = non_trivial_output_dims
-            .into_iter()
-            .enumerate()
-            .map(|(i, size)| {
-                let challenge = assigned_challenges[i];
-                let powers_of_challenge = (0..size)
-                    .scan(Value::known(F::ONE), |state, _| {
-                        *state = *state * challenge;
-                        Some(*state)
-                    })
-                    .collect_vec();
-                Tensor::from(
-                    powers_of_challenge
-                        .into_iter()
-                        .map(Tensor::Scalar)
-                        .collect::<Vec<_>>(),
-                )
-            })
-            .collect();
-
-        let squashed_output = self.assign_output(
-            region,
-            output_tensor,
-            challenge_vectors.iter().cloned().collect_vec(),
-        )?;
-
-        let mut input_tensors = input_tensors.clone();
-        input_tensors.extend_from_slice(&challenge_vectors);
+        let squashed_output =
+            self.assign_output(base_config, region, &output_tensor, &challenge_vectors)?;
 
         // reorder the contraction of input tensors and contract
-        let reordered_input_contractions = input_contractions(equation).unwrap();
+        let reordered_input_contractions = input_contractions(&equation).unwrap();
         assert_eq!(
             reordered_input_contractions.len(),
-            self.input_contractions.len()
+            equation_analysis.contraction_depth,
         );
         let mut tensors = vec![];
-        for (i, input_tensor) in input_tensors.iter().enumerate() {
-            region.set_offset(0);
-            let witnessed_tensor = input_tensor.witness(region, self.inputs[i])?;
+        for (i, input_tensor) in input_tensors.iter().chain(challenge_vectors).enumerate() {
+            // region.set_offset(0);
+            let witnessed_tensor =
+                region.assign(&self.inputs[i], input_tensor)?;
             tensors.push(witnessed_tensor);
         }
 
@@ -238,7 +199,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             .iter()
             .zip(self.input_contractions.iter())
         {
-            region.set_offset(0);
+            // region.set_offset(0);
             let (input_expr, output_expr) = contraction.expression.split_once("->").unwrap();
             let input_exprs = input_expr.split(",").collect_vec();
 
@@ -260,7 +221,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
                 .map(|idx| tensors[idx].clone())
                 .collect_vec();
 
-            let mut flattened_input_tensors: Vec<Vec<Tensor<AssignedCell<F, F>>>> =
+            let mut flattened_input_tensors: Vec<Vec<ValTensor<F>>> =
                 vec![vec![]; input_tensors.len()];
             for remaining_axes_indices in remaining_axes_indices {
                 // corresponds to 1 running sum of input tensors
@@ -277,17 +238,20 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
                             sliced_dim.push(0..input_axes_to_dim[&axis]);
                         }
                     });
-                    let sliced_input_tensor = input_tensor.slice(&sliced_dim);
-                    flattened_input_tensors[i].push(Tensor::array(sliced_input_tensor.flatten()));
+                    let mut sliced_input_tensor = input_tensor.get_slice(&sliced_dim)?;
+                    sliced_input_tensor.flatten();
+                    flattened_input_tensors[i].push(sliced_input_tensor);
                 }
             }
             let flattened_input_tensors = flattened_input_tensors
                 .into_iter()
                 .map(|tensors| {
-                    tensors
-                        .iter()
-                        .flat_map(|tensor| tensor.flatten())
-                        .collect_vec()
+                    ValTensor::from(
+                        tensors
+                            .into_iter()
+                            .flat_map(|t| t.get_inner_tensor().unwrap().clone().into_iter())
+                            .collect_vec(),
+                    )
                 })
                 .collect_vec();
             let dot_product_len = input_axes_to_dim[&contraction.axis];
@@ -296,6 +260,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
                 .map(|c| input_axes_to_dim[&c])
                 .collect_vec();
             let contracted_output = config.assign(
+                base_config,
                 region,
                 flattened_input_tensors,
                 dot_product_len,
@@ -304,51 +269,40 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
 
             tensors.push(contracted_output);
         }
-        tensors.retain(|tensor| tensor.scalar().is_ok());
+        tensors.retain(|tensor| tensor.dims() == &[1]);
 
         // FIXME constrain this to be a product
-        let squashed_input = tensors
-            .iter()
-            .map(|tensor| tensor.scalar().unwrap().value())
-            .fold(Value::known(F::ONE), |acc, v| acc * v);
-        region.set_offset(5);
-        let squashed_input = region.assign_advice(|| "", self.output, squashed_input)?;
-        region.constrain_equal(squashed_input.cell(), squashed_output.cell())
+        let tensors: ValTensor<F> = tensors
+            .into_iter()
+            .map(|t| t.get_inner_tensor().unwrap().get_scalar())
+            .collect_vec()
+            .into();
+        let squashed_input = prod(base_config, region, &[&tensors])?;
+
+        // region.set_offset(5);
+        region.constrain_equal(&squashed_input, &squashed_output)
     }
 
     fn assign_output(
         &self,
+        config: &BaseConfig<F>,
         region: &mut RegionCtx<F>,
-        output: Tensor<Value<F>>,
-        challenge_vectors: Vec<Tensor<Value<F>>>,
-    ) -> Result<AssignedCell<F, F>, CircuitError> {
-        let initial_offset = region.offset();
+        output: &ValTensor<F>,
+        challenge_vectors: &[&ValTensor<F>],
+    ) -> Result<ValTensor<F>, CircuitError> {
+        // let initial_offset = region.offset();
         // Witness challenge vectors
         // FIXME constrain these to be a well-constructed power series
         let mut challenge_vectors_assigned = vec![];
         for (i, challenge_vector) in challenge_vectors.iter().enumerate() {
-            // region.set_offset(initial_offset);
-            let mut challenge_vector_assigned = vec![];
-            for value in challenge_vector.inner.iter() {
-                challenge_vector_assigned.push(region.assign_advice(
-                    || "",
-                    self.challenge_columns[i],
-                    value,
-                )?);
-                region.next();
-            }
-            challenge_vectors_assigned.push(challenge_vector_assigned);
+            challenge_vectors_assigned
+                .push(region.assign(&self.challenge_columns[i], challenge_vector)?);
         }
 
         // Initialise `intermediate_values` to the original output tensor
         // region.set_offset(initial_offset);
-        let mut intermediate_values: Vec<AssignedCell<F, F>> = vec![];
         // Witness flattened output
-        for value in output.flatten().into_iter() {
-            let value = region.assign_advice(|| "", self.output, value)?;
-            region.next();
-            intermediate_values.push(value);
-        }
+        let mut intermediate_values = region.assign(&self.output, output)?;
 
         // Intermediate values output from the previous contraction
         // Loop over the output axes
@@ -359,13 +313,14 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         {
             // region.set_offset(initial_offset);
             intermediate_values = contraction_config.assign_output(
+                config,
                 region,
-                intermediate_values,
+                &intermediate_values,
                 &powers_of_challenge,
             )?;
         }
 
-        Ok(intermediate_values[0].clone())
+        Ok(intermediate_values)
     }
 }
 
@@ -373,55 +328,50 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
 /// i.e. contraction along a single axis.
 /// This consists of multiple running sum (i.e. dot product) arguments.
 /// Each `ContractionConfig` constraints element-wise multiplication and contraction between input tensors.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 struct ContractionConfig<F: Field> {
-    dot_products: Vec<DotProductConfig<F>>,
+    num_dot_products: usize,
+    num_inputs: usize,
+    _marker: PhantomData<F>, // dot_products: Vec<DotProductConfig<F>>,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ContractionConfig<F> {
     fn new(
-        meta: &mut ConstraintSystem<F>,
+        _meta: &mut ConstraintSystem<F>,
         // The number of dot products
         num_dot_products: usize,
-        // The number of tensors in the dot product
+        // The number of input tensors to the dot product
         num_inputs: usize,
     ) -> Self {
-        // TODO optimise choice of advice columns globally
-        let inputs: Vec<_> = (0..num_inputs)
-            .map(|_| meta.advice_column_in(SecondPhase))
-            .collect();
-        inputs.iter().for_each(|c| meta.enable_equality(*c));
-
-        let running_sum = meta.advice_column_in(SecondPhase);
-        meta.enable_equality(running_sum);
-
-        let mut dot_products = vec![];
-        for _ in 0..num_dot_products {
-            dot_products.push(DotProductConfig::new(meta, &inputs, running_sum));
+        Self {
+            num_dot_products,
+            num_inputs,
+            _marker: PhantomData,
         }
-
-        Self { dot_products }
     }
 
     fn assign(
         &self,
+        config: &BaseConfig<F>,
         region: &mut RegionCtx<F>,
-        flattened_tensors: Vec<Vec<AssignedCell<F, F>>>,
+        flattened_tensors: Vec<ValTensor<F>>,
         dot_product_len: usize,
         output_shape: &[usize],
-    ) -> Result<Tensor<AssignedCell<F, F>>, CircuitError> {
-        let num_dot_products = self.dot_products.len();
+    ) -> Result<ValTensor<F>, CircuitError> {
         let mut dot_product_results = vec![];
-        for chunk_idx in 0..num_dot_products {
+        for chunk_idx in 0..self.num_dot_products {
             let start = chunk_idx * dot_product_len;
             let tensors: Vec<_> = flattened_tensors
                 .iter()
-                .map(|tensor| tensor[start..(start + dot_product_len)].to_vec())
-                .collect();
-            let result = self.dot_products[chunk_idx].assign(region, tensors)?;
+                .map(|tensor| tensor.get_slice(&[start..(start + dot_product_len)]))
+                .collect::<Result<Vec<_>, TensorError>>()?;
+            let result = multi_dot(config, region, tensors.iter().collect_vec().as_slice())?
+                .get_inner_tensor()?
+                .get_scalar();
             dot_product_results.push(result);
         }
-        let tensor = Tensor::array(dot_product_results).reshape(output_shape);
+        let mut tensor = ValTensor::from(dot_product_results);
+        tensor.reshape(output_shape);
         Ok(tensor)
     }
 
@@ -429,135 +379,21 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ContractionConfi
         &self,
         config: &BaseConfig<F>,
         region: &mut RegionCtx<F>,
-        tensor: Vec<AssignedCell<F, F>>,
-        powers_of_challenge: &[AssignedCell<F, F>],
-    ) -> Result<Vec<AssignedCell<F, F>>, CircuitError> {
-        let num_dot_products = self.dot_products.len();
+        tensor: &ValTensor<F>,
+        powers_of_challenge: &ValTensor<F>,
+    ) -> Result<ValTensor<F>, CircuitError> {
         let dot_product_len = powers_of_challenge.len();
-        assert_eq!(tensor.len(), num_dot_products * dot_product_len);
+        assert_eq!(tensor.len(), self.num_dot_products * dot_product_len);
         // Split tensor and challenge vector into dot products
         let mut dot_product_results = vec![];
-        for (idx, tensor) in tensor.chunks_exact(dot_product_len).enumerate() {
-            let tensors = vec![tensor.to_vec(), powers_of_challenge.to_vec()];
-            let result = dot(config, region, tensors);
+        for tensor in tensor.get_inner_tensor()?.chunks_exact(dot_product_len) {
+            let tensor = ValTensor::from(tensor.to_vec());
+            let result = dot(config, region, &[&tensor, powers_of_challenge])?
+                .get_inner_tensor()?
+                .get_scalar();
             dot_product_results.push(result);
         }
 
-        Ok(dot_product_results)
+        Ok(ValTensor::from(dot_product_results))
     }
 }
-
-// #[derive(Debug, Clone)]
-// struct DotProductConfig<F: Field> {
-//     selector: (Selector, Selector),
-//     inputs: Vec<Column<Advice>>,
-//     running_sum: Column<Advice>,
-//     _marker: PhantomData<F>,
-// }
-
-// impl<F: Field> DotProductConfig<F> {
-//     fn assign(
-//         &self,
-//         region: &mut RegionCtx<F>,
-//         tensors: Vec<Vec<AssignedCell<F, F>>>,
-//     ) -> Result<AssignedCell<F, F>, CircuitError> {
-//         assert_eq!(tensors.len(), self.inputs.len());
-//         assert!(tensors.iter().map(|t| t.len()).all_equal());
-//         let dot_product_len = tensors[0].len();
-//         let initial_offset = region.offset();
-//         // Copy `tensors` values into appropriate cells
-//         for (col, tensor) in self.inputs.iter().zip(tensors.iter()) {
-//             region.set_offset(initial_offset);
-//             for cell in tensor.iter() {
-//                 println!(
-//                     "cell : ({:?}, {})",
-//                     cell.cell().column,
-//                     cell.cell().row_offset
-//                 );
-//                 println!("(col, offset) : ({}, {})", col.index(), region.offset());
-//                 region.copy_advice(cell, *col)?;
-//                 region.next();
-//             }
-//         }
-
-//         let mut transposed_tensors = vec![];
-//         for idx in 0..tensors[0].len() {
-//             transposed_tensors.push(
-//                 tensors
-//                     .iter()
-//                     .map(|tensor| tensor[idx].clone())
-//                     .collect_vec(),
-//             );
-//         }
-//         let running_sum = transposed_tensors
-//             .iter()
-//             .scan(Value::known(F::ZERO), |state, inputs| {
-//                 let multiplied = inputs
-//                     .iter()
-//                     .map(|input| input.value())
-//                     .fold(Value::known(F::ONE), |acc, v| acc * v);
-//                 *state = *state + multiplied;
-//                 Some(*state)
-//             });
-
-//         region.set_offset(initial_offset);
-//         let mut result = None;
-//         for (idx, running_sum) in running_sum.enumerate() {
-//             let running_sum = region.assign_advice(|| "", self.running_sum, running_sum)?;
-
-//             if idx == 0 {
-//                 region.enable(self.selector.0)?;
-//             } else {
-//                 region.enable(self.selector.1)?;
-//             }
-
-//             if idx == dot_product_len - 1 {
-//                 result = Some(running_sum)
-//             }
-//             region.next();
-//         }
-//         Ok(result.unwrap())
-//     }
-
-//     fn new(
-//         meta: &mut ConstraintSystem<F>,
-//         inputs: &[Column<Advice>],
-//         running_sum: Column<Advice>,
-//     ) -> Self {
-//         // TODO cache and retrieve selectors if using repeated advice columns
-//         let selector = (meta.selector(), meta.selector());
-
-//         let config = Self {
-//             selector,
-//             inputs: inputs.to_vec(),
-//             running_sum,
-//             _marker: PhantomData,
-//         };
-
-//         config.dot_product_gate(meta);
-
-//         config
-//     }
-
-//     // Helper dot product gate
-//     fn dot_product_gate(&self, meta: &mut ConstraintSystem<F>) {
-//         meta.create_gate("initialization", |_| {
-//             let s = self.selector.0.expr();
-//             let init = self
-//                 .inputs
-//                 .iter()
-//                 .fold(Expression::Constant(F::ONE), |acc, input| acc * input.cur());
-//             vec![s * (self.running_sum.cur() - init)]
-//         });
-
-//         meta.create_gate("accumulation", |_| {
-//             let s = self.selector.1.expr();
-//             let acc = self.running_sum.prev();
-//             let curr = self
-//                 .inputs
-//                 .iter()
-//                 .fold(Expression::Constant(F::ONE), |acc, input| acc * input.cur());
-//             vec![s * (self.running_sum.cur() - (acc + curr))]
-//         });
-//     }
-// }

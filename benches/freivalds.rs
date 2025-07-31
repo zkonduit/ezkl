@@ -52,8 +52,7 @@ impl Circuit<Fr> for MyCircuit {
         // create advice columns for einsum
 
         let mut config = Self::Config::default();
-        config.configure_einsums(
-            cs, inputs, output, challenges, challenge_columns, analysis)?;
+        config.configure_einsums(cs, inputs, output, challenges, challenge_columns, analysis)?;
 
         config
     }

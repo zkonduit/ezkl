@@ -1,10 +1,11 @@
 use std::{collections::BTreeSet, ops::Index};
 
+use halo2curves::ff::PrimeField;
 use itertools::Itertools;
 
 use crate::{
     circuit::CircuitError,
-    tensor::{Tensor, TensorType},
+    tensor::{TensorType, ValTensor},
 };
 
 #[derive(Clone, Debug)]
@@ -19,8 +20,8 @@ pub struct Contraction {
     input_indices: Vec<TensorIndex>,
 }
 
-impl<T: TensorType> Index<TensorIndex> for Vec<Tensor<T>> {
-    type Output = Tensor<T>;
+impl<T: PrimeField + TensorType + PartialOrd> Index<TensorIndex> for Vec<ValTensor<T>> {
+    type Output = ValTensor<T>;
 
     fn index(&self, index: TensorIndex) -> &Self::Output {
         &self[index.0]
