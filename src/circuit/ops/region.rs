@@ -221,6 +221,7 @@ pub struct RegionCtx<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Ha
     statistics: RegionStatistics,
     settings: RegionSettings,
     assigned_constants: ConstantsMap<F>,
+    assigned_challenges: Vec<ValTensor<F>>,
     max_dynamic_input_len: usize,
 }
 
@@ -317,6 +318,11 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         &self.statistics
     }
 
+    ///
+    pub fn challenges(&self) -> &[ValTensor<F>] {
+        &self.assigned_challenges
+    }
+
     /// Create a new region context
     pub fn new(
         region: Region<'a, F>,
@@ -339,6 +345,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             statistics: RegionStatistics::default(),
             settings: RegionSettings::all_true(decomp_base, decomp_legs),
             assigned_constants: HashMap::new(),
+            assigned_challenges: vec![],
             max_dynamic_input_len: 0,
         }
     }
@@ -354,6 +361,20 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     ) -> RegionCtx<'a, F> {
         let mut new_self = Self::new(region, row, num_inner_cols, decomp_base, decomp_legs);
         new_self.assigned_constants = constants;
+        new_self
+    }
+
+    /// Create a new region context with challenges
+    pub fn new_with_challenges(
+        region: Region<'a, F>,
+        row: usize,
+        num_inner_cols: usize,
+        decomp_base: usize,
+        decomp_legs: usize,
+        challenges: Vec<ValTensor<F>>,
+    ) -> RegionCtx<'a, F> {
+        let mut new_self = Self::new(region, row, num_inner_cols, decomp_base, decomp_legs);
+        new_self.assigned_challenges = challenges;
         new_self
     }
 
@@ -377,6 +398,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             statistics: RegionStatistics::default(),
             settings,
             assigned_constants: HashMap::new(),
+            assigned_challenges: vec![],
             max_dynamic_input_len: 0,
         }
     }
@@ -400,6 +422,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             statistics: RegionStatistics::default(),
             settings,
             assigned_constants: HashMap::new(),
+            assigned_challenges: vec![],
             max_dynamic_input_len: 0,
         }
     }

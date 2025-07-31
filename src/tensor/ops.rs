@@ -2525,6 +2525,7 @@ pub mod accumulated {
         Ok(transcript)
     }
 
+    /// einsum op
     pub fn einsum<T>(
         equation: &str,
         input_tensors: &[&Tensor<T>],

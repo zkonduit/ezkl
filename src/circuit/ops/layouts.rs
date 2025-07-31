@@ -1,6 +1,6 @@
 use std::{collections::HashMap, f64::consts::E, ops::Range};
 
-use halo2_proofs::circuit::{Layouter, Value};
+use halo2_proofs::circuit::Value;
 use halo2curves::ff::PrimeField;
 use itertools::Itertools;
 use log::{error, trace};
@@ -601,6 +601,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     Ok(last_elem)
 }
 
+/// Dot product of more than two tensors
 pub fn multi_dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
@@ -889,23 +890,26 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     region: &mut RegionCtx<F>,
     input_tensors: &[&ValTensor<F>],
     equation: &str,
-    challenges: &[&ValTensor<F>],
 ) -> Result<ValTensor<F>, CircuitError> {
     // Track the einsum equation
     region.add_used_einsum_equation(equation.to_string())?;
 
-    let einsum_config = config.einsums;
-
-    // Compute expected output using existing einsum logic
-    // need to add this to ops
-    let input_tensors = input_tensors
+    let inputs = input_tensors
         .iter()
         .map(|t| t.get_inner())
         .collect::<Result<Vec<_>, TensorError>>()?;
+    // Compute expected output using existing einsum logic
+    // need to add this to ops
     let (output_tensor, _) =
-        crate::tensor::ops::accumulated::einsum(equation, &input_tensors.iter().collect_vec())?;
+        crate::tensor::ops::accumulated::einsum(equation, &inputs.iter().collect_vec())?;
 
-    einsum_config.assign_with_padding(config, region, input_tensors, output_tensor, challenges, equation)?;
+    config.einsums.assign_with_padding(
+        config,
+        region,
+        input_tensors,
+        &output_tensor.clone().into(),
+        equation,
+    )?;
 
     // region.increment_einsum_col_coord(output_len + flush_len_ref);
     region.increment_einsum_index(1);
@@ -2728,7 +2732,6 @@ pub fn min_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     axes_wise_op(config, region, values, axes, min)
 }
-
 
 /// Pairwise (elementwise) op layout
 pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(

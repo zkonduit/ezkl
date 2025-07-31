@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use halo2_proofs::{
     circuit::Layouter,
-    plonk::{Challenge, ConstraintSystem, Constraints, Expression, Selector, TableColumn},
+    plonk::{ConstraintSystem, Constraints, Expression, Selector, TableColumn},
     poly::Rotation,
 };
 use log::debug;
@@ -25,7 +25,7 @@ use std::{collections::BTreeMap, marker::PhantomData};
 use super::{lookup::LookupOp, region::RegionCtx, CircuitError, Op};
 use halo2curves::ff::{Field, PrimeField};
 
-mod einsum;
+pub mod einsum;
 
 #[allow(missing_docs)]
 /// An enum representing activating the sanity checks we can perform on the accumulated arguments
@@ -701,34 +701,12 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
     pub fn configure_einsums(
         &mut self,
         cs: &mut ConstraintSystem<F>,
-        inputs: &[VarTensor],
-        output: &VarTensor,
-        challenges: &[Challenge],
-        challenge_columns: &[VarTensor],
         analysis: &EinsumAnalysis,
     ) -> Result<(), CircuitError>
     where
         F: Field,
     {
-        let einsums = einsum::Einsums::<F> {
-            inputs: inputs.to_vec(),
-            output: output.clone(),
-            challenges: challenges.to_vec(),
-            challenge_columns: challenge_columns.to_vec(),
-            input_contractions: einsum::Einsums::configure_contraction_tree(
-                cs,
-                analysis.max_contraction_depth,
-                analysis.max_inputs,
-            ),
-            output_contractions: einsum::Einsums::configure_output_contractions(
-                cs,
-                analysis.max_output_axes,
-            ),
-            max_inputs: analysis.max_inputs,
-            max_challenges: analysis.max_output_axes,
-        };
-        self.einsums = einsums;
-
+        self.einsums = einsum::Einsums::configure_universal(cs, analysis);
         Ok(())
     }
 

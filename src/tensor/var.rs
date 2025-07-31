@@ -1,4 +1,4 @@
-use halo2_proofs::plonk::{Phase, SecondPhase};
+use halo2_proofs::plonk::SecondPhase;
 use log::{debug, error, warn};
 
 use crate::circuit::{region::ConstantsMap, CheckMode};
@@ -153,6 +153,7 @@ impl VarTensor {
         }
     }
 
+    /// TODO
     pub fn new_advice_in_second_phase<F: PrimeField>(
         cs: &mut ConstraintSystem<F>,
         logrows: usize,

@@ -29,12 +29,6 @@ impl<T: PrimeField + TensorType + PartialOrd> Index<TensorIndex> for Vec<ValTens
 }
 
 impl Contraction {
-    pub fn num_inputs(&self) -> usize {
-        let (input_exprs, _) = self.expression.split_once("->").unwrap();
-        let input_exprs: Vec<_> = input_exprs.split(",").map(|eq| eq.to_string()).collect();
-        input_exprs.len()
-    }
-
     pub fn input_indices(&self) -> Vec<TensorIndex> {
         self.input_indices.clone()
     }

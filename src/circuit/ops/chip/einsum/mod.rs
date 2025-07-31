@@ -3,12 +3,10 @@ use crate::circuit::chip::einsum::contraction_planner::input_contractions;
 use crate::circuit::layouts::{dot, multi_dot, prod};
 use crate::circuit::region::RegionCtx;
 use crate::circuit::{BaseConfig, CircuitError};
-use crate::tensor::{Tensor, TensorError, TensorType, ValTensor, ValType, VarTensor};
-use halo2_proofs::circuit::{AssignedCell, Layouter, Value};
-use halo2_proofs::plonk::{Advice, Challenge, Column, ConstraintSystem, FirstPhase};
-use halo2curves::ff::{Field, PrimeField};
+use crate::tensor::{TensorError, TensorType, ValTensor, VarTensor};
+use halo2_proofs::plonk::{Challenge, ConstraintSystem, FirstPhase};
+use halo2curves::ff::PrimeField;
 use itertools::Itertools;
-use tract_onnx::tract_core::ndarray::AssignElem;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 
@@ -24,16 +22,26 @@ pub struct Einsums<F: PrimeField + TensorType + PartialOrd> {
     pub challenge_columns: Vec<VarTensor>,
     pub max_inputs: usize,
     pub max_challenges: usize,
+    _marker: PhantomData<F>,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
-    pub fn dummy(_a: usize, _b: usize) -> Self {
-        todo!()
+    ///
+    pub fn dummy(col_size: usize, num_inner_cols: usize) -> Self {
+        let dummy_var = VarTensor::dummy(col_size, num_inner_cols);
+        Self {
+            inputs: vec![dummy_var.clone(), dummy_var.clone()],
+            output: dummy_var.clone(),
+            challenges: vec![],
+            challenge_columns: vec![],
+            max_inputs: 0,
+            max_challenges: 0,
+            _marker: PhantomData,
+        }
     }
 
     /// configure the columns based on universal Einsum analysis
-    fn configure_universal(
-        // equation: String,
+    pub fn configure_universal(
         meta: &mut ConstraintSystem<F>,
         analysis: &EinsumAnalysis,
     ) -> Self {
@@ -78,6 +86,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             challenge_columns,
             max_inputs: analysis.max_inputs,
             max_challenges: analysis.max_output_axes,
+            _marker: PhantomData,
         }
     }
 
@@ -89,7 +98,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
     //     tensor: &VarTensor,
     // ) -> Result<ValTensor<F>, CircuitError> {
     //     // | 0 | 1 | 2 | 3 | 4 |
-        
+
     //     for column in tensor.inner.flatten() {
     //         region.assign_elem(input);
     //     }
@@ -102,7 +111,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         region: &mut RegionCtx<F>,
         input_tensors: &[&ValTensor<F>],
         output_tensor: &ValTensor<F>,
-        challenges: &[&ValTensor<F>],
         equation: &str,
     ) -> Result<(), CircuitError> {
         let (input_exprs, _) = equation.split_once("->").unwrap();
@@ -150,14 +158,15 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         //     self.assign_zero_tensor(region, &self.inputs[i])?;
         // }
 
-        let challenge_vectors: Vec<&ValTensor<F>> = challenges
+        let challenge_vectors: Vec<ValTensor<F>> = region
+            .challenges()
             .iter()
-            .copied()
+            .cloned()
             .take(equation_analysis.output_axes)
             .collect();
 
         let squashed_output =
-            assign_output_contraction(base_config, region, &output_tensor, &challenge_vectors)?;
+            self.assign_output(base_config, region, &output_tensor, &challenge_vectors.iter().collect_vec())?;
 
         // reorder the contraction of input tensors and contract
         let reordered_input_contractions = input_contractions(&equation).unwrap();
@@ -166,16 +175,13 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             equation_analysis.contraction_depth,
         );
         let mut tensors = vec![];
-        for (i, input_tensor) in input_tensors.iter().chain(challenge_vectors).enumerate() {
+        for (i, input_tensor) in input_tensors.iter().chain(challenge_vectors.iter()).enumerate() {
             // region.set_offset(0);
-            let witnessed_tensor =
-                region.assign(&self.inputs[i], input_tensor)?;
+            let witnessed_tensor = region.assign(&self.inputs[i], input_tensor)?;
             tensors.push(witnessed_tensor);
         }
 
-        for contraction in reordered_input_contractions
-            .iter()
-        {
+        for contraction in reordered_input_contractions.iter() {
             // region.set_offset(0);
             let (input_expr, output_expr) = contraction.expression.split_once("->").unwrap();
             let input_exprs = input_expr.split(",").collect_vec();
@@ -283,8 +289,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
 
         // Intermediate values output from the previous contraction
         // Loop over the output axes
-        for powers_of_challenge in challenge_vectors_assigned.into_iter().rev()
-        {
+        for powers_of_challenge in challenge_vectors_assigned.into_iter().rev() {
             // region.set_offset(initial_offset);
             intermediate_values = assign_output_contraction(
                 config,
@@ -321,7 +326,7 @@ fn assign_input_contraction<F: PrimeField + TensorType + PartialOrd + std::hash:
         dot_product_results.push(result);
     }
     let mut tensor = ValTensor::from(dot_product_results);
-    tensor.reshape(output_shape);
+    tensor.reshape(output_shape)?;
     Ok(tensor)
 }
 
