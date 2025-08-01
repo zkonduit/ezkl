@@ -213,6 +213,7 @@ unsafe impl Send for RegionStatistics {}
 pub struct RegionCtx<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> {
     region: Option<RefCell<Region<'a, F>>>,
     row: usize,
+    /// the number assigned cells for the main set of columns
     linear_coord: usize,
     num_inner_cols: usize,
     dynamic_lookup_index: DynamicLookupIndex,
@@ -804,6 +805,63 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         }
     }
 
+    /// Assign a valtensor to a vartensor with duplication
+    pub fn assign_einsum_with_duplication_unconstrained(
+        &mut self,
+        var: &VarTensor,
+        values: &ValTensor<F>,
+    ) -> Result<(ValTensor<F>, usize), Error> {
+        if let Some(region) = &self.region {
+            // duplicates every nth element to adjust for column overflow
+            let (res, len) = var.assign_with_duplication_unconstrained(
+                &mut region.borrow_mut(),
+                self.linear_coord,
+                values,
+                &mut self.assigned_constants,
+            )?;
+            Ok((res, len))
+        } else {
+            let (_, len) = var.dummy_assign_with_duplication(
+                self.row,
+                self.linear_coord,
+                values,
+                false,
+                &mut self.assigned_constants,
+            )?;
+            Ok((values.clone(), len))
+        }
+    }
+
+    /// Assign a valtensor to a vartensor with duplication
+    pub fn assign_einsum_with_duplication_constrained(
+        &mut self,
+        var: &VarTensor,
+        values: &ValTensor<F>,
+        check_mode: &crate::circuit::CheckMode,
+    ) -> Result<(ValTensor<F>, usize), Error> {
+        if let Some(region) = &self.region {
+            // duplicates every nth element to adjust for column overflow
+            let (res, len) = var.assign_with_duplication_constrained(
+                &mut region.borrow_mut(),
+                self.row,
+                self.linear_coord,
+                values,
+                check_mode,
+                &mut self.assigned_constants,
+            )?;
+            Ok((res, len))
+        } else {
+            let (_, len) = var.dummy_assign_with_duplication(
+                self.row,
+                self.linear_coord,
+                values,
+                true,
+                &mut self.assigned_constants,
+            )?;
+            Ok((values.clone(), len))
+        }
+    }
+
     /// Enable a selector
     pub fn enable(&mut self, selector: Option<&Selector>, offset: usize) -> Result<(), Error> {
         match &self.region {
@@ -845,6 +903,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     /// Increment the offset by 1
     pub fn next(&mut self) {
         self.linear_coord += 1;
+        //
+        //
         if self.linear_coord % self.num_inner_cols == 0 {
             self.row += 1;
         }

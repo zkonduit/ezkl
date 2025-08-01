@@ -2,38 +2,58 @@ use std::collections::HashMap;
 
 use crate::circuit::{chip::einsum::contraction_planner, CircuitError};
 
+///
 #[derive(Debug, Clone)]
 pub struct EinsumAnalysis {
+    /// max size of input tensors
     pub max_input_size: usize,
+    /// max size of output tensors
     pub max_output_size: usize,
-    pub max_inputs: usize,
-    pub max_output_axes: usize,
+    /// max number of input tensors
+    pub max_num_inputs: usize,
+    /// max number of output axes
+    pub max_num_output_axes: usize,
+    ///
     pub max_contraction_depth: usize,
+    ///
     pub universal_gate_size: usize,
+    ///
     pub total_challenge_columns: usize,
+    ///
     pub longest_challenge_vector: usize,
 }
 
+///
 #[derive(Debug, Clone)]
 pub struct SingleEquationAnalysis {
+    ///
     pub equation: String,
+    ///
     pub num_inputs: usize,
+    ///
     pub max_input_size: usize,
+    ///
     pub output_size: usize,
+    ///
     pub output_axes: usize,
+    ///
     pub contraction_depth: usize,
+    ///
     pub common_indices: Vec<char>,
+    ///
     pub output_indices: Vec<char>,
+    ///
     pub longest_challenge_vector: usize,
 }
 
+///
 pub fn analyze_einsum_usage(
     equations: &HashMap<String, HashMap<char, usize>>,
 ) -> Result<EinsumAnalysis, CircuitError> {
-    let mut max_inputs = 0;
+    let mut max_num_inputs = 0;
     let mut max_input_size = 0;
     let mut max_output_size = 0;
-    let mut max_output_axes = 0;
+    let mut max_num_output_axes = 0;
     let mut max_contraction_depth = 0;
     let mut longest_challenge_vector = 0;
 
@@ -42,8 +62,8 @@ pub fn analyze_einsum_usage(
         max_input_size = max_input_size.max(analysis.max_input_size);
         longest_challenge_vector = longest_challenge_vector.max(analysis.longest_challenge_vector);
         max_output_size = max_output_size.max(analysis.output_size);
-        max_inputs = max_inputs.max(analysis.num_inputs);
-        max_output_axes = max_output_axes.max(analysis.output_axes);
+        max_num_inputs = max_num_inputs.max(analysis.num_inputs);
+        max_num_output_axes = max_num_output_axes.max(analysis.output_axes);
         max_contraction_depth = max_contraction_depth.max(analysis.contraction_depth);
     }
 
@@ -51,14 +71,15 @@ pub fn analyze_einsum_usage(
         max_input_size,
         longest_challenge_vector,
         max_output_size,
-        max_inputs,
-        max_output_axes,
+        max_num_inputs,
+        max_num_output_axes,
         max_contraction_depth,
-        universal_gate_size: max_inputs + max_output_axes, // For padding with zeros
-        total_challenge_columns: max_output_axes,
+        universal_gate_size: max_num_inputs + max_num_output_axes, // For padding with zeros
+        total_challenge_columns: max_num_output_axes,
     })
 }
 
+///
 pub fn analyze_single_equation(
     equation: &str,
     input_axes_to_dim: &HashMap<char, usize>,

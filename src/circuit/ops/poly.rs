@@ -240,9 +240,7 @@ impl<
             }
             PolyOp::Neg => layouts::neg(config, region, values[..].try_into()?)?,
             PolyOp::Iff => layouts::iff(config, region, values[..].try_into()?)?,
-            PolyOp::Einsum {
-                equation,
-            } => layouts::einsum(config, region, values, equation)?,
+            PolyOp::Einsum { equation } => layouts::einsum(config, region, values, equation)?,
             PolyOp::Sum { axes } => {
                 layouts::sum_axes(config, region, values[..].try_into()?, axes)?
             }

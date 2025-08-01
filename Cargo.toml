@@ -287,11 +287,14 @@ reusable-verifier = []
 [patch.crates-io]
 uniffi_testing = { git = "https://github.com/ElusAegis/uniffi-rs", branch = "feat/testing-feature-build-fix" }
 
-[profile.release]
+[profile.bench]
+opt-level = 0
+
+# [profile.release]
 # debug = true
-rustflags = ["-C", "relocation-model=pic"]
-lto = "fat"
-codegen-units = 1
+# rustflags = ["-C", "relocation-model=pic"]
+# lto = "fat"
+# codegen-units = 1
 # panic = "abort"
 
 

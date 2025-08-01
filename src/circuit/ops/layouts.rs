@@ -601,69 +601,6 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     Ok(last_elem)
 }
 
-/// Dot product of more than two tensors
-pub fn multi_dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
-    config: &BaseConfig<F>,
-    region: &mut RegionCtx<F>,
-    values: &[&ValTensor<F>],
-) -> Result<ValTensor<F>, CircuitError> {
-    if !values.iter().all(|value| value.len() == values[0].len()) {
-        return Err(TensorError::DimMismatch("dot".to_string()).into());
-    }
-
-    region.flush()?;
-    // time this entire function run
-    let global_start = instant::Instant::now();
-
-    let mut values: Vec<ValTensor<F>> = values.iter().copied().cloned().collect();
-
-    let mut inputs = vec![];
-    let block_width = config.custom_gates.output.num_inner_cols();
-
-    let mut assigned_len = 0;
-    for (i, input) in values.iter_mut().enumerate() {
-        input.pad_to_zero_rem(block_width, ValType::Constant(F::ZERO))?;
-        let inp = {
-            let (res, len) = region
-                .assign_with_duplication_unconstrained(&config.custom_gates.inputs[i], input)?;
-            assigned_len = len;
-            res.get_inner()?
-        };
-        inputs.push(inp);
-    }
-
-    let mut intermediate = pairwise(
-        config,
-        region,
-        &[&inputs[0].clone().into(), &inputs[1].clone().into()],
-        BaseOp::Mult,
-    )?;
-    if inputs.len() > 2 {
-        for input in inputs.iter().skip(2) {
-            intermediate = pairwise(
-                config,
-                region,
-                &[&intermediate, &input.clone().into()],
-                BaseOp::Mult,
-            )?;
-        }
-    }
-
-    // Sum the final tensor
-    let accumulated_dot = sum(config, region, &[&intermediate])?;
-
-    let last_elem = accumulated_dot.last()?;
-
-    region.increment(assigned_len);
-
-    // last element is the result
-
-    let elapsed = global_start.elapsed();
-    trace!("multi_dot layout took: {:?}, row {}", elapsed, region.row());
-    trace!("----------------------------");
-    Ok(last_elem)
-}
-
 /// Computes the Einstein summation (einsum) of a set of tensors.
 ///
 /// This powerful function implements generalized tensor contractions using Einstein

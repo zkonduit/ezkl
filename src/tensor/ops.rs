@@ -2599,7 +2599,6 @@ pub mod accumulated {
             .into_iter()
             .map(|dim| 0..dim)
             .multi_cartesian_product();
-        // ik,kj->ij
         let mut output_entries_indices_next = output_entries_indices.next();
         loop {
             // Is this safe to unwrap?
