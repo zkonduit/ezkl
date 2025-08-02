@@ -21,7 +21,7 @@ halo2curves = { git = "https://github.com/privacy-scaling-explorations/halo2curv
     "derive_serde",
 ] }
 halo2_proofs = { git = "https://github.com/zkonduit/halo2", package = "halo2_proofs", branch= "ac/conditional-compilation-icicle2", features = [
-    "circuit-params",
+    "circuit-params", "mv-lookup"
 ] }
 rand = { version = "0.8", default-features = false }
 itertools = { version = "0.10.3", default-features = false }
@@ -33,10 +33,10 @@ thiserror = { version = "1.0.38", default-features = false }
 hex = { version = "0.4.3", default-features = false }
 halo2_wrong_ecc = { git = "https://github.com/zkonduit/halo2wrong", branch = "ac/chunked-mv-lookup", package = "ecc" }
 snark-verifier = { git = "https://github.com/zkonduit/snark-verifier", branch = "ac/chunked-mv-lookup", features = [
-    "derive_serde",
+    "derive_serde", "mv-lookup"
 ] }
 halo2_solidity_verifier = { git = "https://github.com/zkonduit/ezkl-verifier", branch = "main", optional = true, features = [
-    "evm",
+    "evm", "mv-lookup",
 ] }
 maybe-rayon = { version = "0.1.1", default-features = false }
 bincode = { version = "1.3.3", default-features = false }
@@ -228,7 +228,8 @@ required-features = ["python-bindings"]
 [features]
 web = ["wasm-bindgen-rayon"]
 default = [
-    "eth-mv-lookup",
+    "eth",
+    "dep:halo2_solidity_verifier",
     "ezkl",
     "precompute-coset",
     "no-banner",
@@ -242,7 +243,7 @@ universal-bindings = [
     "mv-lookup",
     "precompute-coset",
     "parallel-poly-read",
-    "solidity-verifier-mv-lookup",
+    "dep:halo2_solidity_verifier"
 ]
 logging = ["dep:colored", "dep:env_logger", "dep:chrono"]
 ios-bindings = ["universal-bindings"]
@@ -268,10 +269,6 @@ ezkl = [
     "logging",
 ]
 eth = ["dep:alloy", "dep:foundry-compilers", "dep:ethabi"]
-solidity-verifier = ["dep:halo2_solidity_verifier"]
-solidity-verifier-mv-lookup = ["halo2_solidity_verifier/mv-lookup"]
-eth-mv-lookup = ["solidity-verifier-mv-lookup", "mv-lookup", "eth"]
-eth-original-lookup = ["eth", "solidity-verifier"]
 parallel-poly-read = [
     "halo2_proofs/circuit-params",
     "halo2_proofs/parallel-poly-read",
@@ -293,12 +290,12 @@ reusable-verifier = []
 
 [patch.'https://github.com/zkonduit/halo2']
 halo2_proofs = { git = "https://github.com/zkonduit/halo2#c64c535e6e12c875cebddf8c7b4e794a514c3f4b", package = "halo2_proofs", branch= "ac/conditional-compilation-icicle2", features = [
-    "circuit-params",
+    "circuit-params", "mv-lookup"
 ] }
 
 [patch.'https://github.com/zkonduit/halo2#f441c920be45f8f05d2c06a173d82e8885a5ed4d']
 halo2_proofs = { git = "https://github.com/zkonduit/halo2#c64c535e6e12c875cebddf8c7b4e794a514c3f4b", package = "halo2_proofs", branch= "ac/conditional-compilation-icicle2", features = [
-    "circuit-params",
+    "circuit-params", "mv-lookup"
 ] }
 
 
