@@ -16,8 +16,6 @@ pub struct EinsumAnalysis {
     ///
     pub max_contraction_depth: usize,
     ///
-    pub universal_gate_size: usize,
-    ///
     pub total_challenge_columns: usize,
     ///
     pub longest_challenge_vector: usize,
@@ -74,7 +72,6 @@ pub fn analyze_einsum_usage(
         max_num_inputs,
         max_num_output_axes,
         max_contraction_depth,
-        universal_gate_size: max_num_inputs + max_num_output_axes, // For padding with zeros
         total_challenge_columns: max_num_output_axes,
     })
 }
