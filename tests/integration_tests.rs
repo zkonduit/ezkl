@@ -2275,16 +2275,6 @@ mod native_tests {
         // not macos-metal and not icicle
         #[cfg(all(not(feature = "gpu-accelerated"), not(feature = "macos-metal")))]
         let args = ["build", "--profile=test-runs", "--bin", "ezkl"];
-        #[cfg(feature = "eth-original-lookup")]
-        let args = [
-            "build",
-            "--profile=test-runs",
-            "--bin",
-            "ezkl",
-            "--no-default-features",
-            "--features",
-            "ezkl,solidity-verifier,eth",
-        ];
         #[cfg(feature = "reusable-verifier")]
         let args = [
             "build",
