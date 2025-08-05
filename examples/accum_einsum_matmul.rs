@@ -1,10 +1,9 @@
 use ezkl::circuit::einsum::analysis::analyze_einsum_usage;
-use ezkl::circuit::einsum::analysis::analyze_single_equation;
 use ezkl::circuit::poly::PolyOp;
 use ezkl::circuit::*;
-use ezkl::pfsys::{create_proof_circuit, verify_proof_circuit};
 use ezkl::pfsys::TranscriptType;
 use ezkl::pfsys::{create_keys, srs::gen_srs};
+use ezkl::pfsys::{create_proof_circuit, verify_proof_circuit};
 use ezkl::tensor::*;
 use halo2_proofs::circuit::floor_planner::V1;
 use halo2_proofs::poly::commitment::Params;
@@ -79,30 +78,13 @@ impl<F: PrimeField + TensorType + PartialOrd> Einsum<F> {
         &self,
         config: &BaseConfig<F>,
         layouter: impl Layouter<F>,
-    ) -> Result<Vec<ValTensor<F>>, Error> {
-        let challenges: Vec<Value<F>> = config
+    ) -> Result<Vec<Value<F>>, Error> {
+        Ok(config
             .einsums
             .challenges
             .iter()
             .map(|c| layouter.get_challenge(*c))
-            .collect();
-        let analysis = analyze_single_equation(&self.equation, &self.input_axes_to_dims).unwrap();
-        let powers = analysis
-            .output_indices
-            .iter()
-            .map(|c| *self.input_axes_to_dims.get(c).unwrap());
-
-        Ok(challenges
-            .iter()
-            .zip(powers)
-            .map(|(challenge, power)| {
-                let powers_of_challenge = (0..power).scan(Value::known(F::ONE), |state, _| {
-                    *state = *state * challenge;
-                    Some(*state)
-                });
-                ValTensor::from(Tensor::from(powers_of_challenge))
-            })
-            .collect_vec())
+            .collect())
     }
 }
 
@@ -116,7 +98,6 @@ impl Circuit<Fr> for MyCircuit<Fr> {
     }
 
     fn configure_with_params(cs: &mut ConstraintSystem<Fr>, params: Self::Params) -> Self::Config {
-        println!("Hi");
         let len = unsafe { LEN };
 
         let a = VarTensor::new_advice(cs, K, 1, len);
@@ -211,8 +192,8 @@ fn runmatmul() {
         einsum,
     };
 
-    let pk = create_keys::<KZGCommitmentScheme<Bn256>, MyCircuit<Fr>>(&circuit, &params, true)
-        .unwrap();
+    let pk =
+        create_keys::<KZGCommitmentScheme<Bn256>, MyCircuit<Fr>>(&circuit, &params, true).unwrap();
 
     let prover = create_proof_circuit::<
         KZGCommitmentScheme<_>,
@@ -240,17 +221,12 @@ fn runmatmul() {
     let params = params.verifier_params();
     verify_proof_circuit::<
         VerifierSHPLONK<'_, Bn256>,
-                    KZGCommitmentScheme<Bn256>,
-                    SingleStrategy<_>,
-                    _,
+        KZGCommitmentScheme<Bn256>,
+        SingleStrategy<_>,
+        _,
         EvmTranscript<_, _, _, _>,
-    >(
-        &checkable_pf,
-        params,
-        pk.get_vk(),
-        strategy,
-        params.n(),
-    ).unwrap();
+    >(&checkable_pf, params, pk.get_vk(), strategy, params.n())
+    .unwrap();
 }
 
 pub fn main() {

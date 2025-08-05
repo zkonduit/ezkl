@@ -565,7 +565,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         &config.check_mode,
     )?;
 
-    // input #0                                  |  input #1            | output              | DI Selectors | D Selectors  
+    // input #0                                  |  input #1            | output              | DI Selectors | D Selectors
     //   block 0           | block 1  | block 2                  |    block 0           |    block 0          |
     // [Col #0 ... Col #N] |                   | [Col #0 ... Col #N]  | [Col #0 ... Col #N] |              |
     //    [xx]                                 |     [xx]             |     [xx]            | 1            | 0

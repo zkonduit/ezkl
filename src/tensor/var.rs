@@ -294,9 +294,7 @@ impl VarTensor {
                 col_size,
                 num_inner_cols,
                 ..
-            } => {
-                *col_size * num_inner_cols
-            },
+            } => *col_size * num_inner_cols,
             _ => 0,
         }
     }
@@ -708,6 +706,7 @@ impl VarTensor {
             ValTensor::Value { inner: v, dims, .. } => {
                 let duplication_freq = self.col_size();
                 let num_repeats = 1;
+                // Question: shouldn't this be the row number inside a inner block
                 let duplication_offset = row;
 
                 // duplicates every nth element to adjust for column overflow

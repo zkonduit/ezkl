@@ -1,6 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use ezkl::circuit::einsum::analysis::analyze_einsum_usage;
-use ezkl::circuit::einsum::analysis::analyze_single_equation;
 use ezkl::circuit::poly::PolyOp;
 use ezkl::circuit::*;
 use ezkl::pfsys::create_proof_circuit;
@@ -14,7 +13,7 @@ use halo2_proofs::poly::kzg::multiopen::VerifierSHPLONK;
 use halo2_proofs::poly::kzg::strategy::SingleStrategy;
 use halo2_proofs::{
     arithmetic::Field,
-    circuit::{Layouter, SimpleFloorPlanner, Value},
+    circuit::{Layouter, Value},
     plonk::{Circuit, ConstraintSystem, Error},
 };
 use halo2curves::bn256::{Bn256, Fr};
@@ -78,30 +77,13 @@ impl<F: PrimeField + TensorType + PartialOrd> Einsum<F> {
         &self,
         config: &BaseConfig<F>,
         layouter: impl Layouter<F>,
-    ) -> Result<Vec<ValTensor<F>>, Error> {
-        let challenges: Vec<Value<F>> = config
+    ) -> Result<Vec<Value<F>>, Error> {
+        Ok(config
             .einsums
             .challenges
             .iter()
             .map(|c| layouter.get_challenge(*c))
-            .collect();
-        let analysis = analyze_single_equation(&self.equation, &self.input_axes_to_dims).unwrap();
-        let powers = analysis
-            .output_indices
-            .iter()
-            .map(|c| *self.input_axes_to_dims.get(c).unwrap());
-
-        Ok(challenges
-            .iter()
-            .zip(powers)
-            .map(|(challenge, power)| {
-                let powers_of_challenge = (0..power).scan(Value::known(F::ONE), |state, _| {
-                    *state = *state * challenge;
-                    Some(*state)
-                });
-                ValTensor::from(Tensor::from(powers_of_challenge))
-            })
-            .collect_vec())
+            .collect())
     }
 }
 
@@ -196,7 +178,7 @@ fn runmatmul(c: &mut Criterion) {
     let params = gen_srs::<KZGCommitmentScheme<_>>(17);
     // for &len in [4, 32].iter() {
     for &len in [2].iter() {
-            unsafe {
+        unsafe {
             LEN = len;
         };
 
