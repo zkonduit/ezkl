@@ -175,9 +175,8 @@ impl Circuit<Fr> for MyCircuit<Fr> {
 
 fn runmatmul(c: &mut Criterion) {
     let mut group = c.benchmark_group("accum_einsum_matmul");
-    let params = gen_srs::<KZGCommitmentScheme<_>>(17);
-    // for &len in [4, 32].iter() {
-    for &len in [2].iter() {
+    let params = gen_srs::<KZGCommitmentScheme<_>>(14);
+    for &len in [4, 32].iter() {
         unsafe {
             LEN = len;
         };
