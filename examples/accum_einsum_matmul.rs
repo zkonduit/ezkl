@@ -1,20 +1,21 @@
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use ezkl::circuit::einsum::analysis::analyze_einsum_usage;
 use ezkl::circuit::einsum::analysis::analyze_single_equation;
 use ezkl::circuit::poly::PolyOp;
 use ezkl::circuit::*;
-use ezkl::pfsys::create_proof_circuit;
+use ezkl::pfsys::{create_proof_circuit, verify_proof_circuit};
 use ezkl::pfsys::TranscriptType;
 use ezkl::pfsys::{create_keys, srs::gen_srs};
 use ezkl::tensor::*;
 use halo2_proofs::circuit::floor_planner::V1;
+use halo2_proofs::poly::commitment::Params;
+use halo2_proofs::poly::commitment::ParamsProver;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
 use halo2_proofs::poly::kzg::multiopen::ProverSHPLONK;
 use halo2_proofs::poly::kzg::multiopen::VerifierSHPLONK;
 use halo2_proofs::poly::kzg::strategy::SingleStrategy;
 use halo2_proofs::{
     arithmetic::Field,
-    circuit::{Layouter, SimpleFloorPlanner, Value},
+    circuit::{Layouter, Value},
     plonk::{Circuit, ConstraintSystem, Error},
 };
 use halo2curves::bn256::{Bn256, Fr};
@@ -26,7 +27,7 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 
 static mut LEN: usize = 4;
-const K: usize = 16;
+const K: usize = 8;
 
 #[derive(Clone)]
 struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
@@ -115,6 +116,7 @@ impl Circuit<Fr> for MyCircuit<Fr> {
     }
 
     fn configure_with_params(cs: &mut ConstraintSystem<Fr>, params: Self::Params) -> Self::Config {
+        println!("Hi");
         let len = unsafe { LEN };
 
         let a = VarTensor::new_advice(cs, K, 1, len);
@@ -191,73 +193,66 @@ impl Circuit<Fr> for MyCircuit<Fr> {
     }
 }
 
-fn runmatmul(c: &mut Criterion) {
-    let mut group = c.benchmark_group("accum_einsum_matmul");
-    let params = gen_srs::<KZGCommitmentScheme<_>>(17);
-    // for &len in [4, 32].iter() {
-    for &len in [2].iter() {
-            unsafe {
-            LEN = len;
-        };
+fn runmatmul() {
+    let params = gen_srs::<KZGCommitmentScheme<_>>(10);
+    let len = 10;
 
-        let mut a = Tensor::from((0..len * len).map(|_| Value::known(Fr::random(OsRng))));
-        a.reshape(&[len, len]).unwrap();
+    let mut a = Tensor::from((0..len * len).map(|_| Value::known(Fr::random(OsRng))));
+    a.reshape(&[len, len]).unwrap();
 
-        // parameters
-        let mut b = Tensor::from((0..len * len).map(|_| Value::known(Fr::random(OsRng))));
-        b.reshape(&[len, len]).unwrap();
+    // parameters
+    let mut b = Tensor::from((0..len * len).map(|_| Value::known(Fr::random(OsRng))));
+    b.reshape(&[len, len]).unwrap();
 
-        let einsum = Einsum::<Fr>::new("ij,jk->ik", &[&a, &b]).unwrap();
+    let einsum = Einsum::<Fr>::new("ij,jk->ik", &[&a, &b]).unwrap();
 
-        let circuit = MyCircuit {
-            inputs: [ValTensor::from(a), ValTensor::from(b)],
-            einsum,
-        };
+    let circuit = MyCircuit {
+        inputs: [ValTensor::from(a), ValTensor::from(b)],
+        einsum,
+    };
 
-        group.throughput(Throughput::Elements(len as u64));
-        group.bench_with_input(BenchmarkId::new("pk", len), &len, |b, &_| {
-            b.iter(|| {
-                create_keys::<KZGCommitmentScheme<Bn256>, MyCircuit<Fr>>(&circuit, &params, true)
-                    .unwrap();
-            });
-        });
+    let pk = create_keys::<KZGCommitmentScheme<Bn256>, MyCircuit<Fr>>(&circuit, &params, true)
+        .unwrap();
 
-        let pk = create_keys::<KZGCommitmentScheme<Bn256>, MyCircuit<Fr>>(&circuit, &params, true)
-            .unwrap();
+    let prover = create_proof_circuit::<
+        KZGCommitmentScheme<_>,
+        MyCircuit<Fr>,
+        ProverSHPLONK<_>,
+        VerifierSHPLONK<_>,
+        SingleStrategy<_>,
+        _,
+        EvmTranscript<_, _, _, _>,
+        EvmTranscript<_, _, _, _>,
+    >(
+        circuit.clone(),
+        vec![],
+        &params,
+        &pk,
+        CheckMode::UNSAFE,
+        ezkl::Commitments::KZG,
+        TranscriptType::EVM,
+        None,
+        None,
+    );
+    let strategy = SingleStrategy::new(&params);
 
-        group.throughput(Throughput::Elements(len as u64));
-        group.bench_with_input(BenchmarkId::new("prove", len), &len, |b, &_| {
-            b.iter(|| {
-                let prover = create_proof_circuit::<
-                    KZGCommitmentScheme<_>,
-                    MyCircuit<Fr>,
-                    ProverSHPLONK<_>,
-                    VerifierSHPLONK<_>,
+    let checkable_pf = prover.unwrap();
+    let params = params.verifier_params();
+    verify_proof_circuit::<
+        VerifierSHPLONK<'_, Bn256>,
+                    KZGCommitmentScheme<Bn256>,
                     SingleStrategy<_>,
                     _,
-                    EvmTranscript<_, _, _, _>,
-                    EvmTranscript<_, _, _, _>,
-                >(
-                    circuit.clone(),
-                    vec![],
-                    &params,
-                    &pk,
-                    CheckMode::UNSAFE,
-                    ezkl::Commitments::KZG,
-                    TranscriptType::EVM,
-                    None,
-                    None,
-                );
-                prover.unwrap();
-            });
-        });
-    }
-    group.finish();
+        EvmTranscript<_, _, _, _>,
+    >(
+        &checkable_pf,
+        params,
+        pk.get_vk(),
+        strategy,
+        params.n(),
+    ).unwrap();
 }
 
-criterion_group! {
-  name = benches;
-  config = Criterion::default().with_plots().sample_size(10);
-  targets = runmatmul
+pub fn main() {
+    runmatmul()
 }
-criterion_main!(benches);

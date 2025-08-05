@@ -421,8 +421,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
             },
             static_lookups: StaticLookups::default(),
             dynamic_lookups: DynamicLookups::default(),
-            // FIXME
-            einsums: einsum::Einsums::<F>::dummy(0, 0),
+            einsums: einsum::Einsums::<F>::default(),
             shuffles: Shuffles::default(),
             range_checks: RangeChecks::default(),
             shared_table_inputs: vec![],

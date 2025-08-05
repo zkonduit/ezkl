@@ -149,6 +149,65 @@ fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     Ok(last_elem)
 }
 
+pub fn prod<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+    config: &EinsumOpConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[&ValTensor<F>; 1],
+) -> Result<ValTensor<F>, CircuitError> {
+    region.flush()?;
+    let block_width = config.output.num_inner_cols();
+    let assigned_len: usize;
+    let input = {
+        let mut input = values[0].clone();
+        input.pad_to_zero_rem(block_width, ValType::Constant(F::ONE))?;
+        let (res, len) =
+            region.assign_with_duplication_unconstrained(&config.inputs[1], &input)?;
+        assigned_len = len;
+        res.get_inner()?
+    };
+
+    // Now we can assign the dot product
+    let accumulated_prod = accumulated::prod(&input, block_width)?;
+
+    let (output, output_assigned_len) = region.assign_with_duplication_constrained(
+        &config.output,
+        &accumulated_prod.into(),
+        &crate::circuit::CheckMode::UNSAFE,
+    )?;
+
+    // enable the selectors
+    if !region.is_dummy() {
+        (0..output_assigned_len)
+            .map(|i| {
+                let (x, _, z) = config
+                    .output
+                    .cartesian_coord(region.linear_coord() + i * block_width);
+                // skip over duplicates at start of column
+                if z == 0 && i > 0 {
+                    return Ok(());
+                }
+                let selector = if i == 0 {
+                    config
+                        .selectors
+                        .get(&(BaseOp::CumProdInit, x, 0))
+                } else {
+                    config.selectors.get(&(BaseOp::CumProd, x, 0))
+                };
+
+                region.enable(selector, z)?;
+                Ok(())
+            })
+            .collect::<Result<Vec<_>, CircuitError>>()?;
+    }
+
+    let last_elem = output.last()?;
+
+    region.increment(assigned_len);
+
+    // last element is the result
+    Ok(last_elem)
+}
+
 pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &EinsumOpConfig<F>,
     region: &mut RegionCtx<F>,

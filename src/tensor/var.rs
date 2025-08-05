@@ -294,7 +294,9 @@ impl VarTensor {
                 col_size,
                 num_inner_cols,
                 ..
-            } => *col_size * num_inner_cols,
+            } => {
+                *col_size * num_inner_cols
+            },
             _ => 0,
         }
     }

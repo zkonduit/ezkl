@@ -1,13 +1,12 @@
 use crate::circuit::base::BaseOp;
 use crate::circuit::chip::einsum::analysis::{analyze_single_equation, EinsumAnalysis};
-use crate::circuit::layouts::prod;
 use crate::circuit::region::RegionCtx;
-use crate::circuit::{BaseConfig, CircuitError};
+use crate::circuit::CircuitError;
 use crate::tensor::{Tensor, TensorError, TensorType, ValTensor, VarTensor};
 use halo2_proofs::plonk::{Challenge, ConstraintSystem, Constraints, Expression, FirstPhase, Selector};
 use halo2curves::ff::PrimeField;
 use itertools::Itertools;
-use layouts::{dot, multi_dot};
+use layouts::{dot, multi_dot, prod};
 use std::collections::{BTreeMap, HashMap};
 use std::marker::PhantomData;
 
@@ -59,8 +58,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         for _ in 0..analysis.max_num_inputs {
             let max_input_size = analysis.max_input_size;
             // FIXME calculate the no. of rows needed
-            let k = max_input_size.ilog2() + 1;
-            let input_tensor = VarTensor::new_advice(meta, k as usize, 1, max_input_size);
+            let k = max_input_size.ilog2() + 4;
+            // FIXME should this be in second phase?
+            let input_tensor = VarTensor::new_advice_in_second_phase(meta, k as usize, 1, max_input_size);
             inputs.push(input_tensor);
         }
 
@@ -94,9 +94,10 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
 
         let mut output_contractions = vec![];
         for _ in 0..analysis.max_num_output_axes {
-            // FIXME
+            // FIXME +4 is arbitrary
             let num_inner_cols = 1;
-            let logrows = analysis.max_output_size.ilog2() + 1;
+            // let logrows = analysis.max_output_size.ilog2() + 1;
+            let logrows = analysis.max_input_size.ilog2() + 4;
             let capacity = analysis.max_output_size;
             output_contractions.push(EinsumOpConfig::new(
                 meta,
@@ -108,9 +109,10 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
 
         let mut input_contractions = vec![];
         for _ in 0..analysis.max_contraction_depth {
-            // FIXME
+            // FIXME +4 is arbitrary
             let num_inner_cols = 1;
-            let logrows = analysis.max_input_size.ilog2() + 1;
+            // let logrows = analysis.max_input_size.ilog2() + 1;
+            let logrows = analysis.max_input_size.ilog2() + 4;
             let capacity = analysis.max_input_size;
             input_contractions.push(EinsumOpConfig::new(
                 meta,
@@ -136,7 +138,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
     ///
     pub fn assign_with_padding(
         &self,
-        base_config: &BaseConfig<F>,
         region: &mut RegionCtx<F>,
         input_tensors: &[&ValTensor<F>],
         output_tensor: &ValTensor<F>,
@@ -203,6 +204,10 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         );
         let mut tensors = input_tensors;
         tensors.extend(challenge_vectors);
+
+        for (var, tensor) in self.inputs.iter().zip(tensors.iter_mut()) {
+            *tensor = region.assign(var, &tensor)?;
+        }
 
         for (contraction, config) in reordered_input_contractions.iter().zip(self.input_contractions.iter()) {
             // region_ctx.set_offset(0);
@@ -277,13 +282,12 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         }
         tensors.retain(|tensor| tensor.is_singleton());
 
-        // FIXME constrain this to be a product
-        let tensors: ValTensor<F> = tensors
+        let scalars: ValTensor<F> = tensors
             .into_iter()
             .map(|t| t.get_inner_tensor().unwrap().get_scalar())
             .collect_vec()
             .into();
-        let squashed_input = prod(base_config, region, &[&tensors])?;
+        let squashed_input = prod(&self.output_contractions.last().unwrap(), region, &[&scalars])?;
 
         region.constrain_equal(&squashed_input, &squashed_output)
     }
@@ -403,6 +407,8 @@ impl<F: PrimeField + TensorType + PartialOrd> EinsumOpConfig<F> {
             }
         }
         for i in 0..output.num_blocks() {
+            selectors.insert((BaseOp::CumProd, i, 0), meta.selector());
+            selectors.insert((BaseOp::CumProdInit, i, 0), meta.selector());
             selectors.insert((BaseOp::DotInit, i, 0), meta.selector());
             selectors.insert((BaseOp::Dot, i, 0), meta.selector());
             selectors.insert((BaseOp::Sum, i, 0), meta.selector());
@@ -428,10 +434,8 @@ impl<F: PrimeField + TensorType + PartialOrd> EinsumOpConfig<F> {
                                 .expect("non accum: input query failed")[0]
                                 .clone()
                         }
-        
                         // Get output expressions for each input channel
                         let (rotation_offset, rng) = base_op.query_offset_rng();
-        
                         let constraints = {
                             let expected_output: Tensor<Expression<F>> = output
                                 .query_rng(meta, *block_idx, *inner_col_idx, rotation_offset, rng)
@@ -440,7 +444,6 @@ impl<F: PrimeField + TensorType + PartialOrd> EinsumOpConfig<F> {
                             let res = base_op.nonaccum_f((qis[0].clone(), qis[1].clone()));
                             vec![expected_output[base_op.constraint_idx()].clone() - res]
                         };
-        
                         Constraints::with_selector(selector, constraints)
                     });
                 },
@@ -460,10 +463,8 @@ impl<F: PrimeField + TensorType + PartialOrd> EinsumOpConfig<F> {
                                 .into_iter()
                                 .collect()
                         }
-        
                         // Get output expressions for each input channel
                         let (rotation_offset, rng) = base_op.query_offset_rng();
-        
                         let expected_output: Tensor<Expression<F>> = output
                             .query_rng(meta, *block_idx, 0, rotation_offset, rng)
                             .expect("accum: output query failed");
