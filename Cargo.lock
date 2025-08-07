@@ -7603,8 +7603,3 @@ dependencies = [
  "log",
  "simd-adler32",
 ]
-
-[[patch.unused]]
-name = "halo2_proofs"
-version = "0.3.0"
-source = "git+https://github.com/zkonduit/halo2?rev=4045ea79#4045ea7921f3b5a0a73834aa02aa9e9d6f02ecb8"

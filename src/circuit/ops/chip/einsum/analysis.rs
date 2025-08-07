@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::circuit::{chip::einsum::contraction_planner, CircuitError};
+use crate::circuit::CircuitError;
 
 ///
 #[derive(Debug, Clone)]
@@ -13,10 +13,6 @@ pub struct EinsumAnalysis {
     pub max_num_inputs: usize,
     /// max number of output axes
     pub max_num_output_axes: usize,
-    ///
-    pub max_contraction_depth: usize,
-    ///
-    pub total_challenge_columns: usize,
     ///
     pub longest_challenge_vector: usize,
 }
@@ -33,11 +29,7 @@ pub struct SingleEquationAnalysis {
     ///
     pub output_size: usize,
     ///
-    pub output_axes: usize,
-    ///
-    pub contraction_depth: usize,
-    ///
-    pub common_indices: Vec<char>,
+    pub num_output_axes: usize,
     ///
     pub output_indices: Vec<char>,
     ///
@@ -52,7 +44,6 @@ pub fn analyze_einsum_usage(
     let mut max_input_size = 0;
     let mut max_output_size = 0;
     let mut max_num_output_axes = 0;
-    let mut max_contraction_depth = 0;
     let mut longest_challenge_vector = 0;
 
     for (equation, input_axes_to_dim) in equations.iter() {
@@ -61,8 +52,7 @@ pub fn analyze_einsum_usage(
         longest_challenge_vector = longest_challenge_vector.max(analysis.longest_challenge_vector);
         max_output_size = max_output_size.max(analysis.output_size);
         max_num_inputs = max_num_inputs.max(analysis.num_inputs);
-        max_num_output_axes = max_num_output_axes.max(analysis.output_axes);
-        max_contraction_depth = max_contraction_depth.max(analysis.contraction_depth);
+        max_num_output_axes = max_num_output_axes.max(analysis.num_output_axes);
     }
 
     Ok(EinsumAnalysis {
@@ -71,8 +61,6 @@ pub fn analyze_einsum_usage(
         max_output_size,
         max_num_inputs,
         max_num_output_axes,
-        max_contraction_depth,
-        total_challenge_columns: max_num_output_axes,
     })
 }
 
@@ -117,18 +105,6 @@ pub fn analyze_single_equation(
         .max()
         .unwrap();
 
-    let mut all_indices = std::collections::HashSet::new();
-    let mut common_indices = Vec::new();
-
-    // Find common indices across inputs
-    for input_eq in &input_equations {
-        for c in input_eq.chars() {
-            if !all_indices.insert(c) {
-                common_indices.push(c);
-            }
-        }
-    }
-
     let output_indices: Vec<char> = output_str.chars().collect();
     let output_dims = output_indices
         .iter()
@@ -136,18 +112,13 @@ pub fn analyze_single_equation(
     let output_size = output_dims.clone().product();
     let longest_challenge_vector = *output_dims.max().unwrap();
 
-    // Contraction depth is determined by the number of sequential reductions needed
-    let contraction_depth = contraction_planner::input_contractions(&equation)?.len();
-
     Ok(SingleEquationAnalysis {
         output_size,
         longest_challenge_vector,
         max_input_size,
         equation: equation.to_string(),
         num_inputs: input_equations.len(),
-        output_axes: output_indices.len(),
-        contraction_depth,
-        common_indices,
+        num_output_axes: output_indices.len(),
         output_indices,
     })
 }

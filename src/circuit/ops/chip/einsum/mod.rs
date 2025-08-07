@@ -23,8 +23,7 @@ mod layouts;
 pub struct Einsums<F: PrimeField + TensorType + PartialOrd> {
     /// challenges
     pub challenges: Vec<Challenge>,
-    /// powers of challenges
-    pub challenge_columns: Vec<VarTensor>,
+    /// custom gate to constrain tensor contractions
     custom_gate: EinsumOpConfig<F>,
 }
 
@@ -40,7 +39,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         };
         Self {
             challenges: vec![],
-            challenge_columns: vec![],
             custom_gate: dummy_custom_gate,
         }
     }
@@ -52,17 +50,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         num_inner_cols: usize,
         logrows: usize,
     ) -> Self {
-        let mut challenge_columns = vec![];
-        for _ in 0..analysis.max_num_output_axes {
-            let challenge_tensor = VarTensor::new_advice_in_second_phase(
-                meta,
-                logrows,
-                num_inner_cols,
-                analysis.longest_challenge_vector,
-            );
-            challenge_columns.push(challenge_tensor);
-        }
-
         let challenges: Vec<_> = (0..analysis.max_num_output_axes)
             .map(|_| meta.challenge_usable_after(FirstPhase))
             .collect();
@@ -72,7 +59,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
 
         Self {
             challenges,
-            challenge_columns,
             custom_gate,
         }
     }
@@ -126,7 +112,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             .challenges()
             .iter()
             .cloned()
-            .take(equation_analysis.output_axes)
+            .take(equation_analysis.num_output_axes)
             .collect();
         let mut challenge_tensors = vec![];
         for (challenge, output_axis) in challenges
@@ -159,10 +145,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         // reorder the contraction of input tensors and contract
         let reordered_input_contractions =
             contraction_planner::input_contractions(&equation).unwrap();
-        assert_eq!(
-            reordered_input_contractions.len(),
-            equation_analysis.contraction_depth,
-        );
         let mut tensors = input_tensors;
         tensors.extend(challenge_tensors);
 
@@ -409,7 +391,8 @@ impl<F: PrimeField + TensorType + PartialOrd> EinsumOpConfig<F> {
                                 .query_rng(meta, *block_idx, *inner_col_idx, rotation_offset, rng)
                                 .expect("non accum: output query failed");
 
-                            let res = base_op.nonaccum_f((qis[*min_phase].clone(), qis[min_phase + 1].clone()));
+                            let res = base_op
+                                .nonaccum_f((qis[*min_phase].clone(), qis[min_phase + 1].clone()));
                             vec![expected_output[base_op.constraint_idx()].clone() - res]
                         };
                         Constraints::with_selector(selector, constraints)

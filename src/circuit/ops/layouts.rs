@@ -565,26 +565,6 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         &config.check_mode,
     )?;
 
-    // input #0                                  |  input #1            | output              | DI Selectors | D Selectors
-    //   block 0           | block 1  | block 2                  |    block 0           |    block 0          |
-    // [Col #0 ... Col #N] |                   | [Col #0 ... Col #N]  | [Col #0 ... Col #N] |              |
-    //    [xx]                                 |     [xx]             |     [xx]            | 1            | 0
-    //    [xx]                                   |     [xx]             |     [xx]            | 0            | 1
-    //   block 1                                 |    block 1           |    block 1          |
-    //    [xx]                                   |     [xx]             |     [xx]            | 0            | 0
-    //                        [xx]                                   |     [xx]             |     [xx]            | 0            | 1
-    //   block 2                                 |    block 2           |    block 2          |
-    //    [xx]                                   |     [xx]             |     [xx]            | 0            | 0
-    //    [xx]                                   |     [xx]             |     [xx]            | 0            | 1
-    //
-    //
-    // assignment rule of values into VarTensor
-    // Assign the values block-by-block.
-    // In each block, assign the values row-by-row
-    // When reach the end of the block, copy the last row of
-    // the block into the first row of next block, and do not enable the gate
-    // in the first row of next block
-
     // enable the selectors
     if !region.is_dummy() {
         (0..output_assigned_len)

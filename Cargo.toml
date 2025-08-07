@@ -285,22 +285,19 @@ reusable-verifier = []
 
 [patch.crates-io]
 uniffi_testing = { git = "https://github.com/ElusAegis/uniffi-rs", branch = "feat/testing-feature-build-fix" }
-# If anything pulls halo2_proofs from crates.io, redirect it to the git commit.
-halo2_proofs = { git = "https://github.com/zkonduit/halo2", rev = "4045ea79" }
 
-# If anything pulls halo2_proofs from the same git repository (possibly with different
-#    branch/rev specs), normalize it to this exact rev.
+# FIXME : temporary replacement of halo2_proofs to work around different phase assignment issue
 [patch."https://github.com/zkonduit/halo2"]
 halo2_proofs = { git = "https://github.com/DoHoonKim8/halo2", branch = "feat/cross-phase-assignment" }
 
 [profile.bench]
 opt-level = 3
 
-# [profile.release]
+[profile.release]
 # debug = true
-# rustflags = ["-C", "relocation-model=pic"]
-# lto = "fat"
-# codegen-units = 1
+rustflags = ["-C", "relocation-model=pic"]
+lto = "fat"
+codegen-units = 1
 # panic = "abort"
 
 

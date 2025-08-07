@@ -938,8 +938,6 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     /// Increment the offset by 1
     pub fn next(&mut self) {
         self.linear_coord += 1;
-        //
-        //
         if self.linear_coord % self.num_inner_cols == 0 {
             self.row += 1;
         }
@@ -967,7 +965,6 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     }
 
     /// flush row to the next row in einsum area
-    /// FIXME : we can have different `num_inner_cols` for einsum area
     pub fn flush_einsum(&mut self) -> Result<(), CircuitError> {
         // increment by the difference between the current linear coord and the next row
         let num_einsum_inner_cols = self.num_einsum_inner_cols();

@@ -1,6 +1,5 @@
 use halo2_proofs::circuit::Value;
 use halo2curves::ff::PrimeField;
-use itertools::Itertools;
 use log::{error, trace};
 
 use crate::{
@@ -308,24 +307,23 @@ pub fn multi_dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     let values: Vec<ValTensor<F>> = values.iter().copied().cloned().collect();
     // do pairwise dot product between intermediate tensor and the next tensor
-    let intermediate = values
-        .iter()
-        .zip(phases)
-        .skip(1)
-        .fold((values[0].clone(), phases[0]), |acc, (input, phase)| {
+    let (intermediate, _) = values
+        .into_iter()
+        .zip(phases.iter().cloned())
+        .reduce(|(intermediate, intermediate_phase), (input, phase)| {
             (
                 pairwise(
                     config,
                     region,
-                    &[&acc.0, input],
+                    &[&intermediate, &input],
                     BaseOp::Mult,
-                    std::cmp::min(acc.1, *phase),
+                    std::cmp::min(intermediate_phase, phase),
                 )
                 .unwrap(),
-                std::cmp::max(acc.1, *phase),
+                std::cmp::max(intermediate_phase, phase),
             )
         })
-        .0;
+        .unwrap();
 
     // Sum the final tensor
     // In current freivalds algorithm, there are no tensor contraction between phase 0 tensors,
