@@ -647,8 +647,8 @@ impl VarTensor {
                     })?;
                 let mut res: ValTensor<F> = {
                     v.enum_map(|coord, k| {
-                        let cell = self
-                            .assign_value(region, offset, k.clone(), coord, constants)?;
+                        let cell =
+                            self.assign_value(region, offset, k.clone(), coord, constants)?;
                         Ok::<_, halo2_proofs::plonk::Error>(cell)
                     })?
                     .into()

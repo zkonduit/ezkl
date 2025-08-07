@@ -23,6 +23,8 @@ mod layouts;
 pub struct Einsums<F: PrimeField + TensorType + PartialOrd> {
     /// challenges
     pub challenges: Vec<Challenge>,
+    ///
+    pub challenge_columns: Vec<VarTensor>,
     /// custom gate to constrain tensor contractions
     custom_gate: EinsumOpConfig<F>,
 }
@@ -39,6 +41,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         };
         Self {
             challenges: vec![],
+            challenge_columns: vec![],
             custom_gate: dummy_custom_gate,
         }
     }
@@ -54,11 +57,23 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             .map(|_| meta.challenge_usable_after(FirstPhase))
             .collect();
 
+        let mut challenge_columns = vec![];
+        for _ in 0..analysis.max_num_output_axes {
+            let challenge_tensor = VarTensor::new_advice_in_second_phase(
+                meta,
+                logrows,
+                num_inner_cols,
+                analysis.longest_challenge_vector,
+            );
+            challenge_columns.push(challenge_tensor);
+        }
+
         let capacity = analysis.max_input_size;
         let custom_gate = EinsumOpConfig::new(meta, num_inner_cols, logrows, capacity);
 
         Self {
             challenges,
+            challenge_columns,
             custom_gate,
         }
     }
@@ -115,18 +130,23 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             .take(equation_analysis.num_output_axes)
             .collect();
         let mut challenge_tensors = vec![];
-        for (challenge, output_axis) in challenges
+        for (idx, (challenge, output_axis)) in challenges
             .into_iter()
             .zip(equation_analysis.output_indices.iter())
+            .enumerate()
         {
             let power = *input_axes_to_dim.get(output_axis).unwrap();
+            let challenge_vec = region.assign_einsum(
+                &self.challenge_columns[idx],
+                &vec![ValType::from(challenge.clone()); power].into(),
+            )?;
+            let challenge_vec_ref = challenge_vec.get_inner_tensor()?;
             let mut challenge_tensor: Vec<ValType<F>> = vec![];
             for pow in 1..=power {
-                let challenge_vec: Vec<ValType<F>> = vec![challenge.clone().into(); pow];
                 let val = prod(
                     &self.custom_gate,
                     region,
-                    &[&ValTensor::from(challenge_vec)],
+                    &[&ValTensor::from(challenge_vec_ref.get_slice(&[0..pow])?)],
                     1,
                 )?
                 .get_inner_tensor()?
