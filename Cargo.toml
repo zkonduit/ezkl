@@ -14,7 +14,6 @@ default-run = "ezkl"
 name = "ezkl"
 crate-type = ["cdylib", "rlib", "staticlib"]
 
-
 [dependencies]
 halo2_gadgets = { git = "https://github.com/zkonduit/halo2" }
 halo2curves = { git = "https://github.com/privacy-scaling-explorations/halo2curves", rev = "b753a832e92d5c86c5c997327a9cf9de86a18851", features = [
@@ -286,9 +285,16 @@ reusable-verifier = []
 
 [patch.crates-io]
 uniffi_testing = { git = "https://github.com/ElusAegis/uniffi-rs", branch = "feat/testing-feature-build-fix" }
+# If anything pulls halo2_proofs from crates.io, redirect it to the git commit.
+halo2_proofs = { git = "https://github.com/zkonduit/halo2", rev = "4045ea79" }
+
+# If anything pulls halo2_proofs from the same git repository (possibly with different
+#    branch/rev specs), normalize it to this exact rev.
+[patch."https://github.com/zkonduit/halo2"]
+halo2_proofs = { git = "https://github.com/DoHoonKim8/halo2", branch = "feat/cross-phase-assignment" }
 
 [profile.bench]
-opt-level = 0
+opt-level = 3
 
 # [profile.release]
 # debug = true

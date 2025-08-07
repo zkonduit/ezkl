@@ -108,7 +108,10 @@ impl Circuit<Fr> for MyCircuit<Fr> {
         let mut equations = HashMap::new();
         equations.insert(params.equation, params.input_axes_to_dims);
         let analysis = analyze_einsum_usage(&equations).unwrap();
-        config.configure_einsums(cs, &analysis).unwrap();
+        let num_inner_cols = 2;
+        config
+            .configure_einsums(cs, &analysis, num_inner_cols, K)
+            .unwrap();
 
         config
     }
@@ -132,7 +135,10 @@ impl Circuit<Fr> for MyCircuit<Fr> {
         let mut equations = HashMap::new();
         equations.insert(default_params.equation, default_params.input_axes_to_dims);
         let analysis = analyze_einsum_usage(&equations).unwrap();
-        config.configure_einsums(cs, &analysis).unwrap();
+        let num_inner_cols = 1;
+        config
+            .configure_einsums(cs, &analysis, num_inner_cols, K)
+            .unwrap();
 
         config
     }

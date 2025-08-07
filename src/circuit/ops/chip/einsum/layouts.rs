@@ -1,4 +1,6 @@
+use halo2_proofs::circuit::Value;
 use halo2curves::ff::PrimeField;
+use itertools::Itertools;
 use log::{error, trace};
 
 use crate::{
@@ -18,7 +20,9 @@ fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     region: &mut RegionCtx<F>,
     values: &[&ValTensor<F>; 2],
     op: BaseOp,
+    min_phase: usize,
 ) -> Result<ValTensor<F>, CircuitError> {
+    assert!(min_phase <= 1);
     let (mut lhs, mut rhs) = (values[0].clone(), values[1].clone());
 
     let broadcasted_shape = get_broadcasted_shape(lhs.dims(), rhs.dims())?;
@@ -35,9 +39,9 @@ fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     let inputs = [lhs, rhs]
         .iter()
-        .enumerate()
-        .map(|(i, input)| {
-            let res = region.assign_einsum(&config.inputs[i], input)?;
+        .zip(config.inputs.iter().skip(min_phase))
+        .map(|(val, var)| {
+            let res = region.assign_einsum(var, val)?;
 
             Ok(res.get_inner()?)
         })
@@ -64,7 +68,7 @@ fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         (0..assigned_len)
             .map(|i| {
                 let (x, y, z) = config.inputs[0].cartesian_coord(region.einsum_col_coord() + i);
-                let selector = config.selectors.get(&(op.clone(), x, y));
+                let selector = config.selectors.get(&(min_phase, op.clone(), x, y));
 
                 region.enable(selector, z)?;
 
@@ -83,10 +87,12 @@ fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &EinsumOpConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[&ValTensor<F>; 1],
+    phase: usize,
 ) -> Result<ValTensor<F>, CircuitError> {
     if values[0].len() == 1 {
         return Ok(values[0].clone());
     }
+    assert!(phase == 0 || phase == 1);
 
     region.flush_einsum()?;
     // time this entire function run
@@ -96,9 +102,12 @@ fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     let assigned_len: usize;
     let input = {
-        input.pad_to_zero_rem(block_width, ValType::Constant(F::ZERO))?;
+        // FIXME : should pad with constant zero but currently this incurs an error
+        // `NotEnoughColumnsForConstants` in halo2 because trying to assign constant
+        // value to advice column, how to workaround this issue?
+        input.pad_to_zero_rem(block_width, ValType::Value(Value::known(F::ZERO)))?;
         let (res, len) =
-            region.assign_einsum_with_duplication_unconstrained(&config.inputs[1], &input)?;
+            region.assign_einsum_with_duplication_unconstrained(&config.inputs[phase], &input)?;
         assigned_len = len;
         res.get_inner()?
     };
@@ -123,9 +132,9 @@ fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
                 continue;
             }
             let selector = if i == 0 {
-                config.selectors.get(&(BaseOp::SumInit, x, 0))
+                config.selectors.get(&(phase, BaseOp::SumInit, x, 0))
             } else {
-                config.selectors.get(&(BaseOp::Sum, x, 0))
+                config.selectors.get(&(phase, BaseOp::Sum, x, 0))
             };
 
             region.enable(selector, z)?;
@@ -144,15 +153,21 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &EinsumOpConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[&ValTensor<F>; 1],
+    phase: usize,
 ) -> Result<ValTensor<F>, CircuitError> {
+    assert!(phase == 0 || phase == 1);
     region.flush_einsum()?;
     let block_width = config.output.num_inner_cols();
     let assigned_len: usize;
     let input = {
         let mut input = values[0].clone();
-        input.pad_to_zero_rem(block_width, ValType::Constant(F::ONE))?;
-        let (res, len) =
-            region.assign_einsum_with_duplication_unconstrained(&config.inputs[1], &input)?;
+        // FIXME : should pad with constant one but currently this incurs an error
+        // `NotEnoughColumnsForConstants` in halo2 because trying to assign constant
+        // value to advice column, how to workaround this issue?
+        input.pad_to_zero_rem(block_width, ValType::Value(Value::known(F::ONE)))?;
+        let (res, len) = region
+            .assign_einsum_with_duplication_unconstrained(&config.inputs[phase], &input)
+            .expect("Failed here!");
         assigned_len = len;
         res.get_inner()?
     };
@@ -178,9 +193,9 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
                     return Ok(());
                 }
                 let selector = if i == 0 {
-                    config.selectors.get(&(BaseOp::CumProdInit, x, 0))
+                    config.selectors.get(&(phase, BaseOp::CumProdInit, x, 0))
                 } else {
-                    config.selectors.get(&(BaseOp::CumProd, x, 0))
+                    config.selectors.get(&(phase, BaseOp::CumProd, x, 0))
                 };
 
                 region.enable(selector, z)?;
@@ -201,7 +216,9 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &EinsumOpConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[&ValTensor<F>; 2],
+    min_phase: usize,
 ) -> Result<ValTensor<F>, CircuitError> {
+    assert!(min_phase <= 1);
     if values[0].len() != values[1].len() {
         return Err(TensorError::DimMismatch("dot".to_string()).into());
     }
@@ -216,11 +233,13 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let block_width = config.output.num_inner_cols();
 
     let mut assigned_len = 0;
-    for (i, input) in values.iter_mut().enumerate() {
-        input.pad_to_zero_rem(block_width, ValType::Constant(F::ZERO))?;
+    for (val, var) in values.iter_mut().zip(config.inputs.iter().skip(min_phase)) {
+        // FIXME : should pad with constant zero but currently this incurs an error
+        // `NotEnoughColumnsForConstants` in halo2 because trying to assign constant
+        // value to advice column, how to workaround this issue?
+        val.pad_to_zero_rem(block_width, ValType::Value(Value::known(F::ZERO)))?;
         let inp = {
-            let (res, len) =
-                region.assign_einsum_with_duplication_unconstrained(&config.inputs[i], input)?;
+            let (res, len) = region.assign_einsum_with_duplication_unconstrained(var, &val)?;
             assigned_len = len;
             res.get_inner()?
         };
@@ -248,9 +267,9 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
                     return Ok(());
                 }
                 let selector = if i == 0 {
-                    config.selectors.get(&(BaseOp::DotInit, x, 0))
+                    config.selectors.get(&(min_phase, BaseOp::DotInit, x, 0))
                 } else {
-                    config.selectors.get(&(BaseOp::Dot, x, 0))
+                    config.selectors.get(&(min_phase, BaseOp::Dot, x, 0))
                 };
                 region.enable(selector, z)?;
 
@@ -276,7 +295,9 @@ pub fn multi_dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &EinsumOpConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[&ValTensor<F>],
+    phases: &[usize],
 ) -> Result<ValTensor<F>, CircuitError> {
+    assert!(phases.iter().all(|phase| *phase == 0 || *phase == 1));
     if !values.iter().all(|value| value.len() == values[0].len()) {
         return Err(TensorError::DimMismatch("dot".to_string()).into());
     }
@@ -285,48 +306,32 @@ pub fn multi_dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     // time this entire function run
     let global_start = instant::Instant::now();
 
-    let mut values: Vec<ValTensor<F>> = values.iter().copied().cloned().collect();
-
-    let mut inputs = vec![];
-    let block_width = config.output.num_inner_cols();
-
-    let mut assigned_len = 0;
-    for (i, input) in values.iter_mut().enumerate() {
-        input.pad_to_zero_rem(block_width, ValType::Constant(F::ZERO))?;
-        let inp = {
-            let (res, len) =
-                region.assign_einsum_with_duplication_unconstrained(&config.inputs[i], input)?;
-            assigned_len = len;
-            res.get_inner()?
-        };
-        inputs.push(inp);
-    }
-
-    let mut intermediate = pairwise(
-        config,
-        region,
-        &[&inputs[0].clone().into(), &inputs[1].clone().into()],
-        BaseOp::Mult,
-    )?;
-    if inputs.len() > 2 {
-        for input in inputs.iter().skip(2) {
-            intermediate = pairwise(
-                config,
-                region,
-                &[&intermediate, &input.clone().into()],
-                BaseOp::Mult,
-            )?;
-        }
-    }
+    let values: Vec<ValTensor<F>> = values.iter().copied().cloned().collect();
+    // do pairwise dot product between intermediate tensor and the next tensor
+    let intermediate = values
+        .iter()
+        .zip(phases)
+        .skip(1)
+        .fold((values[0].clone(), phases[0]), |acc, (input, phase)| {
+            (
+                pairwise(
+                    config,
+                    region,
+                    &[&acc.0, input],
+                    BaseOp::Mult,
+                    std::cmp::min(acc.1, *phase),
+                )
+                .unwrap(),
+                std::cmp::max(acc.1, *phase),
+            )
+        })
+        .0;
 
     // Sum the final tensor
-    let accumulated_dot = sum(config, region, &[&intermediate])?;
-
+    // In current freivalds algorithm, there are no tensor contraction between phase 0 tensors,
+    // so the phase of the resulting tensor is set to 1
+    let accumulated_dot = sum(config, region, &[&intermediate], 1)?;
     let last_elem = accumulated_dot.last()?;
-
-    region.increment_einsum_col_coord(assigned_len);
-
-    // last element is the result
 
     let elapsed = global_start.elapsed();
     trace!("multi_dot layout took: {:?}, row {}", elapsed, region.row());

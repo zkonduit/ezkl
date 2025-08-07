@@ -647,8 +647,9 @@ impl VarTensor {
                     })?;
                 let mut res: ValTensor<F> = {
                     v.enum_map(|coord, k| {
-                        let cell =
-                            self.assign_value(region, offset, k.clone(), coord, constants)?;
+                        let cell = self
+                            .assign_value(region, offset, k.clone(), coord, constants)
+                            .expect("Failed in assign_with_duplication_unconstrained");
                         Ok::<_, halo2_proofs::plonk::Error>(cell)
                     })?
                     .into()
@@ -795,9 +796,11 @@ impl VarTensor {
         let res = match k {
             // Handle direct value assignment
             ValType::Value(v) => match &self {
-                VarTensor::Advice { inner: advices, .. } => {
-                    ValType::PrevAssigned(region.assign_advice(|| "k", advices[x][y], z, || v)?)
-                }
+                VarTensor::Advice { inner: advices, .. } => ValType::PrevAssigned(
+                    region
+                        .assign_advice(|| "k", advices[x][y], z, || v)
+                        .expect("failed in assign_value"),
+                ),
                 _ => {
                     error!("VarTensor was not initialized");
                     return Err(halo2_proofs::plonk::Error::Synthesis);

@@ -91,15 +91,17 @@ pub struct EinsumIndex {
     index: usize,
     col_coord: usize,
     equations: HashSet<String>,
+    num_inner_cols: usize,
 }
 
 impl EinsumIndex {
     /// Create a new einsum index
-    pub fn new(index: usize, col_coord: usize) -> EinsumIndex {
+    pub fn new(index: usize, col_coord: usize, num_inner_cols: usize) -> EinsumIndex {
         EinsumIndex {
             index,
             col_coord,
             equations: HashSet::new(),
+            num_inner_cols,
         }
     }
 
@@ -660,6 +662,16 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         self.einsum_index.equations.clone()
     }
 
+    /// set the number of inner columns used in einsum custom gate
+    pub fn set_num_einsum_inner_cols(&mut self, num_inner_cols: usize) {
+        self.einsum_index.num_inner_cols = num_inner_cols;
+    }
+
+    /// number of inner columns used in einsum custom gate
+    pub fn num_einsum_inner_cols(&self) -> usize {
+        self.einsum_index.num_inner_cols
+    }
+
     /// get used lookups
     pub fn used_lookups(&self) -> HashSet<LookupOp> {
         self.statistics.used_lookups.clone()
@@ -955,14 +967,16 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     }
 
     /// flush row to the next row in einsum area
+    /// FIXME : we can have different `num_inner_cols` for einsum area
     pub fn flush_einsum(&mut self) -> Result<(), CircuitError> {
         // increment by the difference between the current linear coord and the next row
-        let remainder = self.einsum_col_coord() % self.num_inner_cols;
+        let num_einsum_inner_cols = self.num_einsum_inner_cols();
+        let remainder = self.einsum_col_coord() % num_einsum_inner_cols;
         if remainder != 0 {
-            let diff = self.num_inner_cols - remainder;
+            let diff = num_einsum_inner_cols - remainder;
             self.increment_einsum_col_coord(diff);
         }
-        if self.einsum_col_coord() % self.num_inner_cols != 0 {
+        if self.einsum_col_coord() % num_einsum_inner_cols != 0 {
             return Err(CircuitError::FlushError);
         }
         Ok(())

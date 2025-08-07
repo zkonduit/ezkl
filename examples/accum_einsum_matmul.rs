@@ -26,7 +26,7 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 
 static mut LEN: usize = 4;
-const K: usize = 8;
+const K: usize = 13;
 
 #[derive(Clone)]
 struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
@@ -109,7 +109,10 @@ impl Circuit<Fr> for MyCircuit<Fr> {
         let mut equations = HashMap::new();
         equations.insert(params.equation, params.input_axes_to_dims);
         let analysis = analyze_einsum_usage(&equations).unwrap();
-        config.configure_einsums(cs, &analysis).unwrap();
+        let num_inner_cols = 2;
+        config
+            .configure_einsums(cs, &analysis, num_inner_cols, K)
+            .unwrap();
 
         config
     }
@@ -133,7 +136,10 @@ impl Circuit<Fr> for MyCircuit<Fr> {
         let mut equations = HashMap::new();
         equations.insert(default_params.equation, default_params.input_axes_to_dims);
         let analysis = analyze_einsum_usage(&equations).unwrap();
-        config.configure_einsums(cs, &analysis).unwrap();
+        let num_inner_cols = 1;
+        config
+            .configure_einsums(cs, &analysis, num_inner_cols, K)
+            .unwrap();
 
         config
     }
@@ -175,8 +181,8 @@ impl Circuit<Fr> for MyCircuit<Fr> {
 }
 
 fn runmatmul() {
-    let params = gen_srs::<KZGCommitmentScheme<_>>(10);
-    let len = 10;
+    let params = gen_srs::<KZGCommitmentScheme<_>>(14);
+    let len = 40;
 
     let mut a = Tensor::from((0..len * len).map(|_| Value::known(Fr::random(OsRng))));
     a.reshape(&[len, len]).unwrap();

@@ -909,6 +909,14 @@ impl<T: Clone + TensorType> Tensor<T> {
     }
 
     /// remove axes that have dimensions 1
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
+    /// let mut a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6]), &[3, 1, 2]).unwrap();
+    /// let mut expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6]), &[3, 2]).unwrap();
+    /// let b = a.remove_trivial_axes().unwrap();
+    /// assert_eq!(b, expected);
+    /// ```
     pub fn remove_trivial_axes(&self) -> Result<Self, TensorError> {
         let mut result = self.clone();
         let new_dims: Vec<_> = self.dims.iter().copied().filter(|dim| *dim > 1).collect();

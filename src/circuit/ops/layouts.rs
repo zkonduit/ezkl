@@ -860,7 +860,7 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let (output_tensor, _) =
         crate::tensor::ops::accumulated::einsum(equation, &inputs.iter().collect_vec())?;
 
-    config.einsums.assign_with_padding(
+    config.einsums.assign_einsum(
         region,
         input_tensors,
         &output_tensor.clone().into(),

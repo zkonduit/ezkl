@@ -21,18 +21,10 @@ mod layouts;
 /// A struct representing the contractions for the einsums
 #[derive(Clone, Debug, Default)]
 pub struct Einsums<F: PrimeField + TensorType + PartialOrd> {
-    /// input tensors
-    pub inputs: Vec<VarTensor>,
-    /// output tensor
-    pub output: VarTensor,
     /// challenges
     pub challenges: Vec<Challenge>,
-    ///
+    /// powers of challenges
     pub challenge_columns: Vec<VarTensor>,
-    /// max number of input tensors
-    pub max_inputs: usize,
-    /// max number of output tensor axes
-    pub max_challenges: usize,
     custom_gate: EinsumOpConfig<F>,
 }
 
@@ -41,116 +33,73 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
     pub fn dummy(col_size: usize, num_inner_cols: usize) -> Self {
         let dummy_var = VarTensor::dummy(col_size, num_inner_cols);
         let dummy_custom_gate = EinsumOpConfig {
-            inputs: [dummy_var.clone(), dummy_var.clone()],
+            inputs: [dummy_var.clone(), dummy_var.clone(), dummy_var.clone()],
             output: dummy_var.clone(),
             selectors: BTreeMap::default(),
             _marker: PhantomData,
         };
         Self {
-            inputs: vec![dummy_var.clone(), dummy_var.clone()],
-            output: dummy_var.clone(),
             challenges: vec![],
             challenge_columns: vec![],
-            max_inputs: 0,
-            max_challenges: 0,
             custom_gate: dummy_custom_gate,
         }
     }
 
     /// Configure the columns based on universal Einsum analysis
-    /// Current approach:
-    /// 1) witness input and output tensors in phase 1 columns
-    /// 2) copy these as slices into phase 2 columns, to be used in contractions
-    ///
-    /// Future optimisation:
-    /// 1) witness input and output tensors directly as slices in phase 1 columns, skipping the reshape step
-    ///    | a1  | a2  |   b
-    ///    |  v  |  r  |  v * r
-    pub fn configure_universal(meta: &mut ConstraintSystem<F>, analysis: &EinsumAnalysis) -> Self {
-        let mut inputs = vec![];
-        for _ in 0..analysis.max_num_inputs {
-            let max_input_size = analysis.max_input_size;
-            // FIXME calculate the no. of rows needed
-            let k = max_input_size.ilog2() + 4;
-            let input_tensor =
-                VarTensor::new_advice_in_second_phase(meta, k as usize, 1, max_input_size);
-            inputs.push(input_tensor);
-        }
-
-        let output = {
-            // FIXME
-            let max_output_size = analysis.max_output_size;
-            // FIXME calculate the no. of rows needed
-            let k = max_output_size.ilog2() + 1;
-            VarTensor::new_advice_in_second_phase(meta, k as usize, 1, max_output_size)
-        };
-
+    pub fn configure_universal(
+        meta: &mut ConstraintSystem<F>,
+        analysis: &EinsumAnalysis,
+        num_inner_cols: usize,
+        logrows: usize,
+    ) -> Self {
         let mut challenge_columns = vec![];
         for _ in 0..analysis.max_num_output_axes {
-            let longest_challenge_vector = analysis.max_output_size;
-            // FIXME calculate the no. of rows needed
-            let k = longest_challenge_vector.ilog2() + 1;
             let challenge_tensor = VarTensor::new_advice_in_second_phase(
                 meta,
-                k as usize,
-                1,
-                longest_challenge_vector,
+                logrows,
+                num_inner_cols,
+                analysis.longest_challenge_vector,
             );
             challenge_columns.push(challenge_tensor);
         }
-
-        inputs.extend_from_slice(&challenge_columns);
 
         let challenges: Vec<_> = (0..analysis.max_num_output_axes)
             .map(|_| meta.challenge_usable_after(FirstPhase))
             .collect();
 
-        // FIXME : pass in `num_inner_cols`, `logrows`, and `capacity` from outside
-        let num_inner_cols = 1;
-        let logrows = analysis.max_input_size.ilog2() + 4;
         let capacity = analysis.max_input_size;
-        let custom_gate = EinsumOpConfig::new(meta, num_inner_cols, logrows as usize, capacity);
+        let custom_gate = EinsumOpConfig::new(meta, num_inner_cols, logrows, capacity);
 
         Self {
-            inputs,
-            output,
             challenges,
             challenge_columns,
-            max_inputs: analysis.max_num_inputs,
-            max_challenges: analysis.max_num_output_axes,
             custom_gate,
         }
     }
 
     ///
-    pub fn assign_with_padding(
+    pub fn assign_einsum(
         &self,
         region: &mut RegionCtx<F>,
         input_tensors: &[&ValTensor<F>],
         output_tensor: &ValTensor<F>,
         equation: &str,
     ) -> Result<(), CircuitError> {
+        region.set_num_einsum_inner_cols(self.custom_gate.output.num_inner_cols());
+
         let (input_exprs, _) = equation.split_once("->").unwrap();
         let input_exprs = input_exprs.split(",").collect_vec();
         assert_eq!(input_exprs.len(), input_tensors.len());
 
-        // Remove trivial axes from tensors
         let mut input_tensors = input_tensors.iter().copied().cloned().collect_vec();
         let mut output_tensor = output_tensor.clone();
 
+        // Remove trivial axes from tensors
         input_tensors
             .iter_mut()
             .map(|tensor| tensor.remove_trivial_axes())
             .collect::<Result<Vec<_>, TensorError>>()?;
         output_tensor.remove_trivial_axes()?;
-
-        let input_tensors = input_tensors
-            .iter()
-            .zip(self.inputs.iter())
-            .map(|(input_val, input_var)| region.assign(&input_var, &input_val))
-            .collect::<Result<Vec<_>, CircuitError>>()?;
-        let output_tensor = region.assign(&self.output, &output_tensor)?;
-        region.increment(output_tensor.len());
 
         let mut input_axes_to_dim: HashMap<char, usize> = HashMap::new();
         input_exprs
@@ -173,25 +122,26 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         let equation_analysis = analyze_single_equation(&equation, &input_axes_to_dim)?;
         let equation = equation_analysis.equation;
 
-        let challenge_vectors: Vec<Value<F>> = region
+        let challenges: Vec<Value<F>> = region
             .challenges()
             .iter()
             .cloned()
             .take(equation_analysis.output_axes)
             .collect();
         let mut challenge_tensors = vec![];
-        for (challenge, output_axis) in challenge_vectors
+        for (challenge, output_axis) in challenges
             .into_iter()
             .zip(equation_analysis.output_indices.iter())
         {
             let power = *input_axes_to_dim.get(output_axis).unwrap();
-            let mut challenge_tensor = vec![];
+            let mut challenge_tensor: Vec<ValType<F>> = vec![];
             for pow in 1..=power {
-                let challenge_vec: Vec<ValType<F>> = vec![challenge.into(); pow];
+                let challenge_vec: Vec<ValType<F>> = vec![challenge.clone().into(); pow];
                 let val = prod(
                     &self.custom_gate,
                     region,
                     &[&ValTensor::from(challenge_vec)],
+                    1,
                 )?
                 .get_inner_tensor()?
                 .get_scalar();
@@ -234,9 +184,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             }
 
             let input_tensors = contraction
-                .input_indices()
-                .into_iter()
-                .map(|idx| tensors[idx].clone())
+                .input_indices
+                .iter()
+                .map(|idx| tensors[*idx].clone())
                 .collect_vec();
 
             let mut flattened_input_tensors: Vec<Vec<ValTensor<F>>> =
@@ -283,6 +233,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
                 flattened_input_tensors,
                 dot_product_len,
                 &output_dims,
+                &contraction.input_phases,
             )?;
 
             tensors.push(contracted_output);
@@ -294,7 +245,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             .map(|t| t.get_inner_tensor().unwrap().get_scalar())
             .collect_vec()
             .into();
-        let squashed_input = prod(&self.custom_gate, region, &[&scalars])?;
+        let squashed_input = prod(&self.custom_gate, region, &[&scalars], 1)?;
 
         region.constrain_equal(&squashed_input, &squashed_output)
     }
@@ -309,12 +260,14 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
 
         // Intermediate values output from the previous contraction
         // Loop over the output axes
-        for powers_of_challenge in challenge_vectors.into_iter().rev() {
+        for (idx, powers_of_challenge) in challenge_vectors.into_iter().rev().enumerate() {
+            let min_phase = if idx > 0 { 1 } else { 0 };
             intermediate_values = assign_output_contraction(
                 &self.custom_gate,
                 region,
                 &intermediate_values,
                 &powers_of_challenge,
+                min_phase,
             )?;
         }
 
@@ -328,6 +281,7 @@ fn assign_input_contraction<F: PrimeField + TensorType + PartialOrd + std::hash:
     flattened_tensors: Vec<ValTensor<F>>,
     dot_product_len: usize,
     output_shape: &[usize],
+    input_phases: &[usize],
 ) -> Result<ValTensor<F>, CircuitError> {
     let num_dot_products = output_shape.iter().product();
     // klm
@@ -339,9 +293,14 @@ fn assign_input_contraction<F: PrimeField + TensorType + PartialOrd + std::hash:
             .iter()
             .map(|tensor| tensor.get_slice(&[start..(start + dot_product_len)]))
             .collect::<Result<Vec<_>, TensorError>>()?;
-        let result = multi_dot(config, region, tensors.iter().collect_vec().as_slice())?
-            .get_inner_tensor()?
-            .get_scalar();
+        let result = multi_dot(
+            config,
+            region,
+            tensors.iter().collect_vec().as_slice(),
+            input_phases,
+        )?
+        .get_inner_tensor()?
+        .get_scalar();
         dot_product_results.push(result);
     }
     let mut tensor = ValTensor::from(dot_product_results);
@@ -354,13 +313,14 @@ fn assign_output_contraction<F: PrimeField + TensorType + PartialOrd + std::hash
     region: &mut RegionCtx<F>,
     tensor: &ValTensor<F>,
     powers_of_challenge: &ValTensor<F>,
+    min_phase: usize,
 ) -> Result<ValTensor<F>, CircuitError> {
     let dot_product_len = powers_of_challenge.len();
     // Split tensor and challenge vector into dot products
     let mut dot_product_results = vec![];
     for tensor in tensor.get_inner_tensor()?.chunks_exact(dot_product_len) {
         let tensor = ValTensor::from(tensor.to_vec());
-        let result = dot(config, region, &[&tensor, powers_of_challenge])?
+        let result = dot(config, region, &[&tensor, powers_of_challenge], min_phase)?
             .get_inner_tensor()?
             .get_scalar();
         dot_product_results.push(result);
@@ -372,9 +332,12 @@ fn assign_output_contraction<F: PrimeField + TensorType + PartialOrd + std::hash
 /// `EinsumOpConfig` is the custom gate used for einsum contraction operations
 #[derive(Clone, Debug, Default)]
 struct EinsumOpConfig<F: PrimeField + TensorType + PartialOrd> {
-    inputs: [VarTensor; 2],
+    // [phase 0, phase 1, phase 1]
+    inputs: [VarTensor; 3],
+    // phase 1
     output: VarTensor,
-    selectors: BTreeMap<(BaseOp, usize, usize), Selector>,
+    // (min phase, BaseOp, block index, inner column index) -> selector
+    selectors: BTreeMap<(usize, BaseOp, usize, usize), Selector>,
     _marker: PhantomData<F>,
 }
 
@@ -386,42 +349,53 @@ impl<F: PrimeField + TensorType + PartialOrd> EinsumOpConfig<F> {
         capacity: usize,
     ) -> Self {
         // TODO optimise choice of advice columns globally
-        let inputs = [(); 2].map(|_| {
-            VarTensor::new_advice_in_second_phase(meta, logrows, num_inner_cols, capacity)
-        });
+        let inputs: [VarTensor; 3] = (0..3)
+            .map(|i| {
+                if i == 0 {
+                    VarTensor::new_advice(meta, logrows, num_inner_cols, capacity)
+                } else {
+                    VarTensor::new_advice_in_second_phase(meta, logrows, num_inner_cols, capacity)
+                }
+            })
+            .collect_vec()
+            .try_into()
+            .unwrap();
 
         let output = VarTensor::new_advice_in_second_phase(meta, logrows, num_inner_cols, capacity);
 
         let mut selectors = BTreeMap::new();
 
         // Required `BaseOp`s in Einsum contraction
-        for i in 0..output.num_blocks() {
-            for j in 0..output.num_inner_cols() {
-                selectors.insert((BaseOp::Mult, i, j), meta.selector());
+        for min_phase in [0, 1] {
+            for i in 0..output.num_blocks() {
+                for j in 0..output.num_inner_cols() {
+                    selectors.insert((min_phase, BaseOp::Mult, i, j), meta.selector());
+                }
             }
         }
-        for i in 0..output.num_blocks() {
-            selectors.insert((BaseOp::CumProd, i, 0), meta.selector());
-            selectors.insert((BaseOp::CumProdInit, i, 0), meta.selector());
-            selectors.insert((BaseOp::DotInit, i, 0), meta.selector());
-            selectors.insert((BaseOp::Dot, i, 0), meta.selector());
-            selectors.insert((BaseOp::Sum, i, 0), meta.selector());
-            selectors.insert((BaseOp::SumInit, i, 0), meta.selector());
+        for min_phase in [0, 1] {
+            for i in 0..output.num_blocks() {
+                selectors.insert((min_phase, BaseOp::CumProd, i, 0), meta.selector());
+                selectors.insert((min_phase, BaseOp::CumProdInit, i, 0), meta.selector());
+                selectors.insert((min_phase, BaseOp::DotInit, i, 0), meta.selector());
+                selectors.insert((min_phase, BaseOp::Dot, i, 0), meta.selector());
+                selectors.insert((min_phase, BaseOp::Sum, i, 0), meta.selector());
+                selectors.insert((min_phase, BaseOp::SumInit, i, 0), meta.selector());
+            }
         }
-
-        for ((base_op, block_idx, inner_col_idx), selector) in selectors.iter() {
+        for ((min_phase, base_op, block_idx, inner_col_idx), selector) in selectors.iter() {
             match base_op {
                 BaseOp::Mult => {
                     meta.create_gate(base_op.as_str(), |meta| {
                         let selector = meta.query_selector(*selector);
 
                         let zero = Expression::<F>::Constant(F::ZERO);
-                        let mut qis = vec![zero; 2];
+                        let mut qis = vec![zero; 3];
                         for (i, q_i) in qis
                             .iter_mut()
                             .enumerate()
-                            .take(2)
-                            .skip(2 - base_op.num_inputs())
+                            .skip(*min_phase)
+                            .take(base_op.num_inputs())
                         {
                             *q_i = inputs[i]
                                 .query_rng(meta, *block_idx, *inner_col_idx, 0, 1)
@@ -435,7 +409,7 @@ impl<F: PrimeField + TensorType + PartialOrd> EinsumOpConfig<F> {
                                 .query_rng(meta, *block_idx, *inner_col_idx, rotation_offset, rng)
                                 .expect("non accum: output query failed");
 
-                            let res = base_op.nonaccum_f((qis[0].clone(), qis[1].clone()));
+                            let res = base_op.nonaccum_f((qis[*min_phase].clone(), qis[min_phase + 1].clone()));
                             vec![expected_output[base_op.constraint_idx()].clone() - res]
                         };
                         Constraints::with_selector(selector, constraints)
@@ -444,12 +418,12 @@ impl<F: PrimeField + TensorType + PartialOrd> EinsumOpConfig<F> {
                 _ => {
                     meta.create_gate(base_op.as_str(), |meta| {
                         let selector = meta.query_selector(*selector);
-                        let mut qis = vec![vec![]; 2];
+                        let mut qis = vec![vec![]; 3];
                         for (i, q_i) in qis
                             .iter_mut()
                             .enumerate()
-                            .take(2)
-                            .skip(2 - base_op.num_inputs())
+                            .skip(*min_phase)
+                            .take(base_op.num_inputs())
                         {
                             *q_i = inputs[i]
                                 .query_whole_block(meta, *block_idx, 0, 1)
@@ -465,8 +439,8 @@ impl<F: PrimeField + TensorType + PartialOrd> EinsumOpConfig<F> {
 
                         let res = base_op.accum_f(
                             expected_output[0].clone(),
-                            qis[0].clone(),
-                            qis[1].clone(),
+                            qis[min_phase + 1].clone(),
+                            qis[*min_phase].clone(),
                         );
                         let constraints =
                             vec![expected_output[base_op.constraint_idx()].clone() - res];

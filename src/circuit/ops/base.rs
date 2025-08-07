@@ -17,7 +17,6 @@ pub enum BaseOp {
     Sub,
     SumInit,
     Sum,
-    // Equals
 }
 
 /// Matches a [BaseOp] to an operation over inputs

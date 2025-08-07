@@ -8,7 +8,7 @@ use crate::{
     tensor::{TensorType, ValTensor},
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct TensorIndex(usize);
 
 /// `Contraction` expresses a tensor contraction between input tensors
@@ -17,7 +17,9 @@ pub struct Contraction {
     pub expression: String,
     pub axis: char,
     /// Uniquely identifying indices of input tensors to be contracted
-    input_indices: Vec<TensorIndex>,
+    pub input_indices: Vec<TensorIndex>,
+    /// phases of input tensors
+    pub input_phases: Vec<usize>,
 }
 
 impl<T: PrimeField + TensorType + PartialOrd> Index<TensorIndex> for Vec<ValTensor<T>> {
@@ -28,38 +30,44 @@ impl<T: PrimeField + TensorType + PartialOrd> Index<TensorIndex> for Vec<ValTens
     }
 }
 
-impl Contraction {
-    pub fn input_indices(&self) -> Vec<TensorIndex> {
-        self.input_indices.clone()
-    }
-}
-
 pub fn input_contractions(expression: &str) -> Result<Vec<Contraction>, CircuitError> {
     let (input_exprs, output_expr) = expression.split_once("->").unwrap();
     let input_exprs: Vec<_> = input_exprs.split(",").map(|eq| eq.to_string()).collect();
+    // (phase, expression)
+    let mut input_exprs: Vec<(usize, String)> =
+        input_exprs.into_iter().map(|expr| (0, expr)).collect_vec();
+
     // augment `input_exprs` with output axes
-    let mut input_exprs = input_exprs.clone();
-    input_exprs.extend(output_expr.chars().map(|c| c.to_string()).collect_vec());
+    input_exprs.extend(
+        output_expr
+            .chars()
+            .map(|c| (1, c.to_string()))
+            .collect_vec(),
+    );
     let mut input_tensor_counter = input_exprs.len();
-    let mut augmented_input_exprs: Vec<(String, TensorIndex)> = input_exprs
+    let mut augmented_input_exprs: Vec<((usize, String), TensorIndex)> = input_exprs
         .into_iter()
         .zip((0..input_tensor_counter).map(TensorIndex))
         .collect();
     let mut contractions: Vec<Contraction> = vec![];
 
     // Contract input_exprs along given axis
-    let mut contract = |input_exprs: Vec<(String, TensorIndex)>,
+    let mut contract = |input_exprs: Vec<((usize, String), TensorIndex)>,
                         axis: char|
-     -> (Contraction, Vec<(String, TensorIndex)>) {
+     -> (Contraction, Vec<((usize, String), TensorIndex)>) {
         // Note all input_exprs that contain `axis`
         // [bn,bm,b]
         let contracted_inputs = input_exprs
             .iter()
-            .filter(|(eq, _)| eq.chars().contains(&axis))
+            .filter(|((_, eq), _)| eq.chars().contains(&axis))
             .cloned()
             .collect_vec();
-        let (contracted_inputs_axes, contracted_inputs_indices): (Vec<String>, Vec<TensorIndex>) =
-            contracted_inputs.into_iter().unzip();
+        let (contracted_inputs_axes, contracted_inputs_indices): (
+            Vec<(usize, String)>,
+            Vec<TensorIndex>,
+        ) = contracted_inputs.into_iter().unzip();
+        let (input_phases, contracted_inputs_axes): (Vec<usize>, Vec<String>) =
+            contracted_inputs_axes.into_iter().unzip();
 
         // nm
         let contracted_output: BTreeSet<char> = contracted_inputs_axes
@@ -77,14 +85,18 @@ pub fn input_contractions(expression: &str) -> Result<Vec<Contraction>, CircuitE
             expression,
             axis,
             input_indices: contracted_inputs_indices,
+            input_phases,
         };
 
         // Mutate input_exprs
         let mut input_exprs = input_exprs.clone();
         // [anm]
-        input_exprs.retain(|(input_eq, _)| !contracted_inputs_axes.contains(input_eq));
+        input_exprs.retain(|((_, input_eq), _)| !contracted_inputs_axes.contains(input_eq));
         // [anm,nm]
-        input_exprs.push((contracted_output.clone(), TensorIndex(input_tensor_counter)));
+        input_exprs.push((
+            (1, contracted_output.clone()),
+            TensorIndex(input_tensor_counter),
+        ));
         input_tensor_counter += 1;
 
         (contraction, input_exprs)
@@ -99,7 +111,7 @@ pub fn input_contractions(expression: &str) -> Result<Vec<Contraction>, CircuitE
     // These are not output axes and were not contracted with random vectors
     let remaining_axes: BTreeSet<_> = augmented_input_exprs
         .iter()
-        .flat_map(|(eq, _)| eq.chars())
+        .flat_map(|((_, eq), _)| eq.chars())
         .collect();
 
     for axis in remaining_axes.iter() {

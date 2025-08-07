@@ -702,11 +702,13 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
         &mut self,
         cs: &mut ConstraintSystem<F>,
         analysis: &EinsumAnalysis,
+        num_inner_cols: usize,
+        logrows: usize,
     ) -> Result<(), CircuitError>
     where
         F: Field,
     {
-        self.einsums = einsum::Einsums::configure_universal(cs, analysis);
+        self.einsums = einsum::Einsums::configure_universal(cs, analysis, num_inner_cols, logrows);
         Ok(())
     }
 

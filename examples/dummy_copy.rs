@@ -90,8 +90,8 @@ impl Circuit<Fr> for MyCircuit<Fr> {
             || "",
             |mut region| {
                 config.selector.enable(&mut region, 0)?;
-                region.assign_advice(|| "", config.phase_one, 0, || self.value)?;
-                region.assign_advice(|| "", config.phase_two, 0, || self.value)?;
+                let cell = region.assign_advice(|| "", config.phase_one, 0, || self.value)?;
+                cell.copy_advice(|| "", &mut region, config.phase_two, 0)?;
                 Ok(())
             },
         )
