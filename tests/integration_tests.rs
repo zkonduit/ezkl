@@ -163,10 +163,16 @@ mod native_tests {
             let data = GraphData::from_path(format!("{}/{}/input.json", test_dir, test).into())
                 .expect("failed to load input data");
 
-            let duplicated_input_data = data.input_data.into_iter().map(|input| {
-                (0..num_batches)
-                    .map(move |_| input.clone()).flatten().collect::<Vec<_>>()
-            }).collect::<Vec<_>>();
+            let duplicated_input_data = data
+                .input_data
+                .into_iter()
+                .map(|input| {
+                    (0..num_batches)
+                        .map(move |_| input.clone())
+                        .flatten()
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
 
             let duplicated_data = GraphData::new(duplicated_input_data);
 
@@ -363,7 +369,7 @@ mod native_tests {
         // "hummingbird_decision_tree",
     ];
 
-    #[cfg(not(feature = "icicle"))]
+    #[cfg(not(feature = "gpu-accelerated"))]
     const TESTS_AGGR: [&str; 21] = [
         "1l_mlp",
         "1l_flatten",
@@ -388,7 +394,7 @@ mod native_tests {
         "1l_max_pool",
     ];
 
-    #[cfg(feature = "icicle")]
+    #[cfg(feature = "gpu-accelerated")]
     const TESTS_AGGR: [&str; 3] = ["1l_mlp", "1l_flatten", "1l_average"];
 
     const TESTS_EVM: [&str; 23] = [
@@ -448,11 +454,12 @@ mod native_tests {
             use crate::native_tests::TESTS_AGGR;
             use test_case::test_case;
             use crate::native_tests::aggr_prove_and_verify;
+            #[cfg(not(feature = "gpu-accelerated"))]
             use crate::native_tests::kzg_aggr_mock_prove_and_verify;
             use tempdir::TempDir;
             use ezkl::Commitments;
 
-            #[cfg(not(feature="icicle"))]
+            #[cfg(not(feature="gpu-accelerated"))]
             seq!(N in 0..=20 {
 
             #(#[test_case(TESTS_AGGR[N])])*
@@ -486,7 +493,7 @@ mod native_tests {
 
             });
 
-            #[cfg(feature="icicle")]
+            #[cfg(feature="gpu-accelerated")]
             seq!(N in 0..=2 {
             #(#[test_case(TESTS_AGGR[N])])*
             fn kzg_aggr_prove_and_verify_(test: &str) {
@@ -514,6 +521,7 @@ mod native_tests {
             use crate::native_tests::mock;
             use crate::native_tests::accuracy_measurement;
             use crate::native_tests::prove_and_verify;
+            #[cfg(not(feature = "gpu-accelerated"))]
             use crate::native_tests::run_js_tests;
             use crate::native_tests::render_circuit;
             use crate::native_tests::model_serialization_different_binaries;
@@ -915,7 +923,7 @@ mod native_tests {
                     env_logger::init();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 1, None, true, "single", Commitments::KZG, 2);
-                    #[cfg(not(feature = "icicle"))]
+                    #[cfg(not(feature = "gpu-accelerated"))]
                     run_js_tests(path, test.to_string(), "testWasm", false);
                     test_dir.close().unwrap();
                 }
@@ -928,7 +936,7 @@ mod native_tests {
                     env_logger::init();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     prove_and_verify(path, test.to_string(), "safe", "hashed", "private", "public", 1, None, true, "single", Commitments::KZG, 2);
-                    #[cfg(not(feature = "icicle"))]
+                    #[cfg(not(feature = "gpu-accelerated"))]
                     run_js_tests(path, test.to_string(), "testWasm", false);
                     test_dir.close().unwrap();
                 }
@@ -941,7 +949,7 @@ mod native_tests {
                     env_logger::init();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     prove_and_verify(path, test.to_string(), "safe", "private", "fixed", "public", 1, None, true, "single", Commitments::KZG, 2);
-                    #[cfg(not(feature = "icicle"))]
+                    #[cfg(not(feature = "gpu-accelerated"))]
                     run_js_tests(path, test.to_string(), "testWasm", false);
                     test_dir.close().unwrap();
                 }
@@ -989,6 +997,7 @@ mod native_tests {
             use crate::native_tests::kzg_evm_aggr_prove_and_verify;
             use tempdir::TempDir;
             use crate::native_tests::Hardfork;
+            #[cfg(not(feature = "gpu-accelerated"))]
             use crate::native_tests::run_js_tests;
             use ezkl::logger::init_logger;
             use crate::native_tests::lazy_static;
@@ -1089,7 +1098,7 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "private", "private", "public");
-                    #[cfg(not(feature = "icicle"))]
+                    #[cfg(not(feature = "gpu-accelerated"))]
                     run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
 
@@ -1103,7 +1112,7 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let mut _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "hashed", "private", "private");
-                    #[cfg(not(feature = "icicle"))]
+                    #[cfg(not(feature = "gpu-accelerated"))]
                     run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
                 }
@@ -1120,7 +1129,7 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let mut _anvil_child = crate::native_tests::start_anvil(false, hardfork);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "polycommit", "private", "public");
-                    #[cfg(not(feature = "icicle"))]
+                    #[cfg(not(feature = "gpu-accelerated"))]
                     run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
                 }
@@ -1133,7 +1142,7 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "private", "hashed", "public");
-                    #[cfg(not(feature = "icicle"))]
+                    #[cfg(not(feature = "gpu-accelerated"))]
                     run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
 
@@ -1146,7 +1155,7 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "private", "private", "hashed");
-                    #[cfg(not(feature = "icicle"))]
+                    #[cfg(not(feature = "gpu-accelerated"))]
                     run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
                 }
@@ -1159,7 +1168,7 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "private", "polycommit", "public");
-                    #[cfg(not(feature = "icicle"))]
+                    #[cfg(not(feature = "gpu-accelerated"))]
                     run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
                 }
@@ -1172,7 +1181,7 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "private", "private", "polycommit");
-                    #[cfg(not(feature = "icicle"))]
+                    #[cfg(not(feature = "gpu-accelerated"))]
                     run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
                 }
@@ -1184,7 +1193,7 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "polycommit", "polycommit", "polycommit");
-                    #[cfg(not(feature = "icicle"))]
+                    #[cfg(not(feature = "gpu-accelerated"))]
                     run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
                 }
@@ -1569,6 +1578,7 @@ mod native_tests {
     }
 
     // prove-serialize-verify, the usual full path
+    #[cfg(not(feature = "gpu-accelerated"))]
     fn kzg_aggr_mock_prove_and_verify(test_dir: &str, example_name: String) {
         prove_and_verify(
             test_dir,
@@ -2225,6 +2235,7 @@ mod native_tests {
     }
 
     // run js browser evm verify tests for a given example
+    #[cfg(not(feature = "gpu-accelerated"))]
     fn run_js_tests(test_dir: &str, example_name: String, js_test: &str, vk: bool) {
         let example = format!("--example={}", example_name);
         let dir = format!("--dir={}", test_dir);
@@ -2243,7 +2254,7 @@ mod native_tests {
 
     #[allow(unused_variables)]
     fn build_ezkl() {
-        #[cfg(feature = "icicle")]
+        #[cfg(feature = "gpu-accelerated")]
         let args = [
             "build",
             "--profile=test-runs",
@@ -2262,18 +2273,8 @@ mod native_tests {
             "macos-metal",
         ];
         // not macos-metal and not icicle
-        #[cfg(all(not(feature = "icicle"), not(feature = "macos-metal")))]
+        #[cfg(all(not(feature = "gpu-accelerated"), not(feature = "macos-metal")))]
         let args = ["build", "--profile=test-runs", "--bin", "ezkl"];
-        #[cfg(feature = "eth-original-lookup")]
-        let args = [
-            "build",
-            "--profile=test-runs",
-            "--bin",
-            "ezkl",
-            "--no-default-features",
-            "--features",
-            "ezkl,solidity-verifier,eth",
-        ];
         #[cfg(feature = "reusable-verifier")]
         let args = [
             "build",

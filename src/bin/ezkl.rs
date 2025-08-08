@@ -15,9 +15,6 @@ use log::{error, info};
 #[cfg(not(any(target_arch = "wasm32", feature = "no-banner")))]
 use rand::prelude::SliceRandom;
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-#[cfg(feature = "icicle")]
-use std::env;
-
 #[tokio::main(flavor = "current_thread")]
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 pub async fn main() {
@@ -31,12 +28,7 @@ pub async fn main() {
         init_logger();
         #[cfg(not(any(target_arch = "wasm32", feature = "no-banner")))]
         banner();
-        #[cfg(feature = "icicle")]
-        if env::var("ENABLE_ICICLE_GPU").is_ok() {
-            info!("Running with ICICLE GPU");
-        } else {
-            info!("Running with CPU");
-        }
+
         debug!(
             "command: \n {}",
             &command.as_json().to_colored_json_auto().unwrap()
