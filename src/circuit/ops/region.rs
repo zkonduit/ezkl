@@ -98,11 +98,6 @@ pub struct RegionSettings {
     pub legs: usize,
 }
 
-#[allow(unsafe_code)]
-unsafe impl Sync for RegionSettings {}
-#[allow(unsafe_code)]
-unsafe impl Send for RegionSettings {}
-
 impl RegionSettings {
     /// Create a new region settings
     pub fn new(witness_gen: bool, check_range: bool, base: usize, legs: usize) -> RegionSettings {
@@ -156,16 +151,11 @@ impl RegionStatistics {
         self.max_lookup_inputs = self.max_lookup_inputs.max(other.max_lookup_inputs);
         self.min_lookup_inputs = self.min_lookup_inputs.min(other.min_lookup_inputs);
         self.max_range_size = self.max_range_size.max(other.max_range_size);
-        self.used_lookups.extend(other.used_lookups.clone());
-        self.used_range_checks
-            .extend(other.used_range_checks.clone());
+        // Avoid cloning HashSets - use iterators instead
+        self.used_lookups.extend(other.used_lookups.iter().cloned());
+        self.used_range_checks.extend(other.used_range_checks.iter().cloned());
     }
 }
-
-#[allow(unsafe_code)]
-unsafe impl Sync for RegionStatistics {}
-#[allow(unsafe_code)]
-unsafe impl Send for RegionStatistics {}
 
 #[derive(Debug)]
 /// A context for a region
@@ -422,16 +412,22 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             );
 
             // update the lookups
-            let mut statistics = statistics.lock().unwrap();
+            let mut statistics = statistics.lock().map_err(|_| CircuitError::ConstrainError)?;
             statistics.update(local_reg.statistics());
+            drop(statistics); // Explicit drop to release lock quickly
+            
             // update the dynamic lookup index
-            let mut dynamic_lookup_index = dynamic_lookup_index.lock().unwrap();
+            let mut dynamic_lookup_index = dynamic_lookup_index.lock().map_err(|_| CircuitError::ConstrainError)?;
             dynamic_lookup_index.update(&local_reg.dynamic_lookup_index);
+            drop(dynamic_lookup_index);
+            
             // update the shuffle index
-            let mut shuffle_index = shuffle_index.lock().unwrap();
+            let mut shuffle_index = shuffle_index.lock().map_err(|_| CircuitError::ConstrainError)?;
             shuffle_index.update(&local_reg.shuffle_index);
+            drop(shuffle_index);
+            
             // update the constants
-            let mut constants = constants.lock().unwrap();
+            let mut constants = constants.lock().map_err(|_| CircuitError::ConstrainError)?;
             constants.extend(local_reg.assigned_constants);
 
             res
