@@ -215,8 +215,6 @@ unsafe impl Send for RegionStatistics {}
 pub struct RegionCtx<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> {
     region: Option<RefCell<Region<'a, F>>>,
     row: usize,
-    /// the number assigned cells for the main set of columns
-    /// YT: is this for one tensor? Or for the whole region
     linear_coord: usize,
     num_inner_cols: usize,
     dynamic_lookup_index: DynamicLookupIndex,

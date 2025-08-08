@@ -165,8 +165,7 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         // value to advice column, how to workaround this issue?
         input.pad_to_zero_rem(block_width, ValType::Value(Value::known(F::ONE)))?;
         let (res, len) = region
-            .assign_einsum_with_duplication_unconstrained(&config.inputs[phase], &input)
-            .expect("Failed here!");
+            .assign_einsum_with_duplication_unconstrained(&config.inputs[phase], &input)?;
         assigned_len = len;
         res.get_inner()?
     };

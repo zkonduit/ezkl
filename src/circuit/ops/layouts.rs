@@ -847,7 +847,6 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         equation,
     )?;
 
-    // region.increment_einsum_col_coord(output_len + flush_len_ref);
     region.increment_einsum_index(1);
 
     let output: ValTensor<F> = output_tensor.into();
