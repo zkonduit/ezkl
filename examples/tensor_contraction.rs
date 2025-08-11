@@ -87,7 +87,7 @@ impl Circuit<Fr> for MyCircuit<Fr> {
         let mut equations = HashMap::new();
         equations.insert(params.equation, params.input_axes_to_dims);
         let analysis = analyze_einsum_usage(&equations).unwrap();
-        let num_einsum_inner_cols = 1;
+        let num_einsum_inner_cols = 2;
         config
             .configure_einsums(cs, &analysis, num_einsum_inner_cols, K)
             .unwrap();
@@ -161,18 +161,20 @@ impl Circuit<Fr> for MyCircuit<Fr> {
     }
 }
 
-fn runbatchmatmul() {
-    let batch_size = 5;
-    let len = 12;
+fn runmatmul() {
+    let i = 10;
+    let n = 10;
+    let j = 40;
+    let k = 10;
 
-    let mut a = Tensor::from((0..batch_size * len * len).map(|_| Value::known(Fr::random(OsRng))));
-    a.reshape(&[batch_size, len, len]).unwrap();
+    let mut a = Tensor::from((0..i * n * j).map(|_| Value::known(Fr::random(OsRng))));
+    a.reshape(&[i, n, j]).unwrap();
 
     // parameters
-    let mut b = Tensor::from((0..batch_size * len * len).map(|_| Value::known(Fr::random(OsRng))));
-    b.reshape(&[batch_size, len, len]).unwrap();
+    let mut b = Tensor::from((0..j * k).map(|_| Value::known(Fr::random(OsRng))));
+    b.reshape(&[j, k]).unwrap();
 
-    let einsum = Einsum::<Fr>::new("ijk,ikl->ijl", &[&a, &b]).unwrap();
+    let einsum = Einsum::<Fr>::new("inj,jk->ik", &[&a, &b]).unwrap();
 
     let circuit = MyCircuit {
         inputs: [ValTensor::from(a), ValTensor::from(b)],
@@ -184,5 +186,5 @@ fn runbatchmatmul() {
 }
 
 pub fn main() {
-    runbatchmatmul()
+    runmatmul()
 }

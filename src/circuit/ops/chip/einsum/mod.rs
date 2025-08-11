@@ -1,5 +1,6 @@
 use crate::circuit::base::BaseOp;
 use crate::circuit::chip::einsum::analysis::{analyze_single_equation, EinsumAnalysis};
+use crate::circuit::einsum::layouts::sum;
 use crate::circuit::region::RegionCtx;
 use crate::circuit::CircuitError;
 use crate::tensor::{Tensor, TensorError, TensorType, ValTensor, ValType, VarTensor};
@@ -175,7 +176,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         tensors.extend(challenge_tensors);
 
         for contraction in reordered_input_contractions.iter() {
-            // region_ctx.set_offset(0);
+            println!("contraction.expression : {:?}", contraction.expression);
             let (input_expr, output_expr) = contraction.expression.split_once("->").unwrap();
             let input_exprs = input_expr.split(",").collect_vec();
 
@@ -291,6 +292,7 @@ fn assign_input_contraction<F: PrimeField + TensorType + PartialOrd + std::hash:
     output_shape: &[usize],
     input_phases: &[usize],
 ) -> Result<ValTensor<F>, CircuitError> {
+    assert_eq!(flattened_tensors.len(), input_phases.len());
     let num_dot_products = output_shape.iter().product();
     let mut dot_product_results = vec![];
     for chunk_idx in 0..num_dot_products {
@@ -299,15 +301,25 @@ fn assign_input_contraction<F: PrimeField + TensorType + PartialOrd + std::hash:
             .iter()
             .map(|tensor| tensor.get_slice(&[start..(start + dot_product_len)]))
             .collect::<Result<Vec<_>, TensorError>>()?;
-        let result = multi_dot(
-            config,
-            region,
-            tensors.iter().collect_vec().as_slice(),
-            input_phases,
-        )?
-        .get_inner_tensor()?
-        .get_scalar();
-        dot_product_results.push(result);
+        let result = if tensors.len() == 1 {
+            sum(config, region, &[&tensors[0]], input_phases[0])?
+        } else if tensors.len() == 2 {
+            println!("input_phases : {:?}", input_phases);
+            dot(
+                config,
+                region,
+                &[&tensors[0], &tensors[1]],
+                &[input_phases[0], input_phases[1]],
+            )?
+        } else {
+            multi_dot(
+                config,
+                region,
+                tensors.iter().collect_vec().as_slice(),
+                input_phases,
+            )?
+        };
+        dot_product_results.push(result.get_inner_tensor()?.get_scalar());
     }
     let mut tensor = ValTensor::from(dot_product_results);
     tensor.reshape(output_shape)?;

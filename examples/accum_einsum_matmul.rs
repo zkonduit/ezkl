@@ -1,28 +1,18 @@
 use ezkl::circuit::einsum::analysis::analyze_einsum_usage;
 use ezkl::circuit::poly::PolyOp;
 use ezkl::circuit::*;
-use ezkl::pfsys::TranscriptType;
-use ezkl::pfsys::{create_keys, srs::gen_srs};
-use ezkl::pfsys::{create_proof_circuit, verify_proof_circuit};
 use ezkl::tensor::*;
 use halo2_proofs::circuit::floor_planner::V1;
 use halo2_proofs::dev::MockProver;
-use halo2_proofs::poly::commitment::Params;
-use halo2_proofs::poly::commitment::ParamsProver;
-use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
-use halo2_proofs::poly::kzg::multiopen::ProverSHPLONK;
-use halo2_proofs::poly::kzg::multiopen::VerifierSHPLONK;
-use halo2_proofs::poly::kzg::strategy::SingleStrategy;
 use halo2_proofs::{
     arithmetic::Field,
     circuit::{Layouter, Value},
     plonk::{Circuit, ConstraintSystem, Error},
 };
-use halo2curves::bn256::{Bn256, Fr};
+use halo2curves::bn256::Fr;
 use halo2curves::ff::PrimeField;
 use itertools::Itertools;
 use rand::rngs::OsRng;
-use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 
@@ -172,7 +162,6 @@ impl Circuit<Fr> for MyCircuit<Fr> {
 }
 
 fn runmatmul() {
-    let params = gen_srs::<KZGCommitmentScheme<_>>(K as u32);
     let len = 40;
 
     let mut a = Tensor::from((0..len * len).map(|_| Value::known(Fr::random(OsRng))));
@@ -189,43 +178,8 @@ fn runmatmul() {
         einsum,
     };
 
-    MockProver::run(K as u32, &circuit, vec![]).unwrap();
-
-    let pk =
-        create_keys::<KZGCommitmentScheme<Bn256>, MyCircuit<Fr>>(&circuit, &params, true).unwrap();
-
-    let prover = create_proof_circuit::<
-        KZGCommitmentScheme<_>,
-        MyCircuit<Fr>,
-        ProverSHPLONK<_>,
-        VerifierSHPLONK<_>,
-        SingleStrategy<_>,
-        _,
-        EvmTranscript<_, _, _, _>,
-        EvmTranscript<_, _, _, _>,
-    >(
-        circuit.clone(),
-        vec![],
-        &params,
-        &pk,
-        CheckMode::UNSAFE,
-        ezkl::Commitments::KZG,
-        TranscriptType::EVM,
-        None,
-        None,
-    );
-    let strategy = SingleStrategy::new(&params);
-
-    let checkable_pf = prover.unwrap();
-    let params = params.verifier_params();
-    verify_proof_circuit::<
-        VerifierSHPLONK<'_, Bn256>,
-        KZGCommitmentScheme<Bn256>,
-        SingleStrategy<_>,
-        _,
-        EvmTranscript<_, _, _, _>,
-    >(&checkable_pf, params, pk.get_vk(), strategy, params.n())
-    .unwrap();
+    let mock_prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+    mock_prover.assert_satisfied();
 }
 
 pub fn main() {

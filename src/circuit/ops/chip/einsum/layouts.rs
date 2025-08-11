@@ -41,6 +41,8 @@ fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         )));
     }
 
+    region.flush_einsum()?;
+
     let inputs = [lhs, rhs]
         .iter()
         .zip(config.inputs.iter().skip(min_phase))
@@ -86,7 +88,7 @@ fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     Ok(output)
 }
 
-fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &EinsumOpConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[&ValTensor<F>; 1],
@@ -98,7 +100,6 @@ fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     assert!(phase == 0 || phase == 1);
 
     region.flush_einsum()?;
-    // time this entire function run
     let mut input = values[0].clone();
 
     let block_width = config.output.num_inner_cols();
@@ -288,8 +289,6 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     region.increment_einsum_col_coord(assigned_len);
 
-    // last element is the result
-
     let elapsed = global_start.elapsed();
     trace!("dot layout took: {:?}, row {}", elapsed, region.row());
     trace!("----------------------------");
@@ -307,8 +306,6 @@ pub fn multi_dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     if !values.iter().all(|value| value.len() == values[0].len()) {
         return Err(TensorError::DimMismatch("dot".to_string()).into());
     }
-
-    region.flush_einsum()?;
     // time this entire function run
     let global_start = instant::Instant::now();
 
