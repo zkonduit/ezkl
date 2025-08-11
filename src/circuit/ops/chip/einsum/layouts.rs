@@ -1,5 +1,6 @@
 use halo2_proofs::circuit::Value;
 use halo2curves::ff::PrimeField;
+use itertools::Itertools;
 use log::{error, trace};
 
 use crate::{
@@ -19,10 +20,14 @@ fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     region: &mut RegionCtx<F>,
     values: &[&ValTensor<F>; 2],
     op: BaseOp,
-    min_phase: usize,
+    phases: &[usize; 2],
 ) -> Result<ValTensor<F>, CircuitError> {
-    assert!(min_phase <= 1);
-    let (mut lhs, mut rhs) = (values[0].clone(), values[1].clone());
+    let (mut lhs, mut rhs) = if phases[0] <= phases[1] {
+        (values[0].clone(), values[1].clone())
+    } else {
+        (values[1].clone(), values[0].clone())
+    };
+    let min_phase = std::cmp::min(phases[0], phases[1]);
 
     let broadcasted_shape = get_broadcasted_shape(lhs.dims(), rhs.dims())?;
 
@@ -41,7 +46,6 @@ fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         .zip(config.inputs.iter().skip(min_phase))
         .map(|(val, var)| {
             let res = region.assign_einsum(var, val)?;
-
             Ok(res.get_inner()?)
         })
         .collect::<Result<Vec<_>, CircuitError>>()?;
@@ -164,8 +168,8 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         // `NotEnoughColumnsForConstants` in halo2 because trying to assign constant
         // value to advice column, how to workaround this issue?
         input.pad_to_zero_rem(block_width, ValType::Value(Value::known(F::ONE)))?;
-        let (res, len) = region
-            .assign_einsum_with_duplication_unconstrained(&config.inputs[phase], &input)?;
+        let (res, len) =
+            region.assign_einsum_with_duplication_unconstrained(&config.inputs[phase], &input)?;
         assigned_len = len;
         res.get_inner()?
     };
@@ -214,9 +218,8 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &EinsumOpConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[&ValTensor<F>; 2],
-    min_phase: usize,
+    phases: &[usize; 2],
 ) -> Result<ValTensor<F>, CircuitError> {
-    assert!(min_phase <= 1);
     if values[0].len() != values[1].len() {
         return Err(TensorError::DimMismatch("dot".to_string()).into());
     }
@@ -225,7 +228,12 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     // time this entire function run
     let global_start = instant::Instant::now();
 
-    let mut values = vec![values[0].clone(), values[1].clone()];
+    let mut values = if phases[0] <= phases[1] {
+        [values[0].clone(), values[1].clone()]
+    } else {
+        [values[1].clone(), values[0].clone()]
+    };
+    let min_phase = std::cmp::min(phases[0], phases[1]);
 
     let mut inputs = vec![];
     let block_width = config.output.num_inner_cols();
@@ -309,6 +317,8 @@ pub fn multi_dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let (intermediate, _) = values
         .into_iter()
         .zip(phases.iter().cloned())
+        // reorder the values to ensure there is no contraction between phase 0 values
+        .sorted_by(|(_, phase0), (_, phase1)| Ord::cmp(&phase1, &phase0))
         .reduce(|(intermediate, intermediate_phase), (input, phase)| {
             (
                 pairwise(
@@ -316,16 +326,16 @@ pub fn multi_dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
                     region,
                     &[&intermediate, &input],
                     BaseOp::Mult,
-                    std::cmp::min(intermediate_phase, phase),
+                    &[intermediate_phase, phase],
                 )
                 .unwrap(),
-                std::cmp::max(intermediate_phase, phase),
+                1,
             )
         })
         .unwrap();
 
     // Sum the final tensor
-    // In current freivalds algorithm, there are no tensor contraction between phase 0 tensors,
+    // In current freivalds' algorithm, we ensure that there is no tensor contraction between phase 0 tensors,
     // so the phase of the resulting tensor is set to 1
     let accumulated_dot = sum(config, region, &[&intermediate], 1)?;
     let last_elem = accumulated_dot.last()?;

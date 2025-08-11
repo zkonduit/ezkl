@@ -68,7 +68,13 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             challenge_columns.push(challenge_tensor);
         }
 
-        let capacity = analysis.max_input_size;
+        // tentatively add the space for witnessing powers of challenges
+        let capacity = analysis.contraction_length
+            + (1..=analysis.longest_challenge_vector)
+                .map(|n| n + (num_inner_cols - (n % num_inner_cols)))
+                .sum::<usize>()
+                * analysis.max_num_output_axes;
+        println!("capacity : {:?}", capacity);
         let custom_gate = EinsumOpConfig::new(meta, num_inner_cols, logrows, capacity);
 
         Self {
@@ -263,13 +269,13 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         // Intermediate values output from the previous contraction
         // Loop over the output axes
         for (idx, powers_of_challenge) in challenge_vectors.into_iter().rev().enumerate() {
-            let min_phase = if idx > 0 { 1 } else { 0 };
+            let phases = if idx > 0 { [1, 1] } else { [0, 1] };
             intermediate_values = assign_output_contraction(
                 &self.custom_gate,
                 region,
                 &intermediate_values,
                 &powers_of_challenge,
-                min_phase,
+                &phases,
             )?;
         }
 
@@ -286,8 +292,6 @@ fn assign_input_contraction<F: PrimeField + TensorType + PartialOrd + std::hash:
     input_phases: &[usize],
 ) -> Result<ValTensor<F>, CircuitError> {
     let num_dot_products = output_shape.iter().product();
-    // klm
-    // Contract along k, using lm dot products of length k
     let mut dot_product_results = vec![];
     for chunk_idx in 0..num_dot_products {
         let start = chunk_idx * dot_product_len;
@@ -315,14 +319,14 @@ fn assign_output_contraction<F: PrimeField + TensorType + PartialOrd + std::hash
     region: &mut RegionCtx<F>,
     tensor: &ValTensor<F>,
     powers_of_challenge: &ValTensor<F>,
-    min_phase: usize,
+    phases: &[usize; 2],
 ) -> Result<ValTensor<F>, CircuitError> {
     let dot_product_len = powers_of_challenge.len();
     // Split tensor and challenge vector into dot products
     let mut dot_product_results = vec![];
     for tensor in tensor.get_inner_tensor()?.chunks_exact(dot_product_len) {
         let tensor = ValTensor::from(tensor.to_vec());
-        let result = dot(config, region, &[&tensor, powers_of_challenge], min_phase)?
+        let result = dot(config, region, &[&tensor, powers_of_challenge], phases)?
             .get_inner_tensor()?
             .get_scalar();
         dot_product_results.push(result);
@@ -350,7 +354,6 @@ impl<F: PrimeField + TensorType + PartialOrd> EinsumOpConfig<F> {
         logrows: usize,
         capacity: usize,
     ) -> Self {
-        // TODO optimise choice of advice columns globally
         let inputs: [VarTensor; 3] = (0..3)
             .map(|i| {
                 if i == 0 {

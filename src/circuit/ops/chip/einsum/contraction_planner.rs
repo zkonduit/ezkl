@@ -55,8 +55,6 @@ pub fn input_contractions(expression: &str) -> Result<Vec<Contraction>, CircuitE
     let mut contract = |input_exprs: Vec<((usize, String), TensorIndex)>,
                         axis: char|
      -> (Contraction, Vec<((usize, String), TensorIndex)>) {
-        // Note all input_exprs that contain `axis`
-        // [bn,bm,b]
         let contracted_inputs = input_exprs
             .iter()
             .filter(|((_, eq), _)| eq.chars().contains(&axis))
@@ -69,7 +67,6 @@ pub fn input_contractions(expression: &str) -> Result<Vec<Contraction>, CircuitE
         let (input_phases, contracted_inputs_axes): (Vec<usize>, Vec<String>) =
             contracted_inputs_axes.into_iter().unzip();
 
-        // nm
         let contracted_output: BTreeSet<char> = contracted_inputs_axes
             .iter()
             .flat_map(|input| input.chars().filter(|&c| c != axis))
