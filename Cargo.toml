@@ -104,7 +104,7 @@ camino = { version = "^1.1", optional = true }
 uuid = { version = "1.10.0", features = ["v4"], optional = true }
 
 # GPU / device related things
-icicle-runtime = { git = "https://github.com/ingonyama-zk/icicle", branch="emir/gate_eval_2", package="icicle-runtime", optional = true }
+icicle-runtime = { git = "https://github.com/ingonyama-zk/icicle", branch="emir/gate_eval_2", package="icicle-runtime" }
 
 
 
@@ -277,7 +277,7 @@ mv-lookup = ["halo2_proofs/mv-lookup", "snark-verifier/mv-lookup"]
 asm = ["halo2curves/asm", "halo2_proofs/asm"]
 precompute-coset = ["halo2_proofs/precompute-coset"]
 det-prove = []
-gpu-accelerated = ["halo2_proofs/gpu-accelerated", "icicle-runtime"]
+gpu-accelerated = ["halo2_proofs/gpu-accelerated"]
 empty-cmd = []
 no-banner = []
 no-update = []
