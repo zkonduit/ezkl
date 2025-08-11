@@ -49,6 +49,7 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      LD_LIBRARY_PATH: /usr/local/lib:$LD_LIBRARY_PATH
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -71,6 +72,7 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      LD_LIBRARY_PATH: /usr/local/lib:$LD_LIBRARY_PATH
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -91,6 +93,7 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      LD_LIBRARY_PATH: /usr/local/lib:$LD_LIBRARY_PATH
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -120,6 +123,7 @@ jobs:
     env:
       ENABLE_ICICLE_GPU: true
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      LD_LIBRARY_PATH: /opt/icicle/lib/backend/halo2:/usr/local/lib:$LD_LIBRARY_PATH
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -161,6 +165,7 @@ jobs:
     runs-on: [ non-gpu, non-sgx ]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      LD_LIBRARY_PATH: /usr/local/lib:$LD_LIBRARY_PATH
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
@@ -200,6 +205,7 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      LD_LIBRARY_PATH: /usr/local/lib:$LD_LIBRARY_PATH
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
@@ -229,6 +235,7 @@ jobs:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
       # add `atomics` and `bulk-memory` to RUSTFLAGS to enable wasm-bindgen tests
       RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory"
+      LD_LIBRARY_PATH: /usr/local/lib:$LD_LIBRARY_PATH
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
@@ -271,6 +278,7 @@ jobs:
     runs-on: [ non-gpu, non-sgx ]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      LD_LIBRARY_PATH: /usr/local/lib:$LD_LIBRARY_PATH
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
@@ -343,6 +351,7 @@ jobs:
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
       RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory"
+      LD_LIBRARY_PATH: /usr/local/lib:$LD_LIBRARY_PATH
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
@@ -446,6 +455,7 @@ jobs:
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
       RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory"
+      LD_LIBRARY_PATH: /usr/local/lib:$LD_LIBRARY_PATH
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
@@ -532,6 +542,7 @@ jobs:
       ENABLE_ICICLE_GPU: true
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
       RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory"
+      LD_LIBRARY_PATH: /opt/icicle/lib/backend/halo2:/usr/local/lib:$LD_LIBRARY_PATH
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -602,6 +613,7 @@ jobs:
     env:
       ENABLE_ICICLE_GPU: true
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      LD_LIBRARY_PATH: /opt/icicle/lib/backend/halo2:/usr/local/lib:$LD_LIBRARY_PATH
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -687,6 +699,7 @@ jobs:
     needs: [build, library-tests, docs]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      LD_LIBRARY_PATH: /usr/local/lib:$LD_LIBRARY_PATH
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
@@ -715,6 +728,7 @@ jobs:
     needs: [build, library-tests, docs]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      LD_LIBRARY_PATH: /usr/local/lib:$LD_LIBRARY_PATH
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
@@ -750,6 +764,7 @@ jobs:
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      LD_LIBRARY_PATH: /usr/local/lib:$LD_LIBRARY_PATH
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
