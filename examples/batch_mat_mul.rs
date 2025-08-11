@@ -27,7 +27,7 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 
 static mut LEN: usize = 4;
-const K: usize = 12;
+const K: usize = 11;
 
 #[derive(Clone)]
 struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
@@ -97,7 +97,7 @@ impl Circuit<Fr> for MyCircuit<Fr> {
         let mut equations = HashMap::new();
         equations.insert(params.equation, params.input_axes_to_dims);
         let analysis = analyze_einsum_usage(&equations).unwrap();
-        let num_einsum_inner_cols = 1;
+        let num_einsum_inner_cols = 2;
         config
             .configure_einsums(cs, &analysis, num_einsum_inner_cols, K)
             .unwrap();
@@ -173,16 +173,17 @@ impl Circuit<Fr> for MyCircuit<Fr> {
 
 fn runmatmul() {
     let params = gen_srs::<KZGCommitmentScheme<_>>(K as u32);
-    let len = 40;
+    let batch_size = 5;
+    let len = 10;
 
-    let mut a = Tensor::from((0..len * len).map(|_| Value::known(Fr::random(OsRng))));
-    a.reshape(&[len, len]).unwrap();
+    let mut a = Tensor::from((0..batch_size * len * len).map(|_| Value::known(Fr::random(OsRng))));
+    a.reshape(&[batch_size, len, len]).unwrap();
 
     // parameters
-    let mut b = Tensor::from((0..len * len).map(|_| Value::known(Fr::random(OsRng))));
-    b.reshape(&[len, len]).unwrap();
+    let mut b = Tensor::from((0..batch_size * len * len).map(|_| Value::known(Fr::random(OsRng))));
+    b.reshape(&[batch_size, len, len]).unwrap();
 
-    let einsum = Einsum::<Fr>::new("ij,jk->ik", &[&a, &b]).unwrap();
+    let einsum = Einsum::<Fr>::new("ijk,ikl->ijl", &[&a, &b]).unwrap();
 
     let circuit = MyCircuit {
         inputs: [ValTensor::from(a), ValTensor::from(b)],
@@ -195,7 +196,7 @@ fn runmatmul() {
         create_keys::<KZGCommitmentScheme<Bn256>, MyCircuit<Fr>>(&circuit, &params, true).unwrap();
 
     let prover = create_proof_circuit::<
-        KZGCommitmentScheme<_>,
+        KZGCommitmentScheme<Bn256>,
         MyCircuit<Fr>,
         ProverSHPLONK<_>,
         VerifierSHPLONK<_>,
