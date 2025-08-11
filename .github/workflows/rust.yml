@@ -62,6 +62,8 @@ jobs:
           components: rustfmt, clippy
       - name: install libc6
         run: sudo apt-get install -y libc6
+      - name: Install cmake and build dependencies
+        run: sudo apt-get install -y cmake build-essential g++ gcc libclang-dev llvm-dev libstdc++-12-dev
       - name: Build
         run: cargo build --verbose
 
@@ -82,6 +84,8 @@ jobs:
           components: rustfmt, clippy
       - name: install libc6
         run: sudo apt-get install -y libc6
+      - name: Install cmake and build dependencies
+        run: sudo apt-get install -y cmake build-essential g++ gcc libclang-dev llvm-dev libstdc++-12-dev
       - name: Docs
         run: cargo doc --verbose
 
@@ -102,6 +106,8 @@ jobs:
           components: rustfmt, clippy
       - name: install libc6
         run: sudo apt-get install -y libc6
+      - name: Install cmake and build dependencies
+        run: sudo apt-get install -y cmake build-essential g++ gcc libclang-dev llvm-dev libstdc++-12-dev
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
         with:
           crate: cargo-nextest
@@ -214,6 +220,8 @@ jobs:
           components: rustfmt, clippy
       - name: install libc6
         run: sudo apt-get install -y libc6
+      - name: Install cmake and build dependencies
+        run: sudo apt-get install -y cmake build-essential g++ gcc libclang-dev llvm-dev libstdc++-12-dev
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
         with:
           crate: cargo-nextest
@@ -243,6 +251,8 @@ jobs:
           components: rustfmt, clippy
       - name: install libc6
         run: sudo apt-get install -y libc6
+      - name: Install cmake and build dependencies
+        run: sudo apt-get install -y cmake build-essential g++ gcc libclang-dev llvm-dev libstdc++-12-dev
       - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa  #v0.4.0
         with:
           # Pin to version 0.12.1
@@ -701,6 +711,8 @@ jobs:
           components: rustfmt, clippy
       - name: install libc6
         run: sudo apt-get install -y libc6
+      - name: Install cmake and build dependencies
+        run: sudo apt-get install -y cmake build-essential g++ gcc libclang-dev llvm-dev libstdc++-12-dev
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
         with:
           crate: cargo-nextest

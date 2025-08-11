@@ -107,8 +107,6 @@ uuid = { version = "1.10.0", features = ["v4"], optional = true }
 icicle-runtime = { git = "https://github.com/ingonyama-zk/icicle", branch="emir/gate_eval_2", package="icicle-runtime" }
 
 
-
-
 [target.'cfg(not(all(target_arch = "wasm32", target_os = "unknown")))'.dependencies]
 colored = { version = "2.0.0", default-features = false, optional = true }
 env_logger = { version = "0.10.0", default-features = false, optional = true }
