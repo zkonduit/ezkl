@@ -64,6 +64,8 @@ jobs:
         run: sudo apt-get install -y libc6
       - name: Install cmake and build dependencies
         run: sudo apt-get install -y cmake build-essential g++ gcc libclang-dev llvm-dev libstdc++-12-dev
+      - name: Force rebuild icicle dependencies
+        run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
       - name: Build
         run: cargo build --verbose
 
