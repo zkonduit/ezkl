@@ -680,7 +680,7 @@ fn ipa_commit(
         .map_err(|_| PyIOError::new_err("Failed to load circuit settings"))?;
 
     let srs_path =
-        crate::execute::get_srs_path(settings.run_args.logrows, srs_path, Commitments::KZG);
+        crate::execute::get_srs_path(settings.run_args.logrows, srs_path, Commitments::IPA);
 
     let srs = load_srs_prover::<IPACommitmentScheme<G1Affine>>(srs_path)
         .map_err(|_| PyIOError::new_err("Failed to load srs"))?;
