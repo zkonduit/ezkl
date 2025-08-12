@@ -688,7 +688,7 @@ impl VarTensor {
     >(
         &self,
         region: &mut Region<F>,
-        row: usize,
+        _row: usize,
         offset: usize,
         values: &ValTensor<F>,
         check_mode: &CheckMode,
@@ -707,7 +707,7 @@ impl VarTensor {
                 let duplication_freq = self.col_size();
                 let num_repeats = 1;
                 // Question: shouldn't this be the row number inside a inner block
-                let duplication_offset = row;
+                let (_, _, duplication_offset) = self.cartesian_coord(offset);
 
                 // duplicates every nth element to adjust for column overflow
                 let v = v
