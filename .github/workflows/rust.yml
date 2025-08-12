@@ -307,6 +307,8 @@ jobs:
     runs-on: [ non-gpu, non-sgx ]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      RUSTFLAGS: "-C linker=gcc"
+      OPENSSL_NO_VENDOR: 1
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
@@ -322,6 +324,8 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
+      - name: Force rebuild icicle dependencies
+        run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
       # - name: The Worm Mock
       #   run: cargo nextest run --verbose tests::large_mock_::large_tests_5_expects -- --include-ignored
       - name: Large 1D Conv Mock
@@ -378,7 +382,8 @@ jobs:
     # needs: [build, library-tests, docs, python-tests, python-integration-tests]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
-      RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory"
+      RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory -C linker=gcc"
+      OPENSSL_NO_VENDOR: 1
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
@@ -399,6 +404,8 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
+      - name: Force rebuild icicle dependencies
+        run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
@@ -481,7 +488,8 @@ jobs:
     needs: [build, library-tests, docs]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
-      RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory"
+      RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory -C linker=gcc"
+      OPENSSL_NO_VENDOR: 1
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
@@ -503,6 +511,8 @@ jobs:
 
       - name: Add rust-src
         run: rustup component add rust-src --toolchain nightly-2025-05-01-x86_64-unknown-linux-gnu
+      - name: Force rebuild icicle dependencies
+        run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
