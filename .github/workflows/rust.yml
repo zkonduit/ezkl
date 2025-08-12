@@ -987,7 +987,7 @@ jobs:
           cd ezkl-swift-package
           xcodebuild test \
             -scheme EzklPackage \
-            -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=17.5' \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.2' \
             -resultBundlePath ../testResults
 
       - name: Run Example App Tests
@@ -996,7 +996,7 @@ jobs:
           xcodebuild test \
             -project Example.xcodeproj \
             -scheme EzklApp \
-            -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=17.5' \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.2' \
             -parallel-testing-enabled NO \
             -resultBundlePath ../../exampleTestResults \
             -skip-testing:EzklAppUITests/EzklAppUITests/testButtonClicksInOrder
