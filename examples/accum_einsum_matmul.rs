@@ -16,8 +16,7 @@ use rand::rngs::OsRng;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 
-static mut LEN: usize = 4;
-const K: usize = 12;
+const K: usize = 15;
 
 #[derive(Clone)]
 struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
@@ -76,13 +75,7 @@ impl Circuit<Fr> for MyCircuit<Fr> {
     }
 
     fn configure_with_params(cs: &mut ConstraintSystem<Fr>, params: Self::Params) -> Self::Config {
-        let len = unsafe { LEN };
-
-        let a = VarTensor::new_advice(cs, K, 1, len);
-        let b = VarTensor::new_advice(cs, K, 1, len);
-        let output = VarTensor::new_advice(cs, K, 1, len);
-
-        let mut config = Self::Config::configure(cs, &[a, b], &output, CheckMode::UNSAFE);
+        let mut config = Self::Config::default();
 
         let mut equations = HashMap::new();
         equations.insert(params.equation, params.input_axes_to_dims);
@@ -162,7 +155,7 @@ impl Circuit<Fr> for MyCircuit<Fr> {
 }
 
 fn runmatmul() {
-    let len = 40;
+    let len = 64;
 
     let mut a = Tensor::from((0..len * len).map(|_| Value::known(Fr::random(OsRng))));
     a.reshape(&[len, len]).unwrap();

@@ -145,7 +145,11 @@ pub fn analyze_single_equation(
                     .map(|c| input_axes_to_dim.get(&c).unwrap())
                     .product();
                 // since `multi_dot` does pairwise mult between input pairs and final summation
-                num_dot_products * dot_product_len * 2 * (num_inputs - 1) + dot_product_len
+                if num_inputs <= 2 {
+                    num_dot_products * dot_product_len
+                } else {
+                    num_dot_products * (dot_product_len * num_inputs)
+                }
             })
             .sum::<usize>()
     };

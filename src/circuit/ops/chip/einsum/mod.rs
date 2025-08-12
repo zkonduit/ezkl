@@ -59,6 +59,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         num_inner_cols: usize,
         logrows: usize,
     ) -> Self {
+        let capacity = analysis.contraction_length;
+        let custom_gate = EinsumOpConfig::new(meta, num_inner_cols, logrows, capacity);
+
         let challenges: Vec<_> = (0..analysis.max_num_output_axes)
             .map(|_| meta.challenge_usable_after(FirstPhase))
             .collect();
@@ -83,14 +86,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             challenge_columns.push(challenge_tensor);
             power_series_selectors.push(selector);
         }
-
-        // tentatively add the space for witnessing powers of challenges
-        let capacity = analysis.contraction_length
-            + (1..=analysis.longest_challenge_vector)
-                .map(|n| n + (num_inner_cols - (n % num_inner_cols)))
-                .sum::<usize>()
-                * analysis.max_num_output_axes;
-        let custom_gate = EinsumOpConfig::new(meta, num_inner_cols, logrows, capacity);
 
         Self {
             challenges,
