@@ -3,7 +3,8 @@ use crate::circuit::chip::einsum::analysis::{analyze_single_equation, EinsumAnal
 use crate::circuit::einsum::layouts::sum;
 use crate::circuit::region::RegionCtx;
 use crate::circuit::CircuitError;
-use crate::tensor::{Tensor, TensorError, TensorType, ValTensor, ValType, VarTensor};
+use crate::tensor::ops::accumulated;
+use crate::tensor::{Tensor, TensorError, TensorType, ValTensor, VarTensor};
 use halo2_proofs::circuit::Value;
 use halo2_proofs::plonk::{
     Challenge, ConstraintSystem, Constraints, Expression, FirstPhase, Selector,
@@ -24,8 +25,11 @@ mod layouts;
 pub struct Einsums<F: PrimeField + TensorType + PartialOrd> {
     /// challenges
     pub challenges: Vec<Challenge>,
-    ///
+    /// Witness powers of challenges
+    /// TODO : bake challenges into constraints
     pub challenge_columns: Vec<VarTensor>,
+    ///
+    pub power_series_selectors: Vec<Selector>,
     /// custom gate to constrain tensor contractions
     custom_gate: EinsumOpConfig<F>,
 }
@@ -43,6 +47,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         Self {
             challenges: vec![],
             challenge_columns: vec![],
+            power_series_selectors: vec![],
             custom_gate: dummy_custom_gate,
         }
     }
@@ -59,14 +64,24 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             .collect();
 
         let mut challenge_columns = vec![];
-        for _ in 0..analysis.max_num_output_axes {
+        let mut power_series_selectors = vec![];
+        for challenge in challenges.iter() {
+            let selector = meta.selector();
             let challenge_tensor = VarTensor::new_advice_in_second_phase(
                 meta,
                 logrows,
-                num_inner_cols,
+                1,
                 analysis.longest_challenge_vector,
             );
+            meta.create_gate("power series", |meta| {
+                let selector = meta.query_selector(selector);
+                let cells = challenge_tensor.query_rng(meta, 0, 0, -1, 2).unwrap();
+                let [prev, curr] = cells.into_iter().collect_vec().try_into().unwrap();
+
+                Constraints::with_selector(selector, vec![curr - prev * challenge.expr()])
+            });
             challenge_columns.push(challenge_tensor);
+            power_series_selectors.push(selector);
         }
 
         // tentatively add the space for witnessing powers of challenges
@@ -75,12 +90,12 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
                 .map(|n| n + (num_inner_cols - (n % num_inner_cols)))
                 .sum::<usize>()
                 * analysis.max_num_output_axes;
-        println!("capacity : {:?}", capacity);
         let custom_gate = EinsumOpConfig::new(meta, num_inner_cols, logrows, capacity);
 
         Self {
             challenges,
             challenge_columns,
+            power_series_selectors,
             custom_gate,
         }
     }
@@ -143,22 +158,15 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             .enumerate()
         {
             let power = *input_axes_to_dim.get(output_axis).unwrap();
-            let challenge_vec = region.assign_einsum(
-                &self.challenge_columns[idx],
-                &vec![ValType::from(challenge.clone()); power].into(),
-            )?;
-            let challenge_vec_ref = challenge_vec.get_inner_tensor()?;
-            let mut challenge_tensor: Vec<ValType<F>> = vec![];
-            for pow in 1..=power {
-                let val = prod(
-                    &self.custom_gate,
-                    region,
-                    &[&ValTensor::from(challenge_vec_ref.get_slice(&[0..pow])?)],
-                    1,
-                )?
-                .get_inner_tensor()?
-                .get_scalar();
-                challenge_tensor.push(val);
+            let value = accumulated::prod(&vec![challenge.clone(); power].into_iter().into(), 1)?;
+            let challenge_tensor =
+                region.assign_einsum(&self.challenge_columns[idx], &value.into())?;
+            // enable selector
+            for i in 1..power {
+                let (block, column, row) = self.challenge_columns[idx].cartesian_coord(region.einsum_col_coord() + i);
+                assert!(block == 0 && column == 0);
+                assert!(region.einsum_col_coord() + i == row);
+                region.enable(Some(&self.power_series_selectors[idx]), row)?;
             }
             challenge_tensors.push(ValTensor::from(challenge_tensor));
         }
@@ -176,7 +184,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         tensors.extend(challenge_tensors);
 
         for contraction in reordered_input_contractions.iter() {
-            println!("contraction.expression : {:?}", contraction.expression);
             let (input_expr, output_expr) = contraction.expression.split_once("->").unwrap();
             let input_exprs = input_expr.split(",").collect_vec();
 
@@ -304,7 +311,6 @@ fn assign_input_contraction<F: PrimeField + TensorType + PartialOrd + std::hash:
         let result = if tensors.len() == 1 {
             sum(config, region, &[&tensors[0]], input_phases[0])?
         } else if tensors.len() == 2 {
-            println!("input_phases : {:?}", input_phases);
             dot(
                 config,
                 region,
@@ -312,11 +318,17 @@ fn assign_input_contraction<F: PrimeField + TensorType + PartialOrd + std::hash:
                 &[input_phases[0], input_phases[1]],
             )?
         } else {
+            let (tensors, phases): (Vec<_>, Vec<usize>) = tensors
+                .into_iter()
+                .zip(input_phases.iter().cloned())
+                // reorder the tensors to ensure there is no contraction between phase 0 tensors
+                .sorted_by(|(_, phase0), (_, phase1)| Ord::cmp(&phase1, &phase0))
+                .unzip();
             multi_dot(
                 config,
                 region,
                 tensors.iter().collect_vec().as_slice(),
-                input_phases,
+                &phases,
             )?
         };
         dot_product_results.push(result.get_inner_tensor()?.get_scalar());

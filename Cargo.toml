@@ -290,9 +290,6 @@ uniffi_testing = { git = "https://github.com/ElusAegis/uniffi-rs", branch = "fea
 [patch."https://github.com/zkonduit/halo2"]
 halo2_proofs = { git = "https://github.com/DoHoonKim8/halo2", branch = "feat/cross-phase-assignment" }
 
-[profile.bench]
-opt-level = 3
-
 [profile.release]
 # debug = true
 rustflags = ["-C", "relocation-model=pic"]

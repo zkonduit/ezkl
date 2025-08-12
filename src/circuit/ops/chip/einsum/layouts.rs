@@ -1,6 +1,5 @@
 use halo2_proofs::circuit::Value;
 use halo2curves::ff::PrimeField;
-use itertools::Itertools;
 use log::{error, trace};
 
 use crate::{
@@ -314,8 +313,6 @@ pub fn multi_dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let (intermediate, _) = values
         .into_iter()
         .zip(phases.iter().cloned())
-        // reorder the values to ensure there is no contraction between phase 0 values
-        .sorted_by(|(_, phase0), (_, phase1)| Ord::cmp(&phase1, &phase0))
         .reduce(|(intermediate, intermediate_phase), (input, phase)| {
             (
                 pairwise(

@@ -2,14 +2,12 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Through
 use ezkl::circuit::einsum::analysis::analyze_einsum_usage;
 use ezkl::circuit::poly::PolyOp;
 use ezkl::circuit::*;
-use ezkl::pfsys::create_proof_circuit;
-use ezkl::pfsys::TranscriptType;
-use ezkl::pfsys::{create_keys, srs::gen_srs};
+use ezkl::pfsys::{create_keys, create_proof_circuit, TranscriptType};
+use ezkl::pfsys::srs::gen_srs;
 use ezkl::tensor::*;
 use halo2_proofs::circuit::floor_planner::V1;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
-use halo2_proofs::poly::kzg::multiopen::ProverSHPLONK;
-use halo2_proofs::poly::kzg::multiopen::VerifierSHPLONK;
+use halo2_proofs::poly::kzg::multiopen::{ProverSHPLONK, VerifierSHPLONK};
 use halo2_proofs::poly::kzg::strategy::SingleStrategy;
 use halo2_proofs::{
     arithmetic::Field,
@@ -25,7 +23,7 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 
 static mut LEN: usize = 4;
-const K: usize = 16;
+const K: usize = 12;
 
 #[derive(Clone)]
 struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
@@ -72,19 +70,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Einsum<F> {
             _marker: PhantomData,
         })
     }
-
-    pub fn get_challenges(
-        &self,
-        config: &BaseConfig<F>,
-        layouter: impl Layouter<F>,
-    ) -> Result<Vec<Value<F>>, Error> {
-        Ok(config
-            .einsums
-            .challenges
-            .iter()
-            .map(|c| layouter.get_challenge(*c))
-            .collect())
-    }
 }
 
 impl Circuit<Fr> for MyCircuit<Fr> {
@@ -108,7 +93,7 @@ impl Circuit<Fr> for MyCircuit<Fr> {
         let mut equations = HashMap::new();
         equations.insert(params.equation, params.input_axes_to_dims);
         let analysis = analyze_einsum_usage(&equations).unwrap();
-        let num_einsum_inner_cols = 2;
+        let num_einsum_inner_cols = 1;
         config
             .configure_einsums(cs, &analysis, num_einsum_inner_cols, K)
             .unwrap();
@@ -148,9 +133,12 @@ impl Circuit<Fr> for MyCircuit<Fr> {
         mut config: Self::Config,
         mut layouter: impl Layouter<Fr>,
     ) -> Result<(), Error> {
-        let challenges = self
-            .einsum
-            .get_challenges(&config, layouter.namespace(|| "challenge values"))?;
+        let challenges = config
+            .einsums
+            .challenges
+            .iter()
+            .map(|c| layouter.get_challenge(*c))
+            .collect_vec();
 
         layouter.assign_region(
             || "",
@@ -181,7 +169,7 @@ impl Circuit<Fr> for MyCircuit<Fr> {
 
 fn runmatmul(c: &mut Criterion) {
     let mut group = c.benchmark_group("accum_einsum_matmul");
-    let params = gen_srs::<KZGCommitmentScheme<_>>(14);
+    let params = gen_srs::<KZGCommitmentScheme<_>>(13);
     for &len in [4, 32].iter() {
         unsafe {
             LEN = len;
