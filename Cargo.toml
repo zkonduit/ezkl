@@ -48,9 +48,6 @@ semver = { version = "1.0.22", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 
-# GPU / device related things (only when gpu-accelerated feature is enabled)
-icicle-runtime = { git = "https://github.com/ingonyama-zk/icicle", branch="emir/gate_eval_2", package="icicle-runtime", optional = true }
-
 # evm related deps
 serde_json = { version = "1.0.97", features = ["float_roundtrip", "raw_value"] }
 
@@ -106,8 +103,8 @@ uniffi_bindgen = { version = "=0.28.0", optional = true }
 camino = { version = "^1.1", optional = true }
 uuid = { version = "1.10.0", features = ["v4"], optional = true }
 
-# GPU / device related things (excluded for WASM)
-# icicle-runtime moved to target-specific dependencies
+# GPU / device related things
+icicle-runtime = { git = "https://github.com/ingonyama-zk/icicle", branch="emir/gate_eval_2", package="icicle-runtime" }
 
 
 [target.'cfg(not(all(target_arch = "wasm32", target_os = "unknown")))'.dependencies]
@@ -118,11 +115,6 @@ sha256 = { version = "1.4.0", optional = true }
 
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-# Use main halo2 branch for WASM to avoid icicle compilation issues
-halo2_gadgets = { git = "https://github.com/zkonduit/halo2", branch= "main" }
-halo2_proofs = { git = "https://github.com/zkonduit/halo2", package = "halo2_proofs", branch= "main", features = [
-    "circuit-params", "mv-lookup"
-] }
 serde_json = { version = "1.0.97", default-features = false, features = [
     "float_roundtrip",
     "raw_value",
@@ -283,7 +275,7 @@ mv-lookup = ["halo2_proofs/mv-lookup", "snark-verifier/mv-lookup"]
 asm = ["halo2curves/asm", "halo2_proofs/asm"]
 precompute-coset = ["halo2_proofs/precompute-coset"]
 det-prove = []
-gpu-accelerated = ["halo2_proofs/gpu-accelerated", "dep:icicle-runtime"]
+gpu-accelerated = ["halo2_proofs/gpu-accelerated"]
 empty-cmd = []
 no-banner = []
 no-update = []
