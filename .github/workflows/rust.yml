@@ -900,6 +900,8 @@ jobs:
     runs-on: macos-latest
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      RUSTFLAGS: "-C linker=gcc"
+      OPENSSL_NO_VENDOR: 1
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
@@ -916,6 +918,8 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
+      - name: Force rebuild icicle dependencies
+        run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
       - name: Run ios tests
         run: CARGO_BUILD_TARGET=aarch64-apple-darwin RUSTUP_TOOLCHAIN=nightly-2025-05-01-aarch64-apple-darwin cargo test --test ios_integration_tests --features ios-bindings-test --no-default-features
 
@@ -927,6 +931,8 @@ jobs:
 
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      RUSTFLAGS: "-C linker=gcc"
+      OPENSSL_NO_VENDOR: 1
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
@@ -938,6 +944,8 @@ jobs:
           toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
+      - name: Force rebuild icicle dependencies
+        run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
       - name: Build EzklCoreBindings
         run: CONFIGURATION=debug cargo run --bin ios_gen_bindings --features "ios-bindings uuid camino uniffi_bindgen" --no-default-features
 
