@@ -259,7 +259,7 @@ jobs:
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
       # add `atomics` and `bulk-memory` to RUSTFLAGS to enable wasm-bindgen tests
-      RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory -C linker=gcc"
+      RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory"
       OPENSSL_NO_VENDOR: 1
 
     steps:
