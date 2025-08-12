@@ -134,6 +134,8 @@ jobs:
     env:
       ENABLE_ICICLE_GPU: true
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      RUSTFLAGS: "-C linker=gcc"
+      OPENSSL_NO_VENDOR: 1
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -155,7 +157,9 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential g++ gcc cmake libclang-dev llvm-dev libstdc++-12-dev
+          sudo apt-get install -y build-essential g++ gcc cmake libclang-dev llvm-dev libstdc++-12-dev libc6 libc6-dev libssl-dev pkg-config
+      - name: Force rebuild icicle dependencies
+        run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
       # - name: Matmul overflow (wasi)
       #   run: cargo wasi test matmul_col_ultra_overflow -- --include-ignored --nocapture
       # - name: Conv overflow (wasi)
@@ -563,7 +567,8 @@ jobs:
     env:
       ENABLE_ICICLE_GPU: true
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
-      RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory"
+      RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory -C linker=gcc"
+      OPENSSL_NO_VENDOR: 1
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -584,7 +589,9 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential g++ gcc cmake libclang-dev llvm-dev libstdc++-12-dev
+          sudo apt-get install -y build-essential g++ gcc cmake libclang-dev llvm-dev libstdc++-12-dev libc6 libc6-dev libssl-dev pkg-config
+      - name: Force rebuild icicle dependencies
+        run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
       - name: KZG prove and verify tests (kzg outputs)
         run: cargo nextest run --verbose tests::kzg_prove_and_verify_kzg_output --features gpu-accelerated --test-threads 1
       - name: KZG prove and verify tests (public outputs + column overflow)
@@ -634,6 +641,8 @@ jobs:
     env:
       ENABLE_ICICLE_GPU: true
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      RUSTFLAGS: "-C linker=gcc"
+      OPENSSL_NO_VENDOR: 1
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -652,7 +661,9 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential g++ gcc cmake libclang-dev llvm-dev libstdc++-12-dev
+          sudo apt-get install -y build-essential g++ gcc cmake libclang-dev llvm-dev libstdc++-12-dev libc6 libc6-dev libssl-dev pkg-config
+      - name: Force rebuild icicle dependencies
+        run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
       - name: KZG tests
         run: cargo nextest run --verbose tests_aggr::kzg_aggr_prove_and_verify_  --features gpu-accelerated --test-threads 1 -- --include-ignored
 
