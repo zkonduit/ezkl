@@ -287,12 +287,12 @@ reusable-verifier = []
 
 
 [patch.'https://github.com/zkonduit/halo2']
-halo2_proofs = { git = "https://github.com/zkonduit/halo2#49ad0a97cc2cf0f6da7e35a4f051bd8b57d4a004", package = "halo2_proofs", branch= "ac/conditional-compilation-icicle2", features = [
+halo2_proofs = { git = "https://github.com/zkonduit/halo2#1dd2090741f006fd031a07da7f3c9dfce5e0015e", package = "halo2_proofs", branch= "ac/conditional-compilation-icicle2", features = [
     "circuit-params", "mv-lookup"
 ] }
 
 [patch.'https://github.com/zkonduit/halo2#f441c920be45f8f05d2c06a173d82e8885a5ed4d']
-halo2_proofs = { git = "https://github.com/zkonduit/halo2#49ad0a97cc2cf0f6da7e35a4f051bd8b57d4a004", package = "halo2_proofs", branch= "ac/conditional-compilation-icicle2", features = [
+halo2_proofs = { git = "https://github.com/zkonduit/halo2#1dd2090741f006fd031a07da7f3c9dfce5e0015e", package = "halo2_proofs", branch= "ac/conditional-compilation-icicle2", features = [
     "circuit-params", "mv-lookup"
 ] }
 
