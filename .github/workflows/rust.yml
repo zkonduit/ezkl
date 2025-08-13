@@ -843,6 +843,7 @@ jobs:
     permissions:
       contents: read
     runs-on: large-self-hosted
+    needs: [build, library-tests, docs, python-tests]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
