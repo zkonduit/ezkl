@@ -382,7 +382,7 @@ jobs:
     # needs: [build, library-tests, docs, python-tests, python-integration-tests]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
-      RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory -C linker=gcc"
+      RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory"
       OPENSSL_NO_VENDOR: 1
 
     steps:
