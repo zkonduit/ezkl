@@ -7,12 +7,7 @@ use halo2_proofs::{
 };
 use log::debug;
 #[cfg(feature = "python-bindings")]
-use pyo3::{
-    conversion::FromPyObject,
-    exceptions::PyValueError,
-    IntoPyObject,
-    prelude::*,
-};
+use pyo3::{conversion::FromPyObject, exceptions::PyValueError, prelude::*, IntoPyObject};
 use serde::{Deserialize, Serialize};
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use tosubcommand::ToFlags;

@@ -269,9 +269,7 @@ impl<'py> IntoPyObject<'py> for CalibrationTarget {
 
     fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
         let result = match self {
-            CalibrationTarget::Resources { col_overflow: true } => {
-                "resources/col-overflow"
-            }
+            CalibrationTarget::Resources { col_overflow: true } => "resources/col-overflow",
             CalibrationTarget::Resources {
                 col_overflow: false,
             } => "resources",

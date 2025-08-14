@@ -26,6 +26,8 @@ use colored::Colorize;
 #[cfg(unix)]
 use gag::Gag;
 use halo2_proofs::dev::VerifyFailure;
+#[cfg(feature = "gpu-accelerated")]
+use halo2_proofs::icicle::try_load_and_set_backend_device;
 use halo2_proofs::plonk::{self, Circuit};
 use halo2_proofs::poly::commitment::{CommitmentScheme, Params};
 use halo2_proofs::poly::commitment::{ParamsProver, Verifier};
@@ -46,6 +48,8 @@ use halo2_solidity_verifier;
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
 use halo2curves::ff::{FromUniformBytes, WithSmallOrderMulGroup};
 use halo2curves::serde::SerdeObject;
+#[cfg(feature = "gpu-accelerated")]
+use icicle_runtime::{stream::IcicleStream, warmup};
 use indicatif::{ProgressBar, ProgressStyle};
 use instant::Instant;
 use itertools::Itertools;
@@ -87,6 +91,22 @@ lazy_static! {
 
 }
 
+/// Set the device used for computation.
+#[cfg(feature = "gpu-accelerated")]
+pub fn set_device() {
+    if std::env::var("ICICLE_BACKEND_INSTALL_DIR").is_ok() {
+        info!("Running with ICICLE GPU");
+        try_load_and_set_backend_device("CUDA");
+        match warmup(&IcicleStream::default()) {
+            Ok(_) => info!("GPU warmed :)"),
+            Err(e) => log::error!("GPU warmup failed: {:?}", e),
+        }
+    } else {
+        info!("Running with CPU: 'ICICLE_BACKEND_INSTALL_DIR' not set");
+        try_load_and_set_backend_device("CPU");
+    }
+}
+
 /// A wrapper for execution errors
 #[derive(Debug, Error)]
 pub enum ExecutionError {
@@ -108,6 +128,8 @@ lazy_static::lazy_static! {
 
 /// Run an ezkl command with given args
 pub async fn run(command: Commands) -> Result<String, EZKLError> {
+    #[cfg(feature = "gpu-accelerated")]
+    set_device();
     // set working dir
     std::env::set_current_dir(WORKING_DIR.as_path())?;
 

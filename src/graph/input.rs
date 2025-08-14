@@ -427,8 +427,6 @@ mod tests {
     }
 }
 
-
-
 #[cfg(feature = "python-bindings")]
 use crate::pfsys::field_to_string;
 
@@ -443,13 +441,9 @@ impl<'py> IntoPyObject<'py> for FileSourceInner {
             FileSourceInner::Field(data) => {
                 let s = field_to_string(&data);
                 Ok(pyo3::types::PyString::new(py, &s).into_any())
-            },
-            FileSourceInner::Bool(data) => {
-                Ok(pyo3::types::PyBool::new(py, data).as_any().clone())
-            },
-            FileSourceInner::Float(data) => {
-                Ok(pyo3::types::PyFloat::new(py, data).into_any())
-            },
+            }
+            FileSourceInner::Bool(data) => Ok(pyo3::types::PyBool::new(py, data).as_any().clone()),
+            FileSourceInner::Float(data) => Ok(pyo3::types::PyFloat::new(py, data).into_any()),
         }
     }
 }

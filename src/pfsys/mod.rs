@@ -314,7 +314,6 @@ impl ToFlags for TranscriptType {
     }
 }
 
-
 #[cfg(feature = "python-bindings")]
 ///
 pub fn g1affine_to_pydict(g1affine_dict: &pyo3::Bound<'_, PyDict>, g1affine: &G1Affine) {
@@ -404,7 +403,8 @@ where
 #[cfg(feature = "python-bindings")]
 use pyo3::{types::PyDict, IntoPyObject, Python};
 #[cfg(feature = "python-bindings")]
-impl<'py, F: PrimeField + SerdeObject + Serialize, C: CurveAffine + Serialize> IntoPyObject<'py> for Snark<F, C>
+impl<'py, F: PrimeField + SerdeObject + Serialize, C: CurveAffine + Serialize> IntoPyObject<'py>
+    for Snark<F, C>
 where
     C::Scalar: Serialize + DeserializeOwned,
     C::ScalarExt: Serialize + DeserializeOwned,

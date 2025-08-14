@@ -47,6 +47,8 @@ jobs:
       TARGET_DIR: ./target
       RUST_BACKTRACE: 1
       PCRE2_SYS_STATIC: 1
+      RUSTFLAGS: "-C linker=gcc"
+      OPENSSL_NO_VENDOR: 1
     steps:
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48   #v1.0.6
         with:
@@ -59,6 +61,13 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential g++ gcc cmake libclang-dev llvm-dev libstdc++-12-dev libc6 libc6-dev libssl-dev pkg-config
+
+      - name: Force rebuild icicle dependencies
+        run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
 
       - name: Get release version from tag
         shell: bash
@@ -79,7 +88,7 @@ jobs:
           sudo apt-get update
 
       - name: Build release binary
-        run: cargo build --release -Z sparse-registry --features icicle
+        run: cargo build --release -Z sparse-registry --features gpu-accelerated
 
       - name: Build archive
         shell: bash
