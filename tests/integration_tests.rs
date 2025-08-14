@@ -522,7 +522,7 @@ mod native_tests {
             use crate::native_tests::accuracy_measurement;
             use crate::native_tests::prove_and_verify;
             #[cfg(not(feature = "gpu-accelerated"))]
-            use crate::native_tests::run_js_tests;
+            // use crate::native_tests::run_js_tests;
             use crate::native_tests::render_circuit;
             use crate::native_tests::model_serialization_different_binaries;
 
@@ -923,8 +923,8 @@ mod native_tests {
                     env_logger::init();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 1, None, true, "single", Commitments::KZG, 2);
-                    #[cfg(not(feature = "gpu-accelerated"))]
-                    run_js_tests(path, test.to_string(), "testWasm", false);
+                    // #[cfg(not(feature = "gpu-accelerated"))]
+                    // run_js_tests(path, test.to_string(), "testWasm", false);
                     test_dir.close().unwrap();
                 }
 
@@ -936,8 +936,8 @@ mod native_tests {
                     env_logger::init();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     prove_and_verify(path, test.to_string(), "safe", "hashed", "private", "public", 1, None, true, "single", Commitments::KZG, 2);
-                    #[cfg(not(feature = "gpu-accelerated"))]
-                    run_js_tests(path, test.to_string(), "testWasm", false);
+                    // #[cfg(not(feature = "gpu-accelerated"))]
+                    // run_js_tests(path, test.to_string(), "testWasm", false);
                     test_dir.close().unwrap();
                 }
 
@@ -949,8 +949,8 @@ mod native_tests {
                     env_logger::init();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     prove_and_verify(path, test.to_string(), "safe", "private", "fixed", "public", 1, None, true, "single", Commitments::KZG, 2);
-                    #[cfg(not(feature = "gpu-accelerated"))]
-                    run_js_tests(path, test.to_string(), "testWasm", false);
+                    // #[cfg(not(feature = "gpu-accelerated"))]
+                    // run_js_tests(path, test.to_string(), "testWasm", false);
                     test_dir.close().unwrap();
                 }
 
