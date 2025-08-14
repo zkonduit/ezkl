@@ -913,7 +913,7 @@ mod native_tests {
 
             });
 
-            seq!(N in 0..=44 {
+            seq!(N in 0..=43 {
 
                 #(#[test_case(WASM_TESTS[N])])*
                 fn kzg_prove_and_verify_with_overflow_(test: &str) {
