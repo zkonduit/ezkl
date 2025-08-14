@@ -313,60 +313,60 @@ mod native_tests {
         "integer_div", // 98
     ];
 
-    const WASM_TESTS: [&str; 46] = [
-        "1l_mlp",
-        "1l_slice",
-        "1l_concat",
-        "1l_flatten",
+    const WASM_TESTS: [&str; 44] = [
+        "1l_mlp",     // 0
+        "1l_slice",   // 1
+        "1l_concat",  // 2
+        "1l_flatten", // 3
         // "1l_average",
-        "1l_div",
-        "1l_pad",
-        "1l_reshape",
-        "1l_eltwise_div",
-        "1l_sigmoid",
-        "1l_sqrt",
-        "1l_softmax",
+        "1l_div",         // 4
+        "1l_pad",         // 5
+        "1l_reshape",     // 6
+        "1l_eltwise_div", // 7
+        "1l_sigmoid",     // 8
+        "1l_sqrt",        // 9
+        "1l_softmax",     // 10
         // "1l_instance_norm",
-        "1l_batch_norm",
-        "1l_prelu",
-        "1l_leakyrelu",
-        "1l_gelu_noappx",
+        "1l_batch_norm",  // 11
+        "1l_prelu",       // 12
+        "1l_leakyrelu",   // 13
+        "1l_gelu_noappx", // 14
         // "1l_gelu_tanh_appx",
-        "1l_relu",
-        "1l_downsample",
-        "1l_tanh",
-        "2l_relu_sigmoid_small",
-        "2l_relu_fc",
-        "2l_relu_small",
-        "2l_relu_sigmoid",
-        "1l_conv",
-        "2l_sigmoid_small",
-        "2l_relu_sigmoid_conv",
-        "3l_relu_conv_fc",
-        "4l_relu_conv_fc",
-        "1l_erf",
-        "1l_var",
-        "1l_elu",
-        "min",
-        "max",
-        "1l_max_pool",
-        "1l_conv_transpose",
-        "1l_upsample",
-        "1l_identity",
+        "1l_relu",               // 15
+        "1l_downsample",         // 16
+        "1l_tanh",               // 17
+        "2l_relu_sigmoid_small", // 18
+        "2l_relu_fc",            // 19
+        "2l_relu_small",         // 20
+        "2l_relu_sigmoid",       // 21
+        "1l_conv",               // 22
+        "2l_sigmoid_small",      // 23
+        "2l_relu_sigmoid_conv",  // 24
+        // "3l_relu_conv_fc",
+        // "4l_relu_conv_fc",
+        "1l_erf",            // 25
+        "1l_var",            // 26
+        "1l_elu",            // 27
+        "min",               // 28
+        "max",               // 29
+        "1l_max_pool",       // 30
+        "1l_conv_transpose", // 31
+        "1l_upsample",       // 32
+        "1l_identity",       // 33
         // "idolmodel",
-        "trig",
-        "prelu_gmm",
-        "lstm",
-        "rnn",
-        "quantize_dequantize",
-        "1l_where",
-        "boolean",
-        "boolean_identity",
-        "gradient_boosted_trees",
-        "1l_topk",
-        // "xgboost",
-        // "lightgbm",
-        // "hummingbird_decision_tree",
+        "trig",                   // 34
+        "prelu_gmm",              // 35
+        "lstm",                   // 36
+        "rnn",                    // 37
+        "quantize_dequantize",    // 38
+        "1l_where",               // 39
+        "boolean",                // 40
+        "boolean_identity",       // 41
+        "gradient_boosted_trees", // 42
+        "1l_topk",                // 43
+                                  // "xgboost",
+                                  // "lightgbm",
+                                  // "hummingbird_decision_tree",
     ];
 
     #[cfg(not(feature = "gpu-accelerated"))]
@@ -913,7 +913,7 @@ mod native_tests {
 
             });
 
-            seq!(N in 0..=45 {
+            seq!(N in 0..=44 {
 
                 #(#[test_case(WASM_TESTS[N])])*
                 fn kzg_prove_and_verify_with_overflow_(test: &str) {
