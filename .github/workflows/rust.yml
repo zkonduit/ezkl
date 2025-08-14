@@ -177,6 +177,7 @@ jobs:
     permissions:
       contents: read
     runs-on: [ non-gpu, non-sgx ]
+    needs: [build, library-tests, docs]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
       RUSTFLAGS: "-C linker=gcc"
@@ -305,6 +306,7 @@ jobs:
     permissions:
       contents: read
     runs-on: [ non-gpu, non-sgx ]
+    needs: [build, library-tests, docs]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
       RUSTFLAGS: "-C linker=gcc"
