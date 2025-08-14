@@ -1,4 +1,4 @@
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, AxisScale, BenchmarkId, Criterion, PlotConfiguration, Throughput};
 use ezkl::circuit::einsum::analysis::analyze_einsum_usage;
 use ezkl::circuit::poly::PolyOp;
 use ezkl::circuit::*;
@@ -23,7 +23,7 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 
 static mut LEN: usize = 4;
-const K: usize = 17;
+static mut K: usize = 10;
 
 #[derive(Clone)]
 struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
@@ -87,12 +87,17 @@ impl Circuit<Fr> for MyCircuit<Fr> {
         let mut equations = HashMap::new();
         equations.insert(params.equation, params.input_axes_to_dims);
         let analysis = analyze_einsum_usage(&equations).unwrap();
-        let num_einsum_inner_cols = 2;
-        config
-            .configure_einsums(cs, &analysis, num_einsum_inner_cols, K)
-            .unwrap();
+        let num_einsum_inner_cols = 1;
+        unsafe {
+            config
+                .configure_einsums(cs, &analysis, num_einsum_inner_cols, K)
+                .unwrap();
+        }
 
+        unsafe { println!("logrows of circuit : {K}"); }
         println!("number of advice columns : {}", cs.num_advice_columns());
+        println!("number of fixed columns : {}", cs.num_selectors());
+        println!("degree of the circuit : {}", cs.degree());
 
         config
     }
@@ -117,9 +122,11 @@ impl Circuit<Fr> for MyCircuit<Fr> {
         equations.insert(default_params.equation, default_params.input_axes_to_dims);
         let analysis = analyze_einsum_usage(&equations).unwrap();
         let num_einsum_inner_cols = 1;
-        config
-            .configure_einsums(cs, &analysis, num_einsum_inner_cols, K)
-            .unwrap();
+        unsafe {
+            config
+                .configure_einsums(cs, &analysis, num_einsum_inner_cols, K)
+                .unwrap();
+        }
 
         config
     }
@@ -165,16 +172,22 @@ impl Circuit<Fr> for MyCircuit<Fr> {
 
 fn runmatmul(c: &mut Criterion) {
     let mut group = c.benchmark_group("accum_einsum_matmul");
-    let params = gen_srs::<KZGCommitmentScheme<_>>(K as u32);
-    for &len in [256].iter() {
-        unsafe {
-            LEN = len;
+    group.plot_config(PlotConfiguration::default().summary_scale(AxisScale::Linear));
+    group.sampling_mode(criterion::SamplingMode::Flat);
+    group.sample_size(10);
+    let len = 64;
+    unsafe {
+        LEN = len;
+    }
+    for k in 14..18 {
+        let params = unsafe {
+            K = k;
+            gen_srs::<KZGCommitmentScheme<_>>(K as u32)
         };
 
         let mut a = Tensor::from((0..len * len).map(|_| Value::known(Fr::random(OsRng))));
         a.reshape(&[len, len]).unwrap();
 
-        // parameters
         let mut b = Tensor::from((0..len * len).map(|_| Value::known(Fr::random(OsRng))));
         b.reshape(&[len, len]).unwrap();
 
@@ -185,19 +198,19 @@ fn runmatmul(c: &mut Criterion) {
             einsum,
         };
 
-        group.throughput(Throughput::Elements(len as u64));
-        group.bench_with_input(BenchmarkId::new("pk", len), &len, |b, &_| {
-            b.iter(|| {
-                create_keys::<KZGCommitmentScheme<Bn256>, MyCircuit<Fr>>(&circuit, &params, true)
-                    .unwrap();
-            });
-        });
+        // group.throughput(Throughput::Elements(len as u64));
+        // group.bench_with_input(BenchmarkId::new("pk", k), &k, |b, &_| {
+        //     b.iter(|| {
+        //         create_keys::<KZGCommitmentScheme<Bn256>, MyCircuit<Fr>>(&circuit, &params, true)
+        //             .unwrap();
+        //     });
+        // });
 
         let pk = create_keys::<KZGCommitmentScheme<Bn256>, MyCircuit<Fr>>(&circuit, &params, true)
             .unwrap();
 
-        group.throughput(Throughput::Elements(len as u64));
-        group.bench_with_input(BenchmarkId::new("prove", len), &len, |b, &_| {
+        // group.throughput(Throughput::Elements(len as u64));
+        group.bench_with_input(BenchmarkId::new("prove", k), &k, |b, &_| {
             b.iter(|| {
                 let prover = create_proof_circuit::<
                     KZGCommitmentScheme<_>,
@@ -226,9 +239,5 @@ fn runmatmul(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group! {
-  name = benches;
-  config = Criterion::default().with_plots().sample_size(30);
-  targets = runmatmul
-}
+criterion_group!(benches, runmatmul);
 criterion_main!(benches);
