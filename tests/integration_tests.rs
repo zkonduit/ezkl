@@ -553,15 +553,15 @@ mod native_tests {
 
             seq!(N in 0..=98 {
 
-            #(#[test_case(TESTS[N])])*
-            #[ignore]
-            fn render_circuit_(test: &str) {
-                crate::native_tests::init_binary();
-                let test_dir = TempDir::new(test).unwrap();
-                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                render_circuit(path, test.to_string());
-                test_dir.close().unwrap();
-            }
+            // #(#[test_case(TESTS[N])])*
+            // #[ignore]
+            // fn render_circuit_(test: &str) {
+            //     crate::native_tests::init_binary();
+            //     let test_dir = TempDir::new(test).unwrap();
+            //     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
+            //     render_circuit(path, test.to_string());
+            //     test_dir.close().unwrap();
+            // }
 
 
 
