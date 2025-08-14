@@ -23,7 +23,7 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 
 static mut LEN: usize = 4;
-const K: usize = 15;
+const K: usize = 17;
 
 #[derive(Clone)]
 struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
@@ -87,10 +87,12 @@ impl Circuit<Fr> for MyCircuit<Fr> {
         let mut equations = HashMap::new();
         equations.insert(params.equation, params.input_axes_to_dims);
         let analysis = analyze_einsum_usage(&equations).unwrap();
-        let num_einsum_inner_cols = 1;
+        let num_einsum_inner_cols = 2;
         config
             .configure_einsums(cs, &analysis, num_einsum_inner_cols, K)
             .unwrap();
+
+        println!("number of advice columns : {}", cs.num_advice_columns());
 
         config
     }
@@ -164,7 +166,7 @@ impl Circuit<Fr> for MyCircuit<Fr> {
 fn runmatmul(c: &mut Criterion) {
     let mut group = c.benchmark_group("accum_einsum_matmul");
     let params = gen_srs::<KZGCommitmentScheme<_>>(K as u32);
-    for &len in [64].iter() {
+    for &len in [256].iter() {
         unsafe {
             LEN = len;
         };
