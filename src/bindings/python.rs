@@ -93,7 +93,6 @@ impl From<PyG1> for G1 {
     }
 }
 
-
 /// pyclass containing the struct used for G1
 #[pyclass]
 #[derive(Debug, Clone)]
@@ -124,7 +123,6 @@ impl From<PyG1Affine> for G1Affine {
         }
     }
 }
-
 
 /// Python class containing the struct used for run_args
 ///

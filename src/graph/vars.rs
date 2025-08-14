@@ -8,9 +8,7 @@ use halo2curves::ff::PrimeField;
 use itertools::Itertools;
 use log::debug;
 #[cfg(feature = "python-bindings")]
-use pyo3::{
-    exceptions::PyValueError, FromPyObject, IntoPyObject, PyResult, Python,
-};
+use pyo3::{exceptions::PyValueError, FromPyObject, IntoPyObject, PyResult, Python};
 use serde::{Deserialize, Serialize};
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use tosubcommand::ToFlags;
@@ -131,7 +129,9 @@ impl<'py> IntoPyObject<'py> for Visibility {
                         .map(|o| o.to_string())
                         .collect_vec()
                         .join(",");
-                    Ok(format!("hashed/private/{}", outlets).into_pyobject(py)?.into_any())
+                    Ok(format!("hashed/private/{}", outlets)
+                        .into_pyobject(py)?
+                        .into_any())
                 }
             }
         }

@@ -521,7 +521,6 @@ mod native_tests {
             use crate::native_tests::mock;
             use crate::native_tests::accuracy_measurement;
             use crate::native_tests::prove_and_verify;
-            #[cfg(not(feature = "gpu-accelerated"))]
             // use crate::native_tests::run_js_tests;
             // use crate::native_tests::render_circuit;
             use crate::native_tests::model_serialization_different_binaries;
