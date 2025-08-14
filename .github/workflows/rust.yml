@@ -489,7 +489,6 @@ jobs:
     runs-on: [ non-gpu, non-sgx ]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
-      RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory"
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
@@ -577,7 +576,7 @@ jobs:
     env:
       ENABLE_ICICLE_GPU: true
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
-      RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory -C linker=gcc"
+      RUSTFLAGS: "-C linker=gcc"
       OPENSSL_NO_VENDOR: 1
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
