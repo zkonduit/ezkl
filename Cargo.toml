@@ -301,11 +301,11 @@ halo2_proofs = { git = "https://github.com/zkonduit/halo2#1dd2090741f006fd031a07
 uniffi_testing = { git = "https://github.com/ElusAegis/uniffi-rs", branch = "feat/testing-feature-build-fix" }
 
 
-[profile.release]
+# [profile.release]
 # debug = true
-rustflags = ["-C", "relocation-model=pic"]
-lto = "fat"
-codegen-units = 1
+# rustflags = ["-C", "relocation-model=pic"]
+# lto = "fat"
+# codegen-units = 1
 # panic = "abort"
 
 
