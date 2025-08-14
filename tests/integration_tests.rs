@@ -523,7 +523,7 @@ mod native_tests {
             use crate::native_tests::prove_and_verify;
             #[cfg(not(feature = "gpu-accelerated"))]
             // use crate::native_tests::run_js_tests;
-            use crate::native_tests::render_circuit;
+            // use crate::native_tests::render_circuit;
             use crate::native_tests::model_serialization_different_binaries;
 
             use tempdir::TempDir;
@@ -1560,22 +1560,22 @@ mod native_tests {
         assert!(status.success());
     }
 
-    // Mock prove (fast, but does not cover some potential issues)
-    fn render_circuit(test_dir: &str, example_name: String) {
-        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
-            .args([
-                "render-circuit",
-                "-M",
-                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "-O",
-                format!("{}/{}/render.png", test_dir, example_name).as_str(),
-                "--lookup-range=-32768->32768",
-                "-K=17",
-            ])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-    }
+    // // Mock prove (fast, but does not cover some potential issues)
+    // fn render_circuit(test_dir: &str, example_name: String) {
+    //     let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
+    //         .args([
+    //             "render-circuit",
+    //             "-M",
+    //             format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+    //             "-O",
+    //             format!("{}/{}/render.png", test_dir, example_name).as_str(),
+    //             "--lookup-range=-32768->32768",
+    //             "-K=17",
+    //         ])
+    //         .status()
+    //         .expect("failed to execute process");
+    //     assert!(status.success());
+    // }
 
     // prove-serialize-verify, the usual full path
     #[cfg(not(feature = "gpu-accelerated"))]
