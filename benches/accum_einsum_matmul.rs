@@ -88,6 +88,11 @@ impl Circuit<Fr> for MyCircuit<Fr> {
         equations.insert(params.equation, params.input_axes_to_dims);
         let analysis = analyze_einsum_usage(&equations).unwrap();
         let num_einsum_inner_cols = 1;
+        // freivalds : adjust shape based on logrows
+        // original version : does not adjust shape based on logrows, so we have to change num inner columns
+
+        // 1) make one factor constant
+        // 2) find best configuration
         unsafe {
             config
                 .configure_einsums(cs, &analysis, num_einsum_inner_cols, K)
@@ -175,11 +180,11 @@ fn runmatmul(c: &mut Criterion) {
     group.plot_config(PlotConfiguration::default().summary_scale(AxisScale::Linear));
     group.sampling_mode(criterion::SamplingMode::Flat);
     group.sample_size(10);
-    let len = 64;
+    let len = 256;
     unsafe {
         LEN = len;
     }
-    for k in 14..18 {
+    for k in 14..19 {
         let params = unsafe {
             K = k;
             gen_srs::<KZGCommitmentScheme<_>>(K as u32)

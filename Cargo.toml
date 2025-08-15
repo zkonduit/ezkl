@@ -20,7 +20,7 @@ halo2curves = { git = "https://github.com/privacy-scaling-explorations/halo2curv
     "derive_serde",
 ] }
 halo2_proofs = { git = "https://github.com/zkonduit/halo2", package = "halo2_proofs", features = [
-    "circuit-params",
+    "circuit-params", "test-dev-graph"
 ] }
 rand = { version = "0.8", default-features = false }
 itertools = { version = "0.10.3", default-features = false }
@@ -134,6 +134,7 @@ criterion = { version = "0.5.1", features = ["html_reports"] }
 uniffi = { version = "0.28", features = ["build"], optional = true }
 
 [dev-dependencies]
+plotters = { version = "0.3.7", default-features = false }
 tempfile = "3.3.0"
 lazy_static = "1.4.0"
 mnist = "0.5"

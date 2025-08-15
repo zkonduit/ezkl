@@ -16,7 +16,8 @@ use rand::rngs::OsRng;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 
-const K: usize = 15;
+const K: usize = 13;
+// 12417 used rows
 
 #[derive(Clone)]
 struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
@@ -173,6 +174,18 @@ fn runmatmul() {
 
     let mock_prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
     mock_prover.assert_satisfied();
+
+        use plotters::prelude::*;
+
+        let root = BitMapBackend::new("freivalds-chip-layout.png", (4096, 4096)).into_drawing_area();
+        root.fill(&WHITE).unwrap();
+        let root = root
+            .titled("Freivalds Chip Layout", ("sans-serif", 60))
+            .unwrap();
+
+        halo2_proofs::dev::CircuitLayout::default()
+            .render(K as u32, &circuit, &root)
+            .unwrap();
 }
 
 pub fn main() {
