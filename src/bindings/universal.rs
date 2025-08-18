@@ -392,7 +392,7 @@ pub fn prove(
     let mut reader = BufReader::new(&pk[..]);
     let pk = ProvingKey::<G1Affine>::read::<_, GraphCircuit>(
         &mut reader,
-        halo2_proofs::SerdeFormat::RawBytesUnchecked,
+        halo2_proofs::SerdeFormat::RawBytes,
         circuit.settings().clone(),
     )
     .map_err(|e| EZKLError::InternalError(format!("Failed to deserialize proving key: {}", e)))?;
@@ -531,7 +531,7 @@ pub fn pk_validation(pk: Vec<u8>, settings: Vec<u8>) -> Result<bool, EZKLError> 
     let mut reader = BufReader::new(&pk[..]);
     let _ = ProvingKey::<G1Affine>::read::<_, GraphCircuit>(
         &mut reader,
-        halo2_proofs::SerdeFormat::RawBytesUnchecked,
+        halo2_proofs::SerdeFormat::RawBytes,
         circuit_settings,
     )
     .map_err(|e| EZKLError::InternalError(format!("Failed to deserialize proving key: {}", e)))?;
