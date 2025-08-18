@@ -388,11 +388,13 @@ pub fn u8_array_to_u128_le(arr: [u8; 16]) -> u128 {
 }
 ///
 pub fn utf8_bytes_to_hex_decoded(input: &[u8]) -> Result<Vec<u8>, JsError> {
-    let string = std::str::from_utf8(input)?.trim();
+    let string = std::str::from_utf8(input)
+        .map_err(|e| JsError::new(&e.to_string()))?
+        .trim();
     let hex_string = if string.starts_with("0x") {
         &string[2..]
     } else {
         string
     };
-    hex::decode(hex_string).map_err(JsError::from)
+    hex::decode(hex_string).map_err(|e| JsError::new(&e.to_string()))
 }
