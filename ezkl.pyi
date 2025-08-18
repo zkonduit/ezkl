@@ -74,7 +74,7 @@ def aggregate(aggregation_snarks:typing.Sequence[str | os.PathLike | pathlib.Pat
     check_mode: str
         Run sanity checks during calculations. Accepts `safe` or `unsafe`
     
-    split-proofs: bool
+    split_proofs: bool
          Whether the accumulated proofs are segments of a larger circuit
     
     srs_path: str
