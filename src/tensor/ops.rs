@@ -241,9 +241,9 @@ pub fn trilu<T: TensorType + std::marker::Send + std::marker::Sync>(
     // The lower triangular part consists of elements on and below the diagonal. All other elements in the matrix are set to zero.
 
     let batch_dims = &a.dims()[0..a.dims().len() - 2];
-    let batch_cartiesian = batch_dims.iter().map(|d| 0..*d).multi_cartesian_product();
+    let batch_cartesian = batch_dims.iter().map(|d| 0..*d).multi_cartesian_product();
 
-    for b in batch_cartiesian {
+    for b in batch_cartesian {
         for i in 0..a.dims()[1] {
             for j in 0..a.dims()[2] {
                 let mut coord = b.clone();

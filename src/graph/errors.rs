@@ -33,7 +33,7 @@ pub enum GraphError {
     #[error("a node is missing required params: {0}")]
     MissingParams(String),
     /// A node has missing parameters
-    #[error("a node has misformed params: {0}")]
+    #[error("a node has malformed params: {0}")]
     MisformedParams(String),
     /// Error in the configuration of the visibility of variables
     #[error("there should be at least one set of public variables")]
@@ -51,7 +51,7 @@ pub enum GraphError {
     #[error("[io] ({0}) {1}")]
     ReadWriteFileError(String, String),
     /// Model serialization error
-    #[error("failed to ser/deser model: {0}")]
+    #[error("failed to serialize/deserialize model: {0}")]
     ModelSerialize(#[from] bincode::Error),
     /// Tract error
     #[cfg(all(

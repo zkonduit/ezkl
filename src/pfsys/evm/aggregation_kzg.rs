@@ -323,9 +323,9 @@ impl AggregationCircuit {
     }
 
     /// Number of instance variables for the aggregation circuit, used in generating verifier.
-    pub fn num_instance(orginal_circuit_instances: usize) -> Vec<usize> {
+    pub fn num_instance(original_circuit_instances: usize) -> Vec<usize> {
         let accumulation_instances = 4 * LIMBS;
-        vec![accumulation_instances + orginal_circuit_instances]
+        vec![accumulation_instances + original_circuit_instances]
     }
 
     /// Instance variables for the aggregation circuit, fed to verifier.
