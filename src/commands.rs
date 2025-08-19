@@ -546,7 +546,7 @@ pub enum Commands {
         /// The path to output the desired srs file, if set to None will save to ~/.ezkl/srs
         #[arg(long, default_value = None, value_hint = clap::ValueHint::FilePath)]
         srs_path: Option<PathBuf>,
-        /// Path to the circuit settings .json file to read in logrows from. Overriden by logrows if specified.
+        /// Path to the circuit settings .json file to read in logrows from. Overridden by logrows if specified.
         #[arg(short = 'S', long, default_value = DEFAULT_SETTINGS, value_hint = clap::ValueHint::FilePath)]
         settings_path: Option<PathBuf>,
         /// Number of logrows to use for srs. Overrides settings_path if specified.

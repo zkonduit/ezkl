@@ -72,7 +72,7 @@ impl<const LEN: usize, const LOOKUP_MIN: IntegerRep, const LOOKUP_MAX: IntegerRe
             .configure_range_check(cs, &input, &params, (0, 1023), K)
             .unwrap();
 
-        // sets up a new ReLU table and resuses it for l1 and l3 non linearities
+        // sets up a new ReLU table and reuses it for l1 and l3 non linearities
         layer_config
             .configure_lookup(
                 cs,

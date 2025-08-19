@@ -1227,7 +1227,7 @@ impl GraphCircuit {
         let reader = std::io::BufReader::with_capacity(*EZKL_BUF_CAPACITY, f);
         let result: GraphCircuit = bincode::deserialize_from(reader)?;
 
-        // check the versions matche
+        // check that the versions match
         crate::check_version_string_matches(&result.core.settings.version);
 
         Ok(result)

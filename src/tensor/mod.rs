@@ -2,7 +2,7 @@
 pub mod errors;
 /// Implementations of common operations on tensors.
 pub mod ops;
-/// A wrapper around a tensor of circuit variables / advices.
+/// A wrapper around a tensor of circuit variables / advice values.
 pub mod val;
 /// A wrapper around a tensor of Halo2 Value types.
 pub mod var;
