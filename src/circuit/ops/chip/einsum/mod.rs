@@ -1,10 +1,10 @@
 use crate::circuit::base::BaseOp;
 use crate::circuit::chip::einsum::analysis::{analyze_single_equation, EinsumAnalysis};
-use crate::circuit::einsum::layouts::sum;
+use crate::circuit::einsum::layouts::{pairwise, sum};
+use crate::circuit::einsum::reduction_planner::Reduction;
 use crate::circuit::region::RegionCtx;
 use crate::circuit::CircuitError;
-use crate::tensor::ops::accumulated;
-use crate::tensor::{Tensor, TensorError, TensorType, ValTensor, VarTensor};
+use crate::tensor::{Tensor, TensorError, TensorType, ValTensor, ValType, VarTensor};
 use halo2_proofs::circuit::Value;
 use halo2_proofs::plonk::{
     Challenge, ConstraintSystem, Constraints, Expression, FirstPhase, Selector,
@@ -17,21 +17,16 @@ use std::marker::PhantomData;
 
 ///
 pub mod analysis;
-mod contraction_planner;
 mod layouts;
+mod reduction_planner;
 
-/// A struct representing the contractions for the einsums
+/// A struct representing reductions for the einsums
 #[derive(Clone, Debug, Default)]
 pub struct Einsums<F: PrimeField + TensorType + PartialOrd> {
-    /// challenges
-    pub challenges: Vec<Challenge>,
-    /// Witness powers of challenges
-    /// TODO : bake challenges into constraints
-    pub challenge_columns: Vec<VarTensor>,
-    ///
-    pub power_series_selectors: Vec<Selector>,
     /// custom gate to constrain tensor contractions
     custom_gate: EinsumOpConfig<F>,
+    /// custom gate to constrain random linear combinations used by Freivalds' argument
+    rlc_gates: Vec<RLCConfig<F>>,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
@@ -39,17 +34,28 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
     pub fn dummy(col_size: usize, num_inner_cols: usize) -> Self {
         let dummy_var = VarTensor::dummy(col_size, num_inner_cols);
         let dummy_custom_gate = EinsumOpConfig {
-            inputs: [dummy_var.clone(), dummy_var.clone(), dummy_var.clone()],
+            inputs: [
+                dummy_var.clone(),
+                dummy_var.clone(),
+                dummy_var.clone(),
+                dummy_var.clone(),
+            ],
             output: dummy_var.clone(),
             selectors: BTreeMap::default(),
             _marker: PhantomData,
         };
         Self {
-            challenges: vec![],
-            challenge_columns: vec![],
-            power_series_selectors: vec![],
             custom_gate: dummy_custom_gate,
+            rlc_gates: vec![],
         }
+    }
+
+    ///
+    pub fn challenges(&self) -> Vec<Challenge> {
+        self.rlc_gates
+            .iter()
+            .map(|gate| gate.challenge)
+            .collect_vec()
     }
 
     /// Configure the columns based on universal Einsum analysis
@@ -59,39 +65,25 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         num_inner_cols: usize,
         logrows: usize,
     ) -> Self {
-        let capacity = analysis.contraction_length;
-        let custom_gate = EinsumOpConfig::new(meta, num_inner_cols, logrows, capacity);
+        let capacity = analysis.reduction_length;
+        let inputs: [VarTensor; 4] = [
+            VarTensor::new_advice(meta, logrows, num_inner_cols, capacity),
+            VarTensor::new_advice(meta, logrows, num_inner_cols, capacity),
+            VarTensor::new_advice_in_second_phase(meta, logrows, num_inner_cols, capacity),
+            VarTensor::new_advice_in_second_phase(meta, logrows, num_inner_cols, capacity),
+        ];
+        let output = VarTensor::new_advice_in_second_phase(meta, logrows, num_inner_cols, capacity);
+        let custom_gate = EinsumOpConfig::new(meta, &inputs, &output);
 
-        let challenges: Vec<_> = (0..analysis.max_num_output_axes)
-            .map(|_| meta.challenge_usable_after(FirstPhase))
-            .collect();
-
-        let mut challenge_columns = vec![];
-        let mut power_series_selectors = vec![];
-        for challenge in challenges.iter() {
-            let selector = meta.selector();
-            let challenge_tensor = VarTensor::new_advice_in_second_phase(
-                meta,
-                logrows,
-                1,
-                analysis.longest_challenge_vector,
-            );
-            meta.create_gate("power series", |meta| {
-                let selector = meta.query_selector(selector);
-                let cells = challenge_tensor.query_rng(meta, 0, 0, -1, 2).unwrap();
-                let [prev, curr] = cells.into_iter().collect_vec().try_into().unwrap();
-
-                Constraints::with_selector(selector, vec![curr - prev * challenge.expr()])
-            });
-            challenge_columns.push(challenge_tensor);
-            power_series_selectors.push(selector);
+        let mut rlc_gates = vec![];
+        for _ in 0..analysis.max_num_output_axes {
+            let rlc_gate = RLCConfig::new(meta, &[inputs[0].clone(), inputs[2].clone()], &output);
+            rlc_gates.push(rlc_gate);
         }
 
         Self {
-            challenges,
-            challenge_columns,
-            power_series_selectors,
             custom_gate,
+            rlc_gates,
         }
     }
 
@@ -140,46 +132,19 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         let equation_analysis = analyze_single_equation(&equation, &input_axes_to_dim)?;
         let equation = equation_analysis.equation;
 
-        let challenges: Vec<Value<F>> = region
-            .challenges()
+        let output_shape = equation_analysis
+            .output_indices
             .iter()
-            .cloned()
-            .take(equation_analysis.num_output_axes)
-            .collect();
-        let mut challenge_tensors = vec![];
-        for (idx, (challenge, output_axis)) in challenges
-            .into_iter()
-            .zip(equation_analysis.output_indices.iter())
-            .enumerate()
-        {
-            let power = *input_axes_to_dim.get(output_axis).unwrap();
-            let value = accumulated::prod(&vec![challenge.clone(); power].into_iter().into(), 1)?;
-            let challenge_tensor =
-                region.assign_einsum(&self.challenge_columns[idx], &value.into())?;
-            // enable selector
-            for i in 1..power {
-                let (block, column, row) = self.challenge_columns[idx].cartesian_coord(region.einsum_col_coord() + i);
-                assert!(block == 0 && column == 0);
-                assert!(region.einsum_col_coord() + i == row);
-                region.enable(Some(&self.power_series_selectors[idx]), row)?;
-            }
-            challenge_tensors.push(ValTensor::from(challenge_tensor));
-        }
+            .map(|c| input_axes_to_dim.get(c).copied().unwrap())
+            .collect_vec();
+        let squashed_output = self.assign_output(region, &output_tensor, output_shape)?;
 
-        let squashed_output = self.assign_output(
-            region,
-            &output_tensor,
-            &challenge_tensors.iter().collect_vec(),
-        )?;
-
-        // reorder the contraction of input tensors and contract
-        let reordered_input_contractions =
-            contraction_planner::input_contractions(&equation).unwrap();
+        // reorder the reduction of input tensors and reduce
+        let reordered_input_reductions = reduction_planner::input_reductions(&equation).unwrap();
         let mut tensors = input_tensors;
-        tensors.extend(challenge_tensors);
 
-        for contraction in reordered_input_contractions.iter() {
-            let (input_expr, output_expr) = contraction.expression.split_once("->").unwrap();
+        for reduction in reordered_input_reductions.iter() {
+            let (input_expr, output_expr) = reduction.expression().split_once("->").unwrap();
             let input_exprs = input_expr.split(",").collect_vec();
 
             let remaining_axes = output_expr.chars().collect_vec();
@@ -194,8 +159,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
                 remaining_axes_indices.push(vec![]);
             }
 
-            let input_tensors = contraction
-                .input_indices
+            let input_tensors = reduction
+                .input_indices()
                 .iter()
                 .map(|idx| tensors[*idx].clone())
                 .collect_vec();
@@ -233,20 +198,57 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
                     )
                 })
                 .collect_vec();
-            let dot_product_len = input_axes_to_dim[&contraction.axis];
+
             let output_dims = output_expr
                 .chars()
                 .map(|c| input_axes_to_dim[&c])
                 .collect_vec();
-            let contracted_output = assign_input_contraction(
-                &self.custom_gate,
-                region,
-                flattened_input_tensors,
-                dot_product_len,
-                &output_dims,
-                &contraction.input_phases,
-            )?;
 
+            let contracted_output = match reduction {
+                Reduction::RLC {
+                    axis,
+                    input_phase,
+                    challenge_index,
+                    ..
+                } => {
+                    assert_eq!(flattened_input_tensors.len(), 1);
+                    let rlc_len = input_axes_to_dim[axis];
+                    let mut result = self.rlc_gates[*challenge_index].assign_rlc(
+                        region,
+                        &flattened_input_tensors[0],
+                        region.challenges()[*challenge_index],
+                        rlc_len,
+                        *input_phase,
+                    )?;
+                    result.reshape(&output_dims)?;
+                    result
+                }
+                Reduction::Contraction {
+                    axis, input_phases, ..
+                } => match axis {
+                    Some(axis) => {
+                        let dot_product_len = input_axes_to_dim[axis];
+                        assign_input_contraction(
+                            &self.custom_gate,
+                            region,
+                            flattened_input_tensors,
+                            dot_product_len,
+                            &output_dims,
+                            input_phases,
+                        )?
+                    }
+                    None => {
+                        let mut result = assign_pairwise_mult(
+                            &self.custom_gate,
+                            region,
+                            flattened_input_tensors,
+                            input_phases,
+                        )?;
+                        result.reshape(&output_dims)?;
+                        result
+                    }
+                },
+            };
             tensors.push(contracted_output);
         }
         tensors.retain(|tensor| tensor.is_singleton());
@@ -265,25 +267,63 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         &self,
         region: &mut RegionCtx<F>,
         output: &ValTensor<F>,
-        challenge_vectors: &[&ValTensor<F>],
+        mut output_shape: Vec<usize>,
     ) -> Result<ValTensor<F>, CircuitError> {
         let mut intermediate_values = output.clone();
 
-        // Intermediate values output from the previous contraction
+        let challenges = region
+            .challenges()
+            .iter()
+            .take(output_shape.len())
+            .copied()
+            .collect_vec();
+        // Intermediate values output from the previous reduction
         // Loop over the output axes
-        for (idx, powers_of_challenge) in challenge_vectors.into_iter().rev().enumerate() {
-            let phases = if idx > 0 { [1, 1] } else { [0, 1] };
-            intermediate_values = assign_output_contraction(
-                &self.custom_gate,
-                region,
-                &intermediate_values,
-                &powers_of_challenge,
-                &phases,
-            )?;
+        for (idx, (rlc_config, challenge)) in self
+            .rlc_gates
+            .iter()
+            .take(output_shape.len())
+            .zip(challenges)
+            .rev()
+            .enumerate()
+        {
+            let rlc_len = output_shape.last().copied().unwrap();
+            intermediate_values.flatten();
+            let phase = if idx > 0 { 1 } else { 0 };
+            intermediate_values =
+                rlc_config.assign_rlc(region, &intermediate_values, challenge, rlc_len, phase)?;
+            output_shape.pop();
         }
 
         Ok(intermediate_values)
     }
+}
+
+fn assign_pairwise_mult<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+    config: &EinsumOpConfig<F>,
+    region: &mut RegionCtx<F>,
+    flattened_tensors: Vec<ValTensor<F>>,
+    input_phases: &[usize],
+) -> Result<ValTensor<F>, CircuitError> {
+    assert_eq!(flattened_tensors.len(), input_phases.len());
+    let (result, _) = flattened_tensors
+        .into_iter()
+        .zip(input_phases.iter().cloned())
+        .reduce(|(acc, acc_phase), (input, phase)| {
+            (
+                pairwise(
+                    config,
+                    region,
+                    &[&acc, &input],
+                    BaseOp::Mult,
+                    &[acc_phase, phase],
+                )
+                .unwrap(),
+                std::cmp::max(acc_phase, phase),
+            )
+        })
+        .unwrap();
+    Ok(result)
 }
 
 fn assign_input_contraction<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
@@ -313,17 +353,11 @@ fn assign_input_contraction<F: PrimeField + TensorType + PartialOrd + std::hash:
                 &[input_phases[0], input_phases[1]],
             )?
         } else {
-            let (tensors, phases): (Vec<_>, Vec<usize>) = tensors
-                .into_iter()
-                .zip(input_phases.iter().cloned())
-                // reorder the tensors to ensure there is no contraction between phase 0 tensors
-                .sorted_by(|(_, phase0), (_, phase1)| Ord::cmp(&phase1, &phase0))
-                .unzip();
             multi_dot(
                 config,
                 region,
                 tensors.iter().collect_vec().as_slice(),
-                &phases,
+                input_phases,
             )?
         };
         dot_product_results.push(result.get_inner_tensor()?.get_scalar());
@@ -333,97 +367,62 @@ fn assign_input_contraction<F: PrimeField + TensorType + PartialOrd + std::hash:
     Ok(tensor)
 }
 
-fn assign_output_contraction<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
-    config: &EinsumOpConfig<F>,
-    region: &mut RegionCtx<F>,
-    tensor: &ValTensor<F>,
-    powers_of_challenge: &ValTensor<F>,
-    phases: &[usize; 2],
-) -> Result<ValTensor<F>, CircuitError> {
-    let dot_product_len = powers_of_challenge.len();
-    // Split tensor and challenge vector into dot products
-    let mut dot_product_results = vec![];
-    for tensor in tensor.get_inner_tensor()?.chunks_exact(dot_product_len) {
-        let tensor = ValTensor::from(tensor.to_vec());
-        let result = dot(config, region, &[&tensor, powers_of_challenge], phases)?
-            .get_inner_tensor()?
-            .get_scalar();
-        dot_product_results.push(result);
-    }
-
-    Ok(ValTensor::from(dot_product_results))
-}
-
 /// `EinsumOpConfig` is the custom gate used for einsum contraction operations
 #[derive(Clone, Debug, Default)]
 struct EinsumOpConfig<F: PrimeField + TensorType + PartialOrd> {
-    // [phase 0, phase 1, phase 1]
-    inputs: [VarTensor; 3],
+    // [phase 0, phase 0, phase 1, phase 1]
+    inputs: [VarTensor; 4],
     // phase 1
     output: VarTensor,
-    // (min phase, BaseOp, block index, inner column index) -> selector
+    // (phase sum, BaseOp, block index, inner column index) -> selector
     selectors: BTreeMap<(usize, BaseOp, usize, usize), Selector>,
     _marker: PhantomData<F>,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> EinsumOpConfig<F> {
-    fn new(
-        meta: &mut ConstraintSystem<F>,
-        num_inner_cols: usize,
-        logrows: usize,
-        capacity: usize,
-    ) -> Self {
-        let inputs: [VarTensor; 3] = (0..3)
-            .map(|i| {
-                if i == 0 {
-                    VarTensor::new_advice(meta, logrows, num_inner_cols, capacity)
-                } else {
-                    VarTensor::new_advice_in_second_phase(meta, logrows, num_inner_cols, capacity)
-                }
-            })
-            .collect_vec()
-            .try_into()
-            .unwrap();
-
-        let output = VarTensor::new_advice_in_second_phase(meta, logrows, num_inner_cols, capacity);
-
+    fn new(meta: &mut ConstraintSystem<F>, inputs: &[VarTensor; 4], output: &VarTensor) -> Self {
         let mut selectors = BTreeMap::new();
-
-        // Required `BaseOp`s in Einsum contraction
-        for min_phase in [0, 1] {
+        for phase_sum in [0, 1] {
             for i in 0..output.num_blocks() {
                 for j in 0..output.num_inner_cols() {
-                    selectors.insert((min_phase, BaseOp::Mult, i, j), meta.selector());
+                    selectors.insert((phase_sum, BaseOp::Mult, i, j), meta.selector());
                 }
             }
         }
-        for min_phase in [0, 1] {
+
+        for phase_sum in [0, 1] {
             for i in 0..output.num_blocks() {
-                selectors.insert((min_phase, BaseOp::CumProd, i, 0), meta.selector());
-                selectors.insert((min_phase, BaseOp::CumProdInit, i, 0), meta.selector());
-                selectors.insert((min_phase, BaseOp::DotInit, i, 0), meta.selector());
-                selectors.insert((min_phase, BaseOp::Dot, i, 0), meta.selector());
-                selectors.insert((min_phase, BaseOp::Sum, i, 0), meta.selector());
-                selectors.insert((min_phase, BaseOp::SumInit, i, 0), meta.selector());
+                selectors.insert((phase_sum, BaseOp::DotInit, i, 0), meta.selector());
+                selectors.insert((phase_sum, BaseOp::Dot, i, 0), meta.selector());
+                selectors.insert((phase_sum, BaseOp::SumInit, i, 0), meta.selector());
+                selectors.insert((phase_sum, BaseOp::Sum, i, 0), meta.selector());
             }
         }
-        for ((min_phase, base_op, block_idx, inner_col_idx), selector) in selectors.iter() {
+        selectors.insert(
+            (1, BaseOp::CumProdInit, output.num_blocks() - 1, 0),
+            meta.selector(),
+        );
+        selectors.insert(
+            (1, BaseOp::CumProd, output.num_blocks() - 1, 0),
+            meta.selector(),
+        );
+        for ((phase, base_op, block_idx, inner_col_idx), selector) in selectors.iter() {
             match base_op {
                 BaseOp::Mult => {
                     meta.create_gate(base_op.as_str(), |meta| {
                         let selector = meta.query_selector(*selector);
 
                         let zero = Expression::<F>::Constant(F::ZERO);
-                        let mut qis = vec![zero; 3];
+                        let mut qis = vec![zero; 4];
                         for (i, q_i) in qis
                             .iter_mut()
                             .enumerate()
-                            .skip(*min_phase)
+                            .skip(*phase * 2)
                             .take(base_op.num_inputs())
                         {
                             *q_i = inputs[i]
                                 .query_rng(meta, *block_idx, *inner_col_idx, 0, 1)
-                                .expect("non accum: input query failed")[0]
+                                .expect("einsum op config: input query failed")[0]
                                 .clone()
                         }
                         // Get output expressions for each input channel
@@ -431,10 +430,10 @@ impl<F: PrimeField + TensorType + PartialOrd> EinsumOpConfig<F> {
                         let constraints = {
                             let expected_output: Tensor<Expression<F>> = output
                                 .query_rng(meta, *block_idx, *inner_col_idx, rotation_offset, rng)
-                                .expect("non accum: output query failed");
+                                .expect("einsum op config: output query failed");
 
                             let res = base_op
-                                .nonaccum_f((qis[*min_phase].clone(), qis[min_phase + 1].clone()));
+                                .nonaccum_f((qis[2 * *phase].clone(), qis[2 * *phase + 1].clone()));
                             vec![expected_output[base_op.constraint_idx()].clone() - res]
                         };
                         Constraints::with_selector(selector, constraints)
@@ -443,16 +442,16 @@ impl<F: PrimeField + TensorType + PartialOrd> EinsumOpConfig<F> {
                 _ => {
                     meta.create_gate(base_op.as_str(), |meta| {
                         let selector = meta.query_selector(*selector);
-                        let mut qis = vec![vec![]; 3];
+                        let mut qis = vec![vec![]; 4];
                         for (i, q_i) in qis
                             .iter_mut()
                             .enumerate()
-                            .skip(*min_phase)
+                            .skip(*phase * 2)
                             .take(base_op.num_inputs())
                         {
                             *q_i = inputs[i]
                                 .query_whole_block(meta, *block_idx, 0, 1)
-                                .expect("accum: input query failed")
+                                .expect("einsum op config: input query failed")
                                 .into_iter()
                                 .collect()
                         }
@@ -460,12 +459,12 @@ impl<F: PrimeField + TensorType + PartialOrd> EinsumOpConfig<F> {
                         let (rotation_offset, rng) = base_op.query_offset_rng();
                         let expected_output: Tensor<Expression<F>> = output
                             .query_rng(meta, *block_idx, 0, rotation_offset, rng)
-                            .expect("accum: output query failed");
+                            .expect("einsum op config: output query failed");
 
                         let res = base_op.accum_f(
                             expected_output[0].clone(),
-                            qis[min_phase + 1].clone(),
-                            qis[*min_phase].clone(),
+                            qis[2 * phase + 1].clone(),
+                            qis[2 * *phase].clone(),
                         );
                         let constraints =
                             vec![expected_output[base_op.constraint_idx()].clone() - res];
@@ -477,10 +476,185 @@ impl<F: PrimeField + TensorType + PartialOrd> EinsumOpConfig<F> {
         }
 
         Self {
-            inputs,
-            output,
+            inputs: inputs.clone(),
+            output: output.clone(),
             selectors,
             _marker: PhantomData,
         }
+    }
+
+    // fn input_phases_to_input_tensor_indices(&self, input_phases: &[usize]) -> Vec<usize> {
+    //     match input_phases {
+    //         &[0] => vec![0],
+    //         &[1] => vec![2],
+    //         &[0, 0] => vec![0, 1],
+    //         &[0, 1] => vec![1, 2],
+    //         &[1, 1] => vec![2, 3],
+    //         _ => unreachable!(),
+    //     }
+    // }
+}
+
+/// `RLCConfig` is the custom gate used for random linear combination with the specific challenge
+#[derive(Clone, Debug)]
+struct RLCConfig<F: PrimeField + TensorType + PartialOrd> {
+    pub challenge: Challenge,
+    /// [phase 0, phase 1]
+    pub inputs: [VarTensor; 2],
+    pub output: VarTensor,
+    /// (phase of input, block index) -> (init selector, acc selector)
+    pub selectors: BTreeMap<(usize, usize), (Selector, Selector)>,
+    _marker: PhantomData<F>,
+}
+
+impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RLCConfig<F> {
+    fn new(meta: &mut ConstraintSystem<F>, inputs: &[VarTensor; 2], output: &VarTensor) -> Self {
+        let challenge = meta.challenge_usable_after(FirstPhase);
+
+        let mut selectors = BTreeMap::new();
+        for (phase, input) in inputs.iter().enumerate() {
+            for block_idx in 0..input.num_blocks() {
+                let selector = (meta.selector(), meta.selector());
+                selectors.insert((phase, block_idx), selector);
+            }
+        }
+        let block_width = output.num_inner_cols();
+        let powers_of_challenge = (0..block_width)
+            .scan(Expression::Constant(F::ONE), |r_power, _| {
+                *r_power = r_power.clone() * challenge.expr();
+                Some(r_power.clone())
+            })
+            .collect_vec();
+        for ((phase, block_idx), (init_selector, acc_selector)) in selectors.iter() {
+            meta.create_gate("init", |meta| {
+                let selector = meta.query_selector(*init_selector);
+                let input_exprs = inputs[*phase]
+                    .query_whole_block(meta, *block_idx, 0, 1)
+                    .expect("rlc config: input query failed")
+                    .into_iter()
+                    .collect();
+                let constraints = {
+                    let expected_output: Tensor<Expression<F>> = output
+                        .query_rng(meta, *block_idx, 0, 0, 1)
+                        .expect("rlc config: output query failed");
+
+                    let res = BaseOp::Dot.accum_f(
+                        Expression::Constant(F::ZERO),
+                        powers_of_challenge.iter().cloned().rev().collect_vec(),
+                        input_exprs,
+                    );
+                    vec![expected_output[0].clone() - res]
+                };
+                Constraints::with_selector(selector, constraints)
+            });
+            meta.create_gate("acc", |meta| {
+                let selector = meta.query_selector(*acc_selector);
+                let input_exprs = inputs[*phase]
+                    .query_whole_block(meta, *block_idx, 0, 1)
+                    .expect("rlc config: input query failed")
+                    .into_iter()
+                    .collect();
+                let constraints = {
+                    let expected_output: Tensor<Expression<F>> = output
+                        .query_rng(meta, *block_idx, 0, -1, 2)
+                        .expect("rlc config: output query failed");
+
+                    let res = BaseOp::Dot.accum_f(
+                        expected_output[0].clone() * powers_of_challenge.last().cloned().unwrap(),
+                        powers_of_challenge.iter().cloned().rev().collect_vec(),
+                        input_exprs,
+                    );
+                    vec![expected_output[1].clone() - res]
+                };
+                Constraints::with_selector(selector, constraints)
+            });
+        }
+        Self {
+            inputs: inputs.clone(),
+            output: output.clone(),
+            selectors,
+            challenge,
+            _marker: PhantomData,
+        }
+    }
+
+    fn assign_rlc(
+        &self,
+        region: &mut RegionCtx<F>,
+        flattened_input: &ValTensor<F>,
+        challenge: Value<F>,
+        rlc_len: usize,
+        phase: usize,
+    ) -> Result<ValTensor<F>, CircuitError> {
+        region.flush_einsum()?;
+        let block_width = self.output.num_inner_cols();
+        let powers_of_challenge = (0..block_width)
+            .scan(Value::known(F::ONE), |challenge_power, _| {
+                *challenge_power = challenge_power.clone() * challenge;
+                Some(challenge_power.clone())
+            })
+            .collect_vec();
+        let mut rlc_results: Vec<ValType<F>> = vec![];
+        for tensor in flattened_input.get_inner_tensor()?.chunks_exact(rlc_len) {
+            let running_sums = tensor
+                .iter()
+                .chunks(block_width)
+                .into_iter()
+                .scan(Value::known(F::ZERO), |state, val| {
+                    let curr_sum: Value<F> = val
+                        .into_iter()
+                        .zip(powers_of_challenge.iter().rev())
+                        .map(|(v, c_power)| {
+                            c_power.and_then(|c_power| {
+                                Value::known(c_power * v.get_felt_eval().unwrap())
+                            })
+                        })
+                        .reduce(|acc, v| acc + v)
+                        .unwrap();
+                    *state = *state * powers_of_challenge.last().unwrap() + curr_sum;
+                    Some(*state)
+                })
+                .collect_vec();
+
+            let assigned_len = {
+                let mut input: ValTensor<F> = tensor.iter().collect_vec().into();
+                input.pad_to_zero_rem(block_width, ValType::Value(Value::known(F::ZERO)))?;
+                let (_, len) = region
+                    .assign_einsum_with_duplication_unconstrained(&self.inputs[phase], &input)?;
+                len
+            };
+            let (assigned_output, assigned_output_len) = {
+                let running_sums = running_sums.into_iter().map(ValType::from).collect_vec();
+                region.assign_einsum_with_duplication_constrained(
+                    &self.output,
+                    &running_sums.into(),
+                    &crate::circuit::CheckMode::UNSAFE,
+                )?
+            };
+
+            (0..assigned_output_len)
+                .map(|i| {
+                    let (block_idx, _, z) = self
+                        .output
+                        .cartesian_coord(region.einsum_col_coord() + i * block_width);
+                    if z == 0 && i > 0 {
+                        return Ok(());
+                    }
+                    let selector = if i == 0 {
+                        self.selectors
+                            .get(&(phase, block_idx))
+                            .map(|(init, _)| init)
+                    } else {
+                        self.selectors.get(&(phase, block_idx)).map(|(_, acc)| acc)
+                    };
+                    region.enable(selector, z)?;
+                    Ok(())
+                })
+                .collect::<Result<Vec<_>, CircuitError>>()?;
+            rlc_results.push(assigned_output.last()?.get_inner_tensor()?.get_scalar());
+
+            region.increment_einsum_col_coord(assigned_len);
+        }
+        Ok(rlc_results.into())
     }
 }

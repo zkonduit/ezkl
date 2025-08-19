@@ -14,7 +14,7 @@ use crate::{
 use super::EinsumOpConfig;
 
 /// Pairwise (elementwise) op layout
-fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &EinsumOpConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[&ValTensor<F>; 2],
@@ -44,7 +44,7 @@ fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     let inputs = [lhs, rhs]
         .iter()
-        .zip(config.inputs.iter().skip(min_phase))
+        .zip(config.inputs.iter().skip(min_phase * 2))
         .map(|(val, var)| {
             let res = region.assign_einsum(var, val)?;
             Ok(res.get_inner()?)
@@ -109,8 +109,8 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         // `NotEnoughColumnsForConstants` in halo2 because trying to assign constant
         // value to advice column, how to workaround this issue?
         input.pad_to_zero_rem(block_width, ValType::Value(Value::known(F::ZERO)))?;
-        let (res, len) =
-            region.assign_einsum_with_duplication_unconstrained(&config.inputs[phase], &input)?;
+        let (res, len) = region
+            .assign_einsum_with_duplication_unconstrained(&config.inputs[phase * 2], &input)?;
         assigned_len = len;
         res.get_inner()?
     };
@@ -168,8 +168,8 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         // `NotEnoughColumnsForConstants` in halo2 because trying to assign constant
         // value to advice column, how to workaround this issue?
         input.pad_to_zero_rem(block_width, ValType::Value(Value::known(F::ONE)))?;
-        let (res, len) =
-            region.assign_einsum_with_duplication_unconstrained(&config.inputs[phase], &input)?;
+        let (res, len) = region
+            .assign_einsum_with_duplication_unconstrained(&config.inputs[phase * 2], &input)?;
         assigned_len = len;
         res.get_inner()?
     };
@@ -239,7 +239,10 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let block_width = config.output.num_inner_cols();
 
     let mut assigned_len = 0;
-    for (val, var) in values.iter_mut().zip(config.inputs.iter().skip(min_phase)) {
+    for (val, var) in values
+        .iter_mut()
+        .zip(config.inputs.iter().skip(min_phase * 2))
+    {
         // FIXME : should pad with constant zero but currently this incurs an error
         // `NotEnoughColumnsForConstants` in halo2 because trying to assign constant
         // value to advice column, how to workaround this issue?
@@ -323,7 +326,7 @@ pub fn multi_dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
                     &[intermediate_phase, phase],
                 )
                 .unwrap(),
-                1,
+                std::cmp::max(intermediate_phase, phase),
             )
         })
         .unwrap();

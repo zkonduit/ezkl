@@ -2,7 +2,10 @@ use std::collections::HashMap;
 
 use itertools::Itertools;
 
-use crate::circuit::{einsum::contraction_planner, CircuitError};
+use crate::circuit::{
+    einsum::reduction_planner::{self, Reduction},
+    CircuitError,
+};
 
 ///
 #[derive(Debug, Clone)]
@@ -18,7 +21,7 @@ pub struct EinsumAnalysis {
     ///
     pub longest_challenge_vector: usize,
     ///
-    pub contraction_length: usize,
+    pub reduction_length: usize,
 }
 
 ///
@@ -38,8 +41,8 @@ pub struct SingleEquationAnalysis {
     pub output_indices: Vec<char>,
     ///
     pub longest_challenge_vector: usize,
-    /// the length of dot product to compute all the contractions
-    pub contraction_length: usize,
+    /// the length of dot product to compute all the reductions
+    pub reduction_length: usize,
 }
 
 ///
@@ -51,7 +54,7 @@ pub fn analyze_einsum_usage(
     let mut max_output_size = 0;
     let mut max_num_output_axes = 0;
     let mut longest_challenge_vector = 0;
-    let mut contraction_length = 0;
+    let mut reduction_length = 0;
 
     for (equation, input_axes_to_dim) in equations.iter() {
         let analysis = analyze_single_equation(equation, input_axes_to_dim)?;
@@ -60,7 +63,7 @@ pub fn analyze_einsum_usage(
         max_output_size = max_output_size.max(analysis.output_size);
         max_num_inputs = max_num_inputs.max(analysis.num_inputs);
         max_num_output_axes = max_num_output_axes.max(analysis.num_output_axes);
-        contraction_length += analysis.contraction_length;
+        reduction_length += analysis.reduction_length;
     }
 
     Ok(EinsumAnalysis {
@@ -69,7 +72,7 @@ pub fn analyze_einsum_usage(
         max_output_size,
         max_num_inputs,
         max_num_output_axes,
-        contraction_length,
+        reduction_length,
     })
 }
 
@@ -121,7 +124,7 @@ pub fn analyze_single_equation(
     let output_size = output_dims.clone().product();
     let longest_challenge_vector = *output_dims.clone().max().unwrap();
 
-    let output_contraction_length = {
+    let output_reduction_length = {
         let mut output_dims = output_dims.rev().cloned().collect_vec();
         let mut total_length = 0;
         for _ in 0..output_dims.len() {
@@ -132,14 +135,19 @@ pub fn analyze_single_equation(
         total_length
     };
 
-    let input_contractions_length = {
-        let input_contractions = contraction_planner::input_contractions(&equation)?;
-        input_contractions
+    let input_reductions_length = {
+        let input_reductions = reduction_planner::input_reductions(&equation)?;
+        input_reductions
             .into_iter()
-            .map(|contraction| {
-                let (_, output_expr) = contraction.expression.split_once("->").unwrap();
-                let num_inputs = contraction.input_indices.len();
-                let dot_product_len = *input_axes_to_dim.get(&contraction.axis).unwrap();
+            .map(|reduction| {
+                let (_, output_expr) = reduction.expression().split_once("->").unwrap();
+                let num_inputs = reduction.input_indices().len();
+                let dot_product_len = match reduction {
+                    Reduction::RLC { axis, .. } => *input_axes_to_dim.get(&axis).unwrap(),
+                    Reduction::Contraction { axis, .. } => *axis
+                        .and_then(|axis| input_axes_to_dim.get(&axis))
+                        .unwrap_or(&1),
+                };
                 let num_dot_products: usize = output_expr
                     .chars()
                     .map(|c| input_axes_to_dim.get(&c).unwrap())
@@ -162,6 +170,6 @@ pub fn analyze_single_equation(
         num_inputs: input_equations.len(),
         num_output_axes: output_indices.len(),
         output_indices,
-        contraction_length: output_contraction_length + input_contractions_length,
+        reduction_length: output_reduction_length + input_reductions_length,
     })
 }
