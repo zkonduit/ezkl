@@ -55,7 +55,7 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>:
     /// Returns the scale of the output of the operation.
     fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, CircuitError>;
 
-    /// Do any of the inputs to this op require homogenous input scales?
+    /// Do any of the inputs to this op require homogeneous input scales?
     fn requires_homogenous_input_scales(&self) -> Vec<usize> {
         vec![]
     }

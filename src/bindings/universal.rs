@@ -90,7 +90,7 @@ pub fn poseidon_hash_no_felt(message: Vec<u8>) -> Result<Vec<u8>, EZKLError> {
 /// Encode verifier calldata from proof and ethereum vk_address
 #[cfg_attr(feature = "ios-bindings", uniffi::export)]
 pub fn encode_verifier_calldata(
-    // TODO - shuold it be pub or pub or pub(super)?
+    // TODO - should it be pub or pub or pub(super)?
     proof: Vec<u8>,
     vka: Option<Vec<u8>>,
 ) -> Result<Vec<u8>, EZKLError> {
