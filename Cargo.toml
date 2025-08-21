@@ -20,7 +20,7 @@ halo2curves = { git = "https://github.com/privacy-scaling-explorations/halo2curv
     "derive_serde",
 ] }
 halo2_proofs = { git = "https://github.com/zkonduit/halo2", package = "halo2_proofs", features = [
-    "circuit-params", "test-dev-graph"
+    "circuit-params"
 ] }
 rand = { version = "0.8", default-features = false }
 itertools = { version = "0.10.3", default-features = false }
@@ -286,10 +286,6 @@ reusable-verifier = []
 
 [patch.crates-io]
 uniffi_testing = { git = "https://github.com/ElusAegis/uniffi-rs", branch = "feat/testing-feature-build-fix" }
-
-# FIXME : temporary replacement of halo2_proofs to work around different phase assignment issue
-[patch."https://github.com/zkonduit/halo2"]
-halo2_proofs = { git = "https://github.com/DoHoonKim8/halo2", branch = "feat/cross-phase-assignment" }
 
 [profile.release]
 # debug = true
