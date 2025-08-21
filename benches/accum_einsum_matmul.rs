@@ -1,14 +1,18 @@
-use criterion::{criterion_group, criterion_main, AxisScale, BenchmarkId, Criterion, PlotConfiguration, Throughput};
+use criterion::{
+    criterion_group, criterion_main, AxisScale, BenchmarkId, Criterion, PlotConfiguration,
+    Throughput,
+};
 use ezkl::circuit::einsum::analysis::analyze_einsum_usage;
 use ezkl::circuit::poly::PolyOp;
 use ezkl::circuit::*;
-use ezkl::pfsys::{create_keys, create_proof_circuit, TranscriptType};
+use ezkl::pfsys::create_keys;
 use ezkl::pfsys::srs::gen_srs;
 use ezkl::tensor::*;
 use halo2_proofs::circuit::floor_planner::V1;
+use halo2_proofs::plonk::create_proof;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
-use halo2_proofs::poly::kzg::multiopen::{ProverSHPLONK, VerifierSHPLONK};
-use halo2_proofs::poly::kzg::strategy::SingleStrategy;
+use halo2_proofs::poly::kzg::multiopen::ProverSHPLONK;
+use halo2_proofs::transcript::{Blake2bWrite, Challenge255, TranscriptWriterBuffer};
 use halo2_proofs::{
     arithmetic::Field,
     circuit::{Layouter, Value},
@@ -18,12 +22,12 @@ use halo2curves::bn256::{Bn256, Fr};
 use halo2curves::ff::PrimeField;
 use itertools::Itertools;
 use rand::rngs::OsRng;
-use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::collections::HashMap;
 use std::marker::PhantomData;
+use std::time::Instant;
 
 static mut LEN: usize = 4;
-static mut K: usize = 10;
+static mut K: usize = 15;
 
 #[derive(Clone)]
 struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
@@ -87,7 +91,7 @@ impl Circuit<Fr> for MyCircuit<Fr> {
         let mut equations = HashMap::new();
         equations.insert(params.equation, params.input_axes_to_dims);
         let analysis = analyze_einsum_usage(&equations).unwrap();
-        let num_einsum_inner_cols = 1;
+        let num_einsum_inner_cols = 2;
         // freivalds : adjust shape based on logrows
         // original version : does not adjust shape based on logrows, so we have to change num inner columns
 
@@ -99,9 +103,11 @@ impl Circuit<Fr> for MyCircuit<Fr> {
                 .unwrap();
         }
 
-        unsafe { println!("logrows of circuit : {K}"); }
+        unsafe {
+            println!("logrows of circuit : {K}");
+        }
         println!("number of advice columns : {}", cs.num_advice_columns());
-        println!("number of fixed columns : {}", cs.num_selectors());
+        println!("number of selectors : {}", cs.num_selectors());
         println!("degree of the circuit : {}", cs.degree());
 
         config
@@ -141,9 +147,10 @@ impl Circuit<Fr> for MyCircuit<Fr> {
         mut config: Self::Config,
         mut layouter: impl Layouter<Fr>,
     ) -> Result<(), Error> {
+        let now = Instant::now();
         let challenges = config
             .einsums
-            .challenges
+            .challenges()
             .iter()
             .map(|c| layouter.get_challenge(*c))
             .collect_vec();
@@ -171,6 +178,7 @@ impl Circuit<Fr> for MyCircuit<Fr> {
                 Ok(())
             },
         )?;
+        println!("synthesize time : {:?}", now.elapsed());
         Ok(())
     }
 }
@@ -180,11 +188,11 @@ fn runmatmul(c: &mut Criterion) {
     group.plot_config(PlotConfiguration::default().summary_scale(AxisScale::Linear));
     group.sampling_mode(criterion::SamplingMode::Flat);
     group.sample_size(10);
-    let len = 256;
+    let len = 512;
     unsafe {
         LEN = len;
     }
-    for k in 14..19 {
+    for k in 18..19 {
         let params = unsafe {
             K = k;
             gen_srs::<KZGCommitmentScheme<_>>(K as u32)
@@ -211,33 +219,25 @@ fn runmatmul(c: &mut Criterion) {
         //     });
         // });
 
-        let pk = create_keys::<KZGCommitmentScheme<Bn256>, MyCircuit<Fr>>(&circuit, &params, true)
+        let pk = create_keys::<KZGCommitmentScheme<Bn256>, MyCircuit<Fr>>(&circuit, &params, false)
             .unwrap();
 
         // group.throughput(Throughput::Elements(len as u64));
         group.bench_with_input(BenchmarkId::new("prove", k), &k, |b, &_| {
             b.iter(|| {
-                let prover = create_proof_circuit::<
-                    KZGCommitmentScheme<_>,
-                    MyCircuit<Fr>,
-                    ProverSHPLONK<_>,
-                    VerifierSHPLONK<_>,
-                    SingleStrategy<_>,
-                    _,
-                    EvmTranscript<_, _, _, _>,
-                    EvmTranscript<_, _, _, _>,
-                >(
-                    circuit.clone(),
-                    vec![],
+                let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
+
+                create_proof::<KZGCommitmentScheme<_>, ProverSHPLONK<_>, _, _, _, _>(
                     &params,
                     &pk,
-                    CheckMode::UNSAFE,
-                    ezkl::Commitments::KZG,
-                    TranscriptType::EVM,
-                    None,
-                    None,
-                );
-                prover.unwrap();
+                    &[circuit.clone()],
+                    &[&[]],
+                    OsRng,
+                    &mut transcript,
+                )
+                .expect("proof generation should not fail");
+
+                transcript.finalize();
             });
         });
     }
