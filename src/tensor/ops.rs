@@ -2397,6 +2397,8 @@ pub mod nonlinearities {
 
 /// Ops that return the transcript i.e intermediate calcs of an op
 pub mod accumulated {
+    use maybe_rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
+
     use super::*;
 
     /// Dot product of two tensors.
@@ -2525,7 +2527,186 @@ pub mod accumulated {
         Ok(transcript)
     }
 
-    /// einsum op
+    #[inline]
+    fn row_major_strides(dims: &[usize]) -> Vec<usize> {
+        let mut s = vec![0; dims.len()];
+        let mut acc = 1;
+        for (i, &d) in dims.iter().enumerate().rev() {
+            s[i] = acc;
+            acc *= d;
+        }
+        s
+    }
+
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
+    /// use ezkl::tensor::ops::accumulated::einsum;
+    ///
+    /// // matmul case
+    /// let x = Tensor::<IntegerRep>::new(
+    ///    Some(&[2, 1, 2, 1, 1, 1]),
+    ///  &[2, 3],
+    /// ).unwrap();
+    /// let k = Tensor::<IntegerRep>::new(
+    ///   Some(&[2, 3, 2, 1, 1, 1]),
+    /// &[3, 2],
+    /// ).unwrap();
+    /// let (result, _) = einsum::<IntegerRep>("ij,jk->ik", &[&x, &k]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[8, 9, 5, 5]), &[2, 2]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    /// // element wise multiplication
+    /// let x = Tensor::<IntegerRep>::new(
+    ///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5]),
+    ///  &[3, 3],
+    /// ).unwrap();
+    /// let k = Tensor::<IntegerRep>::new(
+    ///    Some(&[1, 2, 3, 1, 2, 3, 1, 2, 3]),
+    ///  &[3, 3],
+    /// ).unwrap();
+    /// let (result, _) = einsum::<IntegerRep>("ij,ij->ij", &[&x, &k]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 4, 9, 2, 6, 12, 3, 8, 15]), &[3, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    ///
+    /// // dot product of A with the transpose of B.
+    /// let x = Tensor::<IntegerRep>::new(
+    ///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5]),
+    ///  &[3, 3],
+    /// ).unwrap();
+    /// let k = Tensor::<IntegerRep>::new(
+    ///    Some(&[1, 2, 3, 1, 2, 3, 1, 2, 3]),
+    ///  &[3, 3],
+    /// ).unwrap();
+    /// let (result, _) = einsum::<IntegerRep>("ik,jk->ij", &[&x, &k]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[14, 14, 14, 20, 20, 20, 26, 26, 26]), &[3, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    /// // dot product
+    /// let x = Tensor::<IntegerRep>::new(
+    ///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5]),
+    ///  &[3, 3],
+    /// ).unwrap();
+    /// let k = Tensor::<IntegerRep>::new(
+    ///    Some(&[1, 2, 3, 1, 2, 3, 1, 2, 3]),
+    ///  &[3, 3],
+    /// ).unwrap();
+    /// let (result, _) = einsum::<IntegerRep>("ik,ik->i", &[&x, &k]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[14, 20, 26]), &[3]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    ///
+    /// // dot product
+    /// let x = Tensor::<IntegerRep>::new(
+    ///    Some(&[1, 2, 3]),
+    ///  &[3],
+    /// ).unwrap();
+    /// let k = Tensor::<IntegerRep>::new(
+    ///    Some(&[1, 2, 3]),
+    ///  &[3],
+    /// ).unwrap();
+    /// let (result, _) = einsum::<IntegerRep>("i,i->", &[&x, &k]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[14]), &[1]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    ///
+    /// // wut ?
+    /// let x = Tensor::<IntegerRep>::new(
+    ///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5, 1, 2, 3, 2, 3, 4, 3, 4, 5]),
+    ///  &[3, 3, 2],
+    /// ).unwrap();
+    /// let k = Tensor::<IntegerRep>::new(
+    ///    Some(&[4, 5, 7, 8]),
+    ///  &[2, 2],
+    /// ).unwrap();
+    /// let (result, _) = einsum::<IntegerRep>("anm,bm->ba", &[&x, &k]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[68, 80, 95, 113, 134, 158]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    /// // wutttttt ?
+    /// let x = Tensor::<IntegerRep>::new(
+    ///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5, 1, 2, 3, 2, 3, 4, 3, 4, 5]),
+    ///  &[3, 3, 2],
+    /// ).unwrap();
+    /// let k = Tensor::<IntegerRep>::new(
+    ///    Some(&[4, 5, 7, 8]),
+    ///  &[2, 2],
+    /// ).unwrap();
+    /// let z =  Tensor::<IntegerRep>::new(
+    ///    Some(&[4, 5, 7, 8, 9, 9]),
+    ///  &[2, 3],
+    /// ).unwrap();
+    ///
+    /// let (result, _) = einsum::<IntegerRep>("bn,anm,bm->ba", &[&z, &x, &k]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[390, 414, 534, 994, 1153, 1384]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    ///
+    /// // contraction with a single common axis
+    /// let x = Tensor::<IntegerRep>::new(
+    ///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5, 1, 2, 3, 2, 3, 4, 3, 4, 5]),
+    ///  &[3, 3, 2],
+    /// ).unwrap();
+    /// let k = Tensor::<IntegerRep>::new(
+    ///    Some(&[4, 5, 7, 8]),
+    ///  &[2, 2],
+    /// ).unwrap();
+    /// let (result, _) = einsum::<IntegerRep>("abc,cd->", &[&x, &k]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[648]), &[1]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    /// // contraction with no common axes (outer product)
+    /// let x = Tensor::<IntegerRep>::new(
+    ///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5, 1, 2, 3, 2, 3, 4, 3, 4, 5]),
+    ///  &[3, 3, 2],
+    /// ).unwrap();
+    /// let k = Tensor::<IntegerRep>::new(
+    ///    Some(&[4, 5, 7, 8]),
+    ///  &[2, 2],
+    /// ).unwrap();
+    /// let (result, _) = einsum::<IntegerRep>("abc,ed->", &[&x, &k]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[1296]), &[1]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    /// // trivial axes mapping
+    /// let x = Tensor::<IntegerRep>::new(
+    ///    Some(&[4, 5, 7, 8]),
+    ///  &[2, 2],
+    /// ).unwrap();
+    /// let k = Tensor::<IntegerRep>::new(
+    ///    Some(&[4, 5]),
+    ///  &[2],
+    /// ).unwrap();
+    ///
+    /// let (result, _) = einsum::<IntegerRep>("mk,k->m", &[&x, &k]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[41, 68]), &[2]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    /// let (result, _) = einsum::<IntegerRep>("mk,k->mn", &[&x, &k]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[41, 68]), &[2, 1]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    /// let x = Tensor::<IntegerRep>::new(
+    ///    Some(&[0, 0, 0, 3]),
+    ///  &[1, 4],
+    /// ).unwrap();
+    /// let k = Tensor::<IntegerRep>::new(
+    ///    Some(&[213, 227, 74, 77]),
+    ///  &[4],
+    /// ).unwrap();
+    ///
+    /// let (result, _) = einsum::<IntegerRep>("mk,k->ma", &[&x, &k]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[231]), &[1, 1]).unwrap();
+    /// assert_eq!(result, expected);
+    /// // subtle difference
+    /// let (result, _) = einsum::<IntegerRep>("mk,n->ma", &[&x, &k]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[1773]), &[1, 1]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    /// ```
+    ///
     pub fn einsum<T>(
         equation: &str,
         input_tensors: &[&Tensor<T>],
@@ -2533,238 +2714,132 @@ pub mod accumulated {
     where
         T: Clone + TensorType + Mul<Output = T> + Add<Output = T> + Send + Sync,
     {
-        // parse equation
-        let (inputs, output) = equation.split_once("->").unwrap();
-        let inputs = inputs.split(",").collect_vec();
-        assert_eq!(inputs.len(), input_tensors.len());
+        let (input_exprs, output_expr) = equation.split_once("->").unwrap();
+        let input_exprs: Vec<&str> = input_exprs.split(',').collect();
+        assert_eq!(input_exprs.len(), input_tensors.len());
 
-        let mut index_to_dim: HashMap<char, usize> = HashMap::new();
-        let mut common_indices_to_inputs = HashSet::new();
-        // creates (index -> dim) map
-        inputs
+        let mut dim_of: HashMap<char, usize> = HashMap::new();
+        for (input_expr, t) in input_exprs.iter().zip(input_tensors.iter()) {
+            for (c, &d) in input_expr.chars().zip(t.dims().iter()) {
+                let e = dim_of.entry(c).or_insert(d);
+                debug_assert!((*e == d) || (*e == 1) || (d == 1));
+                *e = (*e).max(d);
+            }
+        }
+
+        // Output dims
+        let out_idx: Vec<char> = output_expr.chars().collect();
+        let out_dims: Vec<usize> = out_idx.iter().map(|c| *dim_of.get(c).unwrap_or(&1)).collect();
+
+        // Reduction indices
+        let all_idx: HashSet<char> = dim_of.keys().copied().collect();
+        let out_set: HashSet<char> = out_idx.iter().copied().collect();
+        let red_idx: Vec<char> = all_idx.difference(&out_set).copied().collect();
+        let red_dims: Vec<usize> = red_idx.iter().map(|c| dim_of[c]).collect();
+
+        // Fast index->pos
+        let out_pos: HashMap<char, usize> = out_idx.iter().enumerate().map(|(i, &c)| (c, i)).collect();
+        let red_pos: HashMap<char, usize> = red_idx.iter().enumerate().map(|(i, &c)| (c, i)).collect();
+
+        // Precompute strides per input and contributions
+        struct Contrib {
+            out_stride: Vec<usize>,
+            red_stride: Vec<usize>,
+        }
+        let contribs: Vec<Contrib> = input_exprs
             .iter()
-            .zip(input_tensors)
-            .for_each(|(indices, tensor)| {
-                let tensor_dim = tensor.dims();
-                indices
-                    .chars()
-                    .zip(tensor_dim.iter())
-                    .for_each(|(index, dim)| {
-                        if let std::collections::hash_map::Entry::Vacant(e) =
-                            index_to_dim.entry(index)
-                        {
-                            e.insert(*dim);
-                        } else {
-                            common_indices_to_inputs.insert(index);
-                        }
-                    });
-            });
-
-        let output_index_to_dim = output
-            .chars()
-            .map(|index| {
-                if let Some(dim) = index_to_dim.get(&index) {
-                    (index, *dim)
-                } else {
-                    // if the index is not found in the inputs, set to 1
-                    (index, 1)
+            .zip(input_tensors.iter())
+            .map(|(expr, t)| {
+                let dims = t.dims().to_vec();
+                let strides = row_major_strides(&dims);
+                let mut out_stride = vec![0; out_idx.len()];
+                let mut red_stride = vec![0; red_idx.len()];
+                for (ax, (c, &d)) in expr.chars().zip(dims.iter()).enumerate() {
+                    let s = if d == 1 { 0 } else { strides[ax] };
+                    if let Some(&p) = out_pos.get(&c) {
+                        out_stride[p] = s;
+                    } else if let Some(&q) = red_pos.get(&c) {
+                        red_stride[q] = s;
+                    }
                 }
+                Contrib { out_stride, red_stride }
             })
-            .collect_vec();
-        let (output_index, output_dim): (Vec<char>, Vec<usize>) =
-            output_index_to_dim.iter().cloned().unzip();
+            .collect();
 
-        let non_common_indices_to_inputs_exclusive = index_to_dim
-            .keys()
-            .filter(|c| !common_indices_to_inputs.contains(c) && !output_index.contains(c))
-            .cloned()
-            .collect_vec();
-        // find common indices that are not contained in output equation and their possible ranges
-        let common_indices_to_inputs_exclusive = common_indices_to_inputs
-            .into_iter()
-            .filter(|index| !output_index.contains(index))
-            .collect_vec();
-        let mut common_indices = common_indices_to_inputs_exclusive
-            .iter()
-            .map(|index| 0..index_to_dim[index])
-            .multi_cartesian_product();
-        let mut non_common_indices = non_common_indices_to_inputs_exclusive
-            .iter()
-            .map(|index| 0..index_to_dim[index])
-            .multi_cartesian_product();
+        // Prepare output buffer
+        let mut out = if out_dims.is_empty() {
+            Tensor::<T>::new(None, &[1])?
+        } else {
+            Tensor::<T>::new(None, &out_dims)?
+        };
 
-        let mut output_tensor = Tensor::<T>::new(None, &output_dim)?;
-        // we will iterate over output indices
-        let mut output_entries_indices = output_dim
-            .into_iter()
-            .map(|dim| 0..dim)
-            .multi_cartesian_product();
-        let mut output_entries_indices_next = output_entries_indices.next();
-        loop {
-            // Is this safe to unwrap?
-            let mut output_entry = T::zero().unwrap();
-            let output_entry_index =
-                if let Some(output_entry_index) = output_entries_indices_next.as_ref() {
-                    output_entry_index.clone()
-                } else {
-                    vec![0; output_tensor.dims().len()]
-                };
-            let sliced_inputs = bind_to_output_indices(
-                input_tensors,
-                &inputs,
-                &output_index,
-                output_entries_indices_next,
-                &index_to_dim,
-            );
-            // For the indices which aren't contained in output equation,
-            // iterate through the range of the common indices to input equations
-            // and iterate through the range of uncommon indices, binding all the indices
-            // of input equations.
-            let mut input_tuples = vec![];
-            let mut common_indices_next = common_indices.next();
-            loop {
-                let sliced_inputs = bind_to_common_indices(
-                    &sliced_inputs,
-                    &inputs,
-                    common_indices_next,
-                    &common_indices_to_inputs_exclusive,
-                );
-                // iterate over non common indices
-                let mut non_common_indices_next = non_common_indices.next();
-                loop {
-                    match non_common_indices_next {
-                        Some(non_common_indices) => {
-                            let input_tuple = sliced_inputs
-                                .iter()
-                                .enumerate()
-                                .map(|(i, slice)| {
-                                    let mut sliced_dim = vec![];
-                                    for c in inputs[i].chars() {
-                                        if let Some(pos) = non_common_indices_to_inputs_exclusive
-                                            .iter()
-                                            .position(|index| *index == c)
-                                        {
-                                            sliced_dim.push(
-                                                non_common_indices[pos]
-                                                    ..non_common_indices[pos] + 1,
-                                            );
-                                        } else {
-                                            sliced_dim.push(0..1);
-                                        }
-                                    }
-                                    slice.get_slice(&sliced_dim)
-                                })
-                                .collect::<Result<Vec<_>, TensorError>>()?;
-                            input_tuples.push(input_tuple);
-                        }
-                        None => {
-                            input_tuples.push(sliced_inputs);
-                            break;
-                        }
-                    }
-                    if let Some(non_common_indices) = non_common_indices.next() {
-                        non_common_indices_next = Some(non_common_indices);
-                    } else {
-                        break;
+        let out_rank = out_dims.len();
+        let red_rank = red_dims.len();
+
+        // Materialize output elements one by one
+        out
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(out_linear_coord, out)| {
+                let mut out_index = vec![0usize; out_rank];
+                {
+                    let mut x = out_linear_coord;
+                    for i in (0..out_rank).rev() {
+                        let d = out_dims[i];
+                        out_index[i] = x % d;
+                        x /= d;
                     }
                 }
 
-                if let Some(common_indices) = common_indices.next() {
-                    common_indices_next = Some(common_indices);
-                } else {
-                    break;
+                // Base offset per input from output coordinates
+                let mut base_off = vec![0usize; input_tensors.len()];
+                for (i, c) in contribs.iter().enumerate() {
+                    let mut off = 0usize;
+                    for p in 0..out_rank {
+                        off += out_index[p] * c.out_stride[p];
+                    }
+                    base_off[i] = off;
                 }
-            }
 
-            output_entry = output_entry
-                + input_tuples
-                    .into_iter()
-                    .fold(T::zero().unwrap(), |acc, tuple| {
-                        let term = tuple
-                            .into_iter()
-                            .map(|tensor| tensor.get_scalar())
-                            .fold(T::one().unwrap(), |acc, value| acc * value);
-                        acc + term
-                    });
-            output_tensor.set(&output_entry_index, output_entry);
+                let mut acc = T::zero().unwrap();
 
-            if let Some(output_entries_indices) = output_entries_indices.next() {
-                output_entries_indices_next = Some(output_entries_indices);
-            } else {
-                break;
-            }
-        }
-        Ok((output_tensor, index_to_dim))
-    }
-
-    fn bind_to_output_indices<T>(
-        input_tensors: &[&Tensor<T>],
-        input_indices: &[&str],
-        output_indices: &[char],
-        output_indices_values: Option<Vec<usize>>,
-        index_to_dim: &HashMap<char, usize>,
-    ) -> Vec<Tensor<T>>
-    where
-        T: TensorType + Mul<Output = T> + Add<Output = T> + Send + Sync,
-    {
-        match output_indices_values {
-            Some(entry_index) => {
-                // for each input equation, check the index is whether
-                // contained in output equation.
-                // 1) If yes, bound that index to the same value with output index value
-                // 2) If no, range over all possible values for the index
-                // Return the slice of each input tensor with indices bounded correctly
-                input_tensors
-                    .iter()
-                    .zip(input_indices.iter())
-                    .map(|(input_tensor, input_indices)| {
-                        let mut sliced_dim = vec![];
-                        input_indices.chars().for_each(|index| {
-                            if let Some(pos) = output_indices.iter().position(|o| *o == index) {
-                                sliced_dim.push(entry_index[pos]..entry_index[pos] + 1);
-                            } else {
-                                sliced_dim.push(0..*index_to_dim.get(&index).unwrap());
-                            }
-                        });
-                        // FIXME propagate error
-                        input_tensor.get_slice(&sliced_dim).unwrap()
-                    })
-                    .collect_vec()
-            }
-            None => input_tensors.iter().map(|&t| t.clone()).collect_vec(),
-        }
-    }
-
-    fn bind_to_common_indices<T>(
-        input_tensors: &[Tensor<T>],
-        input_indices: &[&str],
-        common_indices: Option<Vec<usize>>,
-        common_indices_to_inputs_exclusive: &[char],
-    ) -> Vec<Tensor<T>>
-    where
-        T: TensorType + Mul<Output = T> + Add<Output = T> + Send + Sync,
-    {
-        match common_indices {
-            Some(common_indices) => input_tensors
-                .iter()
-                .enumerate()
-                .map(|(i, slice)| {
-                    let mut sliced_dim = vec![];
-                    for (c, dim) in input_indices[i].chars().zip(slice.dims()) {
-                        if let Some(pos) = common_indices_to_inputs_exclusive
-                            .iter()
-                            .position(|index| *index == c)
+                if red_rank == 0 {
+                    // No reduction -> just multiply corresponding elements
+                    let mut prod = T::one().unwrap();
+                    for (i, t) in input_tensors.iter().enumerate() {
+                        let val = t.get_flat_index(base_off[i]);
+                        prod = prod * val;
+                    }
+                    acc = acc + prod;
+                } else {
+                    // Iterate over all reduction coords
+                    let red_size = red_dims.iter().product::<usize>();
+                    let mut red_index = vec![0usize; red_rank];
+                    for red_linear_coord in 0..red_size {
                         {
-                            sliced_dim.push(common_indices[pos]..common_indices[pos] + 1);
-                        } else {
-                            sliced_dim.push(0..*dim);
+                            let mut x = red_linear_coord;
+                            for q in (0..red_rank).rev() {
+                                let d = red_dims[q];
+                                red_index[q] = x % d;
+                                x /= d;
+                            }
                         }
+                        let mut prod = T::one().unwrap();
+                        for (i, (t, c)) in input_tensors.iter().zip(contribs.iter()).enumerate() {
+                            let mut off = base_off[i];
+                            for q in 0..red_rank {
+                                off += red_index[q] * c.red_stride[q];
+                            }
+                            let val = t.get_flat_index(off);
+                            prod = prod * val;
+                        }
+                        acc = acc + prod;
                     }
-                    // FIXME propagate error
-                    slice.get_slice(&sliced_dim).unwrap()
-                })
-                .collect_vec(),
-            None => input_tensors.iter().cloned().collect_vec(),
-        }
+                }
+
+                // write result
+                *out = acc;
+            });
+        Ok((out, dim_of))
     }
 }
