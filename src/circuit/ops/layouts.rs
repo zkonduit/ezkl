@@ -1,8 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    f64::consts::E,
-    ops::Range,
-};
+use std::{collections::HashMap, f64::consts::E, ops::Range};
 
 use halo2_proofs::circuit::Value;
 use halo2curves::ff::PrimeField;
@@ -829,215 +825,31 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    inputs: &[&ValTensor<F>],
+    input_tensors: &[&ValTensor<F>],
     equation: &str,
 ) -> Result<ValTensor<F>, CircuitError> {
     // Track the einsum equation
     region.add_used_einsum_equation(equation.to_string())?;
 
-    let mut equation = equation.split("->");
-    let inputs_eq = equation.next().ok_or(CircuitError::InvalidEinsum)?;
-    let output_eq = equation.next().ok_or(CircuitError::InvalidEinsum)?;
-    let inputs_eq = inputs_eq.split(',').collect::<Vec<_>>();
-
-    // Check that the number of inputs matches the number of inputs in the equation
-    if inputs.len() != inputs_eq.len() {
-        return Err(TensorError::DimMismatch("einsum".to_string()).into());
-    }
-
-    let mut indices_to_size = HashMap::new();
-    for (i, input) in inputs.iter().enumerate() {
-        for j in 0..inputs_eq[i].len() {
-            let c = inputs_eq[i]
-                .chars()
-                .nth(j)
-                .ok_or(CircuitError::InvalidEinsum)?;
-            if let std::collections::hash_map::Entry::Vacant(e) = indices_to_size.entry(c) {
-                e.insert(input.dims()[j]);
-            } else if indices_to_size[&c] != input.dims()[j] {
-                return Err(TensorError::DimMismatch("einsum".to_string()).into());
-            }
-        }
-    }
-
-    // maps unrepresented indices in the output to a trivial 1
-    for c in output_eq.chars() {
-        indices_to_size.entry(c).or_insert(1);
-    }
-
-    // Compute the output tensor shape
-    let mut output_shape: Vec<usize> = output_eq
-        .chars()
-        .map(|c| {
-            indices_to_size
-                .get(&c)
-                .ok_or(CircuitError::InvalidEinsum)
-                .copied()
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-
-    if output_shape.is_empty() {
-        output_shape.push(1);
-    }
-
-    // Create a new output tensor with the computed shape
-    let mut output: Tensor<ValType<F>> = Tensor::new(None, &output_shape)?;
-
-    let mut seen = HashSet::new();
-    let mut common_indices_to_inputs = vec![];
-    for input in inputs_eq.iter().take(inputs.len()) {
-        for c in input.chars() {
-            if !seen.contains(&c) {
-                seen.insert(c);
-            } else {
-                common_indices_to_inputs.push(c);
-            }
-        }
-    }
-
-    let non_common_indices = indices_to_size
-        .keys()
-        .filter(|&x| !common_indices_to_inputs.contains(x))
-        .collect::<Vec<_>>();
-
-    let non_common_coord_size = non_common_indices
+    let inputs = input_tensors
         .iter()
-        .map(|d| {
-            // If the current index is in the output equation, then the slice should be the current coordinate
-            if output_eq.contains(**d) {
-                Ok(1)
-            // Otherwise, the slice should be the entire dimension of the input tensor
-            } else {
-                indices_to_size
-                    .get(d)
-                    .ok_or(CircuitError::InvalidEinsum)
-                    .copied()
-            }
-        })
-        .collect::<Result<Vec<_>, _>>()?
-        .iter()
-        .product::<usize>();
+        .map(|t| t.get_inner())
+        .collect::<Result<Vec<_>, TensorError>>()?;
+    // Compute expected output using existing einsum logic
+    // need to add this to ops
+    let (output_tensor, _) =
+        crate::tensor::ops::accumulated::einsum(equation, &inputs.iter().collect_vec())?;
 
-    let cartesian_coord = output_shape
-        .iter()
-        .map(|d| 0..*d)
-        .multi_cartesian_product()
-        .collect::<Vec<_>>();
+    config.einsums.assign_einsum(
+        region,
+        input_tensors,
+        &output_tensor.clone().into(),
+        equation,
+    )?;
 
-    // Get the indices common across input tensors
-    let mut common_coord = common_indices_to_inputs
-        .iter()
-        .map(|d| {
-            // If the current index is in the output equation, then the slice should be the current coordinate
-            if output_eq.contains(*d) {
-                Ok(0..1)
-            // Otherwise, the slice should be the entire dimension of the input tensor
-            } else {
-                Ok(0..*indices_to_size.get(d).ok_or(CircuitError::InvalidEinsum)?)
-            }
-        })
-        .collect::<Result<Vec<Range<_>>, CircuitError>>()?
-        .into_iter()
-        .multi_cartesian_product()
-        .collect::<Vec<_>>();
+    region.increment_einsum_index(1);
 
-    // If there are no common indices, then we need to add an empty slice to force one iteration of the loop
-    if common_coord.is_empty() {
-        common_coord.push(vec![]);
-    }
-
-    let inner_loop_function = |i: usize, region: &mut RegionCtx<'_, F>| {
-        let coord = cartesian_coord[i].clone();
-        // Compute the slice of each input tensor given the current coordinate of the output tensor
-        let inputs = (0..inputs.len())
-            .map(|idx| {
-                let mut slice = vec![];
-                for (i, c) in inputs_eq[idx].chars().enumerate() {
-                    // If the current index is in the output equation, then the slice should be the current coordinate
-                    if let Some(idx) = output_eq.find(c) {
-                        slice.push(coord[idx]..coord[idx] + 1);
-                    // Otherwise, the slice should be the entire dimension of the input tensor
-                    } else {
-                        slice.push(0..inputs[idx].dims()[i]);
-                    }
-                }
-                // Get the slice of the input tensor
-                inputs[idx].get_slice(&slice)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-
-        // in this case its just a dot product :)
-        if non_common_coord_size == 1 && inputs.len() == 2 {
-            Ok(dot(config, region, &[&inputs[0], &inputs[1]])?.get_inner_tensor()?[0].clone())
-        } else {
-            let mut prod_res = None;
-
-            // Compute the cartesian product of all common indices
-            for common_dim in &common_coord {
-                let inputs = (0..inputs.len())
-                    .map(|idx| {
-                        let mut slice = vec![];
-                        // Iterate over all indices in the input equation
-                        for (i, c) in inputs_eq[idx].chars().enumerate() {
-                            // If the current index is common to multiple inputs, then the slice should be the current coordinate
-                            if let Some(j) = common_indices_to_inputs.iter().position(|&r| r == c) {
-                                slice.push(common_dim[j]..common_dim[j] + 1);
-                            } else {
-                                slice.push(0..inputs[idx].dims()[i]);
-                            }
-                        }
-                        // Get the slice of the input tensor
-                        inputs[idx].get_slice(&slice).map_err(|e| {
-                            error!("{}", e);
-                            halo2_proofs::plonk::Error::Synthesis
-                        })
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
-
-                let mut input_pairs = vec![];
-
-                for input in &inputs {
-                    input_pairs.push(input.get_inner_tensor()?.iter());
-                }
-
-                let input_pairs = input_pairs
-                    .into_iter()
-                    .multi_cartesian_product()
-                    .collect::<Vec<_>>();
-
-                // Compute the product of all input tensors
-                for pair in input_pairs {
-                    let product_across_pair = prod(config, region, &[&pair.into()])?;
-
-                    if let Some(product) = prod_res {
-                        prod_res = Some(
-                            pairwise(
-                                config,
-                                region,
-                                &[&product, &product_across_pair],
-                                BaseOp::Add,
-                            )
-                            .map_err(|e| {
-                                error!("{}", e);
-                                halo2_proofs::plonk::Error::Synthesis
-                            })?,
-                        );
-                    } else {
-                        prod_res = Some(product_across_pair);
-                    }
-                }
-            }
-            Ok(prod_res
-                .ok_or(CircuitError::MissingEinsumProduct)?
-                .get_inner_tensor()?[0]
-                .clone())
-        }
-    };
-
-    region.flush()?;
-    region.apply_in_loop(&mut output, inner_loop_function)?;
-
-    let output: ValTensor<F> = output.into();
+    let output: ValTensor<F> = output_tensor.into();
 
     Ok(output)
 }

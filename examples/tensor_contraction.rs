@@ -1,24 +1,15 @@
-use criterion::{
-    criterion_group, criterion_main, AxisScale, BenchmarkId, Criterion, PlotConfiguration,
-    Throughput,
-};
 use ezkl::circuit::einsum::analysis::analyze_einsum_usage;
 use ezkl::circuit::poly::PolyOp;
 use ezkl::circuit::*;
-use ezkl::pfsys::create_keys;
-use ezkl::pfsys::srs::gen_srs;
 use ezkl::tensor::*;
 use halo2_proofs::circuit::floor_planner::V1;
-use halo2_proofs::plonk::create_proof;
-use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
-use halo2_proofs::poly::kzg::multiopen::ProverSHPLONK;
-use halo2_proofs::transcript::{Blake2bWrite, Challenge255, TranscriptWriterBuffer};
+use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
     arithmetic::Field,
     circuit::{Layouter, Value},
     plonk::{Circuit, ConstraintSystem, Error},
 };
-use halo2curves::bn256::{Bn256, Fr};
+use halo2curves::bn256::Fr;
 use halo2curves::ff::PrimeField;
 use itertools::Itertools;
 use rand::rngs::OsRng;
@@ -26,7 +17,7 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 
 static mut LEN: usize = 4;
-static mut K: usize = 15;
+const K: usize = 11;
 
 #[derive(Clone)]
 struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
@@ -85,17 +76,21 @@ impl Circuit<Fr> for MyCircuit<Fr> {
     }
 
     fn configure_with_params(cs: &mut ConstraintSystem<Fr>, params: Self::Params) -> Self::Config {
-        let mut config = Self::Config::default();
+        let len = unsafe { LEN };
+
+        let a = VarTensor::new_advice(cs, K, 1, len);
+        let b = VarTensor::new_advice(cs, K, 1, len);
+        let output = VarTensor::new_advice(cs, K, 1, len);
+
+        let mut config = Self::Config::configure(cs, &[a, b], &output, CheckMode::UNSAFE);
 
         let mut equations = HashMap::new();
         equations.insert(params.equation, params.input_axes_to_dims);
         let analysis = analyze_einsum_usage(&equations).unwrap();
         let num_einsum_inner_cols = 2;
-        unsafe {
-            config
-                .configure_einsums(cs, &analysis, num_einsum_inner_cols, K)
-                .unwrap();
-        }
+        config
+            .configure_einsums(cs, &analysis, num_einsum_inner_cols, K)
+            .unwrap();
 
         config
     }
@@ -120,11 +115,9 @@ impl Circuit<Fr> for MyCircuit<Fr> {
         equations.insert(default_params.equation, default_params.input_axes_to_dims);
         let analysis = analyze_einsum_usage(&equations).unwrap();
         let num_einsum_inner_cols = 1;
-        unsafe {
-            config
-                .configure_einsums(cs, &analysis, num_einsum_inner_cols, K)
-                .unwrap();
-        }
+        config
+            .configure_einsums(cs, &analysis, num_einsum_inner_cols, K)
+            .unwrap();
 
         config
     }
@@ -168,66 +161,30 @@ impl Circuit<Fr> for MyCircuit<Fr> {
     }
 }
 
-fn runmatmul(c: &mut Criterion) {
-    let mut group = c.benchmark_group("accum_einsum_matmul");
-    group.plot_config(PlotConfiguration::default().summary_scale(AxisScale::Linear));
-    group.sampling_mode(criterion::SamplingMode::Flat);
-    group.sample_size(10);
-    let len = 512;
-    unsafe {
-        LEN = len;
-    }
-    for k in 19..20 {
-        let params = unsafe {
-            K = k;
-            gen_srs::<KZGCommitmentScheme<_>>(K as u32)
-        };
+fn runmatmul() {
+    let i = 10;
+    let n = 10;
+    let j = 40;
+    let k = 10;
 
-        let mut a = Tensor::from((0..len * len).map(|_| Value::known(Fr::random(OsRng))));
-        a.reshape(&[len, len]).unwrap();
+    let mut a = Tensor::from((0..i * n * j).map(|_| Value::known(Fr::random(OsRng))));
+    a.reshape(&[i, n, j]).unwrap();
 
-        let mut b = Tensor::from((0..len * len).map(|_| Value::known(Fr::random(OsRng))));
-        b.reshape(&[len, len]).unwrap();
+    // parameters
+    let mut b = Tensor::from((0..j * k).map(|_| Value::known(Fr::random(OsRng))));
+    b.reshape(&[j, k]).unwrap();
 
-        let einsum = Einsum::<Fr>::new("ij,jk->ik", &[&a, &b]).unwrap();
+    let einsum = Einsum::<Fr>::new("inj,jk->ik", &[&a, &b]).unwrap();
 
-        let circuit = MyCircuit {
-            inputs: [ValTensor::from(a), ValTensor::from(b)],
-            einsum,
-        };
+    let circuit = MyCircuit {
+        inputs: [ValTensor::from(a), ValTensor::from(b)],
+        einsum,
+    };
 
-        group.throughput(Throughput::Elements(len as u64));
-        group.bench_with_input(BenchmarkId::new("pk", k), &k, |b, &_| {
-            b.iter(|| {
-                create_keys::<KZGCommitmentScheme<Bn256>, MyCircuit<Fr>>(&circuit, &params, true)
-                    .unwrap();
-            });
-        });
-
-        let pk = create_keys::<KZGCommitmentScheme<Bn256>, MyCircuit<Fr>>(&circuit, &params, false)
-            .unwrap();
-
-        group.throughput(Throughput::Elements(len as u64));
-        group.bench_with_input(BenchmarkId::new("prove", k), &k, |b, &_| {
-            b.iter(|| {
-                let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
-
-                create_proof::<KZGCommitmentScheme<_>, ProverSHPLONK<_>, _, _, _, _>(
-                    &params,
-                    &pk,
-                    &[circuit.clone()],
-                    &[&[]],
-                    OsRng,
-                    &mut transcript,
-                )
-                .expect("proof generation should not fail");
-
-                transcript.finalize();
-            });
-        });
-    }
-    group.finish();
+    let mock_prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+    mock_prover.assert_satisfied();
 }
 
-criterion_group!(benches, runmatmul);
-criterion_main!(benches);
+pub fn main() {
+    runmatmul()
+}

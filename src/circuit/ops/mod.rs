@@ -364,7 +364,15 @@ impl<
         };
         Ok(Some(if self.decomp {
             log::debug!("constraining constant to be decomp");
-            super::layouts::decompose(config, region, &[&value], &region.base(), &region.legs(), false)?.1
+            super::layouts::decompose(
+                config,
+                region,
+                &[&value],
+                &region.base(),
+                &region.legs(),
+                false,
+            )?
+            .1
         } else {
             log::debug!("constraining constant to be identity");
             super::layouts::identity(config, region, &[&value])?

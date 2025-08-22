@@ -5,6 +5,7 @@ use crate::{
 };
 use itertools::Itertools;
 use maybe_rayon::{iter::ParallelIterator, prelude::IntoParallelRefIterator};
+use std::collections::{HashMap, HashSet};
 pub use std::ops::{Add, Mul, Neg, Sub};
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
@@ -2396,6 +2397,8 @@ pub mod nonlinearities {
 
 /// Ops that return the transcript i.e intermediate calcs of an op
 pub mod accumulated {
+    use maybe_rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
+
     use super::*;
 
     /// Dot product of two tensors.
@@ -2522,5 +2525,321 @@ pub mod accumulated {
             .collect();
 
         Ok(transcript)
+    }
+
+    #[inline]
+    fn row_major_strides(dims: &[usize]) -> Vec<usize> {
+        let mut s = vec![0; dims.len()];
+        let mut acc = 1;
+        for (i, &d) in dims.iter().enumerate().rev() {
+            s[i] = acc;
+            acc *= d;
+        }
+        s
+    }
+
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
+    /// use ezkl::tensor::ops::accumulated::einsum;
+    ///
+    /// // matmul case
+    /// let x = Tensor::<IntegerRep>::new(
+    ///    Some(&[2, 1, 2, 1, 1, 1]),
+    ///  &[2, 3],
+    /// ).unwrap();
+    /// let k = Tensor::<IntegerRep>::new(
+    ///   Some(&[2, 3, 2, 1, 1, 1]),
+    /// &[3, 2],
+    /// ).unwrap();
+    /// let (result, _) = einsum::<IntegerRep>("ij,jk->ik", &[&x, &k]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[8, 9, 5, 5]), &[2, 2]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    /// // element wise multiplication
+    /// let x = Tensor::<IntegerRep>::new(
+    ///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5]),
+    ///  &[3, 3],
+    /// ).unwrap();
+    /// let k = Tensor::<IntegerRep>::new(
+    ///    Some(&[1, 2, 3, 1, 2, 3, 1, 2, 3]),
+    ///  &[3, 3],
+    /// ).unwrap();
+    /// let (result, _) = einsum::<IntegerRep>("ij,ij->ij", &[&x, &k]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 4, 9, 2, 6, 12, 3, 8, 15]), &[3, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    ///
+    /// // dot product of A with the transpose of B.
+    /// let x = Tensor::<IntegerRep>::new(
+    ///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5]),
+    ///  &[3, 3],
+    /// ).unwrap();
+    /// let k = Tensor::<IntegerRep>::new(
+    ///    Some(&[1, 2, 3, 1, 2, 3, 1, 2, 3]),
+    ///  &[3, 3],
+    /// ).unwrap();
+    /// let (result, _) = einsum::<IntegerRep>("ik,jk->ij", &[&x, &k]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[14, 14, 14, 20, 20, 20, 26, 26, 26]), &[3, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    /// // dot product
+    /// let x = Tensor::<IntegerRep>::new(
+    ///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5]),
+    ///  &[3, 3],
+    /// ).unwrap();
+    /// let k = Tensor::<IntegerRep>::new(
+    ///    Some(&[1, 2, 3, 1, 2, 3, 1, 2, 3]),
+    ///  &[3, 3],
+    /// ).unwrap();
+    /// let (result, _) = einsum::<IntegerRep>("ik,ik->i", &[&x, &k]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[14, 20, 26]), &[3]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    ///
+    /// // dot product
+    /// let x = Tensor::<IntegerRep>::new(
+    ///    Some(&[1, 2, 3]),
+    ///  &[3],
+    /// ).unwrap();
+    /// let k = Tensor::<IntegerRep>::new(
+    ///    Some(&[1, 2, 3]),
+    ///  &[3],
+    /// ).unwrap();
+    /// let (result, _) = einsum::<IntegerRep>("i,i->", &[&x, &k]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[14]), &[1]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    ///
+    /// // wut ?
+    /// let x = Tensor::<IntegerRep>::new(
+    ///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5, 1, 2, 3, 2, 3, 4, 3, 4, 5]),
+    ///  &[3, 3, 2],
+    /// ).unwrap();
+    /// let k = Tensor::<IntegerRep>::new(
+    ///    Some(&[4, 5, 7, 8]),
+    ///  &[2, 2],
+    /// ).unwrap();
+    /// let (result, _) = einsum::<IntegerRep>("anm,bm->ba", &[&x, &k]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[68, 80, 95, 113, 134, 158]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    /// // wutttttt ?
+    /// let x = Tensor::<IntegerRep>::new(
+    ///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5, 1, 2, 3, 2, 3, 4, 3, 4, 5]),
+    ///  &[3, 3, 2],
+    /// ).unwrap();
+    /// let k = Tensor::<IntegerRep>::new(
+    ///    Some(&[4, 5, 7, 8]),
+    ///  &[2, 2],
+    /// ).unwrap();
+    /// let z =  Tensor::<IntegerRep>::new(
+    ///    Some(&[4, 5, 7, 8, 9, 9]),
+    ///  &[2, 3],
+    /// ).unwrap();
+    ///
+    /// let (result, _) = einsum::<IntegerRep>("bn,anm,bm->ba", &[&z, &x, &k]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[390, 414, 534, 994, 1153, 1384]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    ///
+    /// // contraction with a single common axis
+    /// let x = Tensor::<IntegerRep>::new(
+    ///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5, 1, 2, 3, 2, 3, 4, 3, 4, 5]),
+    ///  &[3, 3, 2],
+    /// ).unwrap();
+    /// let k = Tensor::<IntegerRep>::new(
+    ///    Some(&[4, 5, 7, 8]),
+    ///  &[2, 2],
+    /// ).unwrap();
+    /// let (result, _) = einsum::<IntegerRep>("abc,cd->", &[&x, &k]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[648]), &[1]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    /// // contraction with no common axes (outer product)
+    /// let x = Tensor::<IntegerRep>::new(
+    ///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5, 1, 2, 3, 2, 3, 4, 3, 4, 5]),
+    ///  &[3, 3, 2],
+    /// ).unwrap();
+    /// let k = Tensor::<IntegerRep>::new(
+    ///    Some(&[4, 5, 7, 8]),
+    ///  &[2, 2],
+    /// ).unwrap();
+    /// let (result, _) = einsum::<IntegerRep>("abc,ed->", &[&x, &k]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[1296]), &[1]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    /// // trivial axes mapping
+    /// let x = Tensor::<IntegerRep>::new(
+    ///    Some(&[4, 5, 7, 8]),
+    ///  &[2, 2],
+    /// ).unwrap();
+    /// let k = Tensor::<IntegerRep>::new(
+    ///    Some(&[4, 5]),
+    ///  &[2],
+    /// ).unwrap();
+    ///
+    /// let (result, _) = einsum::<IntegerRep>("mk,k->m", &[&x, &k]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[41, 68]), &[2]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    /// let (result, _) = einsum::<IntegerRep>("mk,k->mn", &[&x, &k]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[41, 68]), &[2, 1]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    /// let x = Tensor::<IntegerRep>::new(
+    ///    Some(&[0, 0, 0, 3]),
+    ///  &[1, 4],
+    /// ).unwrap();
+    /// let k = Tensor::<IntegerRep>::new(
+    ///    Some(&[213, 227, 74, 77]),
+    ///  &[4],
+    /// ).unwrap();
+    ///
+    /// let (result, _) = einsum::<IntegerRep>("mk,k->ma", &[&x, &k]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[231]), &[1, 1]).unwrap();
+    /// assert_eq!(result, expected);
+    /// // subtle difference
+    /// let (result, _) = einsum::<IntegerRep>("mk,n->ma", &[&x, &k]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[1773]), &[1, 1]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    /// ```
+    ///
+    pub fn einsum<T>(
+        equation: &str,
+        input_tensors: &[&Tensor<T>],
+    ) -> Result<(Tensor<T>, HashMap<char, usize>), TensorError>
+    where
+        T: Clone + TensorType + Mul<Output = T> + Add<Output = T> + Send + Sync,
+    {
+        let (input_exprs, output_expr) = equation.split_once("->").unwrap();
+        let input_exprs: Vec<&str> = input_exprs.split(',').collect();
+        assert_eq!(input_exprs.len(), input_tensors.len());
+
+        let mut dim_of: HashMap<char, usize> = HashMap::new();
+        for (input_expr, t) in input_exprs.iter().zip(input_tensors.iter()) {
+            for (c, &d) in input_expr.chars().zip(t.dims().iter()) {
+                let e = dim_of.entry(c).or_insert(d);
+                debug_assert!((*e == d) || (*e == 1) || (d == 1));
+                *e = (*e).max(d);
+            }
+        }
+
+        // Output dims
+        let out_idx: Vec<char> = output_expr.chars().collect();
+        let out_dims: Vec<usize> = out_idx.iter().map(|c| *dim_of.get(c).unwrap_or(&1)).collect();
+
+        // Reduction indices
+        let all_idx: HashSet<char> = dim_of.keys().copied().collect();
+        let out_set: HashSet<char> = out_idx.iter().copied().collect();
+        let red_idx: Vec<char> = all_idx.difference(&out_set).copied().collect();
+        let red_dims: Vec<usize> = red_idx.iter().map(|c| dim_of[c]).collect();
+
+        // Fast index->pos
+        let out_pos: HashMap<char, usize> = out_idx.iter().enumerate().map(|(i, &c)| (c, i)).collect();
+        let red_pos: HashMap<char, usize> = red_idx.iter().enumerate().map(|(i, &c)| (c, i)).collect();
+
+        // Precompute strides per input and contributions
+        struct Contrib {
+            out_stride: Vec<usize>,
+            red_stride: Vec<usize>,
+        }
+        let contribs: Vec<Contrib> = input_exprs
+            .iter()
+            .zip(input_tensors.iter())
+            .map(|(expr, t)| {
+                let dims = t.dims().to_vec();
+                let strides = row_major_strides(&dims);
+                let mut out_stride = vec![0; out_idx.len()];
+                let mut red_stride = vec![0; red_idx.len()];
+                for (ax, (c, &d)) in expr.chars().zip(dims.iter()).enumerate() {
+                    let s = if d == 1 { 0 } else { strides[ax] };
+                    if let Some(&p) = out_pos.get(&c) {
+                        out_stride[p] = s;
+                    } else if let Some(&q) = red_pos.get(&c) {
+                        red_stride[q] = s;
+                    }
+                }
+                Contrib { out_stride, red_stride }
+            })
+            .collect();
+
+        // Prepare output buffer
+        let mut out = if out_dims.is_empty() {
+            Tensor::<T>::new(None, &[1])?
+        } else {
+            Tensor::<T>::new(None, &out_dims)?
+        };
+
+        let out_rank = out_dims.len();
+        let red_rank = red_dims.len();
+
+        // Materialize output elements one by one
+        out
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(out_linear_coord, out)| {
+                let mut out_index = vec![0usize; out_rank];
+                {
+                    let mut x = out_linear_coord;
+                    for i in (0..out_rank).rev() {
+                        let d = out_dims[i];
+                        out_index[i] = x % d;
+                        x /= d;
+                    }
+                }
+
+                // Base offset per input from output coordinates
+                let mut base_off = vec![0usize; input_tensors.len()];
+                for (i, c) in contribs.iter().enumerate() {
+                    let mut off = 0usize;
+                    for p in 0..out_rank {
+                        off += out_index[p] * c.out_stride[p];
+                    }
+                    base_off[i] = off;
+                }
+
+                let mut acc = T::zero().unwrap();
+
+                if red_rank == 0 {
+                    // No reduction -> just multiply corresponding elements
+                    let mut prod = T::one().unwrap();
+                    for (i, t) in input_tensors.iter().enumerate() {
+                        let val = t.get_flat_index(base_off[i]);
+                        prod = prod * val;
+                    }
+                    acc = acc + prod;
+                } else {
+                    // Iterate over all reduction coords
+                    let red_size = red_dims.iter().product::<usize>();
+                    let mut red_index = vec![0usize; red_rank];
+                    for red_linear_coord in 0..red_size {
+                        {
+                            let mut x = red_linear_coord;
+                            for q in (0..red_rank).rev() {
+                                let d = red_dims[q];
+                                red_index[q] = x % d;
+                                x /= d;
+                            }
+                        }
+                        let mut prod = T::one().unwrap();
+                        for (i, (t, c)) in input_tensors.iter().zip(contribs.iter()).enumerate() {
+                            let mut off = base_off[i];
+                            for q in 0..red_rank {
+                                off += red_index[q] * c.red_stride[q];
+                            }
+                            let val = t.get_flat_index(off);
+                            prod = prod * val;
+                        }
+                        acc = acc + prod;
+                    }
+                }
+
+                // write result
+                *out = acc;
+            });
+        Ok((out, dim_of))
     }
 }

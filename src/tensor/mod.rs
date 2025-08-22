@@ -480,6 +480,13 @@ impl<T: Clone + TensorType> Tensor<T> {
         self[index].clone()
     }
 
+    /// Extracts a single value from the tensor
+    pub fn get_scalar(&self) -> T {
+        assert!(self.inner.len() == 1);
+        assert!(self.dims.iter().all(|dim| *dim == 1));
+        self.inner[0].clone()
+    }
+
     /// Get a mutable array index from rows / columns indices.
     ///
     /// ```
@@ -899,6 +906,22 @@ impl<T: Clone + TensorType> Tensor<T> {
             self.dims = Vec::from(new_dims);
         }
         Ok(())
+    }
+
+    /// remove axes that have dimensions 1
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
+    /// let mut a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6]), &[3, 1, 2]).unwrap();
+    /// let mut expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6]), &[3, 2]).unwrap();
+    /// let b = a.remove_trivial_axes().unwrap();
+    /// assert_eq!(b, expected);
+    /// ```
+    pub fn remove_trivial_axes(&self) -> Result<Self, TensorError> {
+        let mut result = self.clone();
+        let new_dims: Vec<_> = self.dims.iter().copied().filter(|dim| *dim > 1).collect();
+        result.reshape(&new_dims)?;
+        Ok(result)
     }
 
     /// Move axis of the tensor

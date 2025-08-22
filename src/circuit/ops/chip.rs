@@ -7,18 +7,14 @@ use halo2_proofs::{
 };
 use log::debug;
 #[cfg(feature = "python-bindings")]
-use pyo3::{
-    conversion::FromPyObject,
-    exceptions::PyValueError,
-    IntoPyObject,
-    prelude::*,
-};
+use pyo3::{conversion::FromPyObject, exceptions::PyValueError, prelude::*, IntoPyObject};
 use serde::{Deserialize, Serialize};
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use tosubcommand::ToFlags;
 
 use crate::{
     circuit::{
+        chip::einsum::analysis::EinsumAnalysis,
         ops::base::BaseOp,
         table::{Range, RangeCheck, Table},
     },
@@ -28,6 +24,9 @@ use std::{collections::BTreeMap, marker::PhantomData};
 
 use super::{lookup::LookupOp, region::RegionCtx, CircuitError, Op};
 use halo2curves::ff::{Field, PrimeField};
+
+///
+pub mod einsum;
 
 #[allow(missing_docs)]
 /// An enum representing activating the sanity checks we can perform on the accumulated arguments
@@ -271,6 +270,8 @@ pub struct BaseConfig<F: PrimeField + TensorType + PartialOrd> {
     pub range_checks: RangeChecks<F>,
     /// [Selector]s for the shuffles
     pub shuffles: Shuffles,
+    /// Einsum-specific configuration
+    pub einsums: einsum::Einsums<F>,
     /// Activate sanity checks
     pub check_mode: CheckMode,
     _marker: PhantomData<F>,
@@ -285,6 +286,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
             custom_gates: CustomGates::dummy(col_size, num_inner_cols),
             static_lookups: StaticLookups::dummy(col_size, num_inner_cols),
             dynamic_lookups: DynamicLookups::dummy(col_size, num_inner_cols),
+            einsums: einsum::Einsums::<F>::dummy(col_size, num_inner_cols),
             shuffles: Shuffles::dummy(col_size, num_inner_cols),
             range_checks: RangeChecks::dummy(col_size, num_inner_cols),
             check_mode: CheckMode::SAFE,
@@ -419,6 +421,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
             },
             static_lookups: StaticLookups::default(),
             dynamic_lookups: DynamicLookups::default(),
+            einsums: einsum::Einsums::<F>::default(),
             shuffles: Shuffles::default(),
             range_checks: RangeChecks::default(),
             shared_table_inputs: vec![],
@@ -690,6 +693,22 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
             self.dynamic_lookups.inputs = lookups.to_vec();
         }
 
+        Ok(())
+    }
+
+    /// Configures and creates einsums
+    #[allow(clippy::too_many_arguments)]
+    pub fn configure_einsums(
+        &mut self,
+        cs: &mut ConstraintSystem<F>,
+        analysis: &EinsumAnalysis,
+        num_inner_cols: usize,
+        logrows: usize,
+    ) -> Result<(), CircuitError>
+    where
+        F: Field,
+    {
+        self.einsums = einsum::Einsums::configure_universal(cs, analysis, num_inner_cols, logrows);
         Ok(())
     }
 

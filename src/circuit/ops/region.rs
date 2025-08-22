@@ -6,7 +6,7 @@ use crate::{
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use colored::Colorize;
 use halo2_proofs::{
-    circuit::Region,
+    circuit::{Region, Value},
     plonk::{Error, Selector},
 };
 use halo2curves::ff::PrimeField;
@@ -91,15 +91,17 @@ pub struct EinsumIndex {
     index: usize,
     col_coord: usize,
     equations: HashSet<String>,
+    num_inner_cols: usize,
 }
 
 impl EinsumIndex {
     /// Create a new einsum index
-    pub fn new(index: usize, col_coord: usize) -> EinsumIndex {
-        EinsumIndex { 
-            index, 
+    pub fn new(index: usize, col_coord: usize, num_inner_cols: usize) -> EinsumIndex {
+        EinsumIndex {
+            index,
             col_coord,
             equations: HashSet::new(),
+            num_inner_cols,
         }
     }
 
@@ -221,6 +223,7 @@ pub struct RegionCtx<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Ha
     statistics: RegionStatistics,
     settings: RegionSettings,
     assigned_constants: ConstantsMap<F>,
+    challenges: Vec<Value<F>>,
     max_dynamic_input_len: usize,
 }
 
@@ -317,6 +320,11 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         &self.statistics
     }
 
+    ///
+    pub fn challenges(&self) -> &[Value<F>] {
+        &self.challenges
+    }
+
     /// Create a new region context
     pub fn new(
         region: Region<'a, F>,
@@ -339,6 +347,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             statistics: RegionStatistics::default(),
             settings: RegionSettings::all_true(decomp_base, decomp_legs),
             assigned_constants: HashMap::new(),
+            challenges: vec![],
             max_dynamic_input_len: 0,
         }
     }
@@ -354,6 +363,20 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     ) -> RegionCtx<'a, F> {
         let mut new_self = Self::new(region, row, num_inner_cols, decomp_base, decomp_legs);
         new_self.assigned_constants = constants;
+        new_self
+    }
+
+    /// Create a new region context with challenges
+    pub fn new_with_challenges(
+        region: Region<'a, F>,
+        row: usize,
+        num_inner_cols: usize,
+        decomp_base: usize,
+        decomp_legs: usize,
+        challenges: Vec<Value<F>>,
+    ) -> RegionCtx<'a, F> {
+        let mut new_self = Self::new(region, row, num_inner_cols, decomp_base, decomp_legs);
+        new_self.challenges = challenges;
         new_self
     }
 
@@ -377,6 +400,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             statistics: RegionStatistics::default(),
             settings,
             assigned_constants: HashMap::new(),
+            challenges: vec![],
             max_dynamic_input_len: 0,
         }
     }
@@ -400,6 +424,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             statistics: RegionStatistics::default(),
             settings,
             assigned_constants: HashMap::new(),
+            challenges: vec![],
             max_dynamic_input_len: 0,
         }
     }
@@ -635,6 +660,16 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         self.einsum_index.equations.clone()
     }
 
+    /// set the number of inner columns used in einsum custom gate
+    pub fn set_num_einsum_inner_cols(&mut self, num_inner_cols: usize) {
+        self.einsum_index.num_inner_cols = num_inner_cols;
+    }
+
+    /// number of inner columns used in einsum custom gate
+    pub fn num_einsum_inner_cols(&self) -> usize {
+        self.einsum_index.num_inner_cols
+    }
+
     /// get used lookups
     pub fn used_lookups(&self) -> HashSet<LookupOp> {
         self.statistics.used_lookups.clone()
@@ -724,6 +759,28 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         self.assign_dynamic_lookup(var, values)
     }
 
+    /// Assign a valtensor to a vartensor in einsum area
+    pub fn assign_einsum(
+        &mut self,
+        var: &VarTensor,
+        values: &ValTensor<F>,
+    ) -> Result<ValTensor<F>, CircuitError> {
+        if let Some(region) = &self.region {
+            Ok(var.assign(
+                &mut region.borrow_mut(),
+                self.einsum_col_coord(),
+                values,
+                &mut self.assigned_constants,
+            )?)
+        } else {
+            if !values.is_instance() {
+                let values_map = values.create_constants_map_iterator();
+                self.assigned_constants.par_extend(values_map);
+            }
+            Ok(values.clone())
+        }
+    }
+
     /// Assign a valtensor to a vartensor with duplication
     pub fn assign_with_duplication_unconstrained(
         &mut self,
@@ -773,6 +830,63 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             let (_, len) = var.dummy_assign_with_duplication(
                 self.row,
                 self.linear_coord,
+                values,
+                true,
+                &mut self.assigned_constants,
+            )?;
+            Ok((values.clone(), len))
+        }
+    }
+
+    /// Assign a valtensor to a vartensor with duplication
+    pub fn assign_einsum_with_duplication_unconstrained(
+        &mut self,
+        var: &VarTensor,
+        values: &ValTensor<F>,
+    ) -> Result<(ValTensor<F>, usize), Error> {
+        if let Some(region) = &self.region {
+            // duplicates every nth element to adjust for column overflow
+            let (res, len) = var.assign_with_duplication_unconstrained(
+                &mut region.borrow_mut(),
+                self.einsum_col_coord(),
+                values,
+                &mut self.assigned_constants,
+            )?;
+            Ok((res, len))
+        } else {
+            let (_, len) = var.dummy_assign_with_duplication(
+                self.row,
+                self.einsum_col_coord(),
+                values,
+                false,
+                &mut self.assigned_constants,
+            )?;
+            Ok((values.clone(), len))
+        }
+    }
+
+    /// Assign a valtensor to a vartensor with duplication
+    pub fn assign_einsum_with_duplication_constrained(
+        &mut self,
+        var: &VarTensor,
+        values: &ValTensor<F>,
+        check_mode: &crate::circuit::CheckMode,
+    ) -> Result<(ValTensor<F>, usize), Error> {
+        if let Some(region) = &self.region {
+            // duplicates every nth element to adjust for column overflow
+            let (res, len) = var.assign_with_duplication_constrained(
+                &mut region.borrow_mut(),
+                self.row,
+                self.einsum_col_coord(),
+                values,
+                check_mode,
+                &mut self.assigned_constants,
+            )?;
+            Ok((res, len))
+        } else {
+            let (_, len) = var.dummy_assign_with_duplication(
+                self.row,
+                self.einsum_col_coord(),
                 values,
                 true,
                 &mut self.assigned_constants,
@@ -843,6 +957,21 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             self.increment(diff);
         }
         if self.linear_coord % self.num_inner_cols != 0 {
+            return Err(CircuitError::FlushError);
+        }
+        Ok(())
+    }
+
+    /// flush row to the next row in einsum area
+    pub fn flush_einsum(&mut self) -> Result<(), CircuitError> {
+        // increment by the difference between the current linear coord and the next row
+        let num_einsum_inner_cols = self.num_einsum_inner_cols();
+        let remainder = self.einsum_col_coord() % num_einsum_inner_cols;
+        if remainder != 0 {
+            let diff = num_einsum_inner_cols - remainder;
+            self.increment_einsum_col_coord(diff);
+        }
+        if self.einsum_col_coord() % num_einsum_inner_cols != 0 {
             return Err(CircuitError::FlushError);
         }
         Ok(())
