@@ -352,7 +352,7 @@ def test_prove_and_verify():
         "for-aggr",
         srs_path=srs_path,
     )
-    assert res['transcript_type'] == 'Poseidon'
+    assert res['transcript_type'] == 'poseidon'
     assert os.path.isfile(proof_path)
 
     settings_path = os.path.join(folder_path, 'settings.json')
@@ -388,7 +388,7 @@ def test_prove_evm():
         "single",
         srs_path=srs_path,
     )
-    assert res['transcript_type'] == 'EVM'
+    assert res['transcript_type'] == 'evm'
     assert os.path.isfile(proof_path)
 
 

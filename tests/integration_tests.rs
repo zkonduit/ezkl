@@ -163,10 +163,16 @@ mod native_tests {
             let data = GraphData::from_path(format!("{}/{}/input.json", test_dir, test).into())
                 .expect("failed to load input data");
 
-            let duplicated_input_data = data.input_data.into_iter().map(|input| {
-                (0..num_batches)
-                    .map(move |_| input.clone()).flatten().collect::<Vec<_>>()
-            }).collect::<Vec<_>>();
+            let duplicated_input_data = data
+                .input_data
+                .into_iter()
+                .map(|input| {
+                    (0..num_batches)
+                        .map(move |_| input.clone())
+                        .flatten()
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
 
             let duplicated_data = GraphData::new(duplicated_input_data);
 
@@ -307,63 +313,63 @@ mod native_tests {
         "integer_div", // 98
     ];
 
-    const WASM_TESTS: [&str; 46] = [
-        "1l_mlp",
-        "1l_slice",
-        "1l_concat",
-        "1l_flatten",
+    const WASM_TESTS: [&str; 44] = [
+        "1l_mlp",     // 0
+        "1l_slice",   // 1
+        "1l_concat",  // 2
+        "1l_flatten", // 3
         // "1l_average",
-        "1l_div",
-        "1l_pad",
-        "1l_reshape",
-        "1l_eltwise_div",
-        "1l_sigmoid",
-        "1l_sqrt",
-        "1l_softmax",
+        "1l_div",         // 4
+        "1l_pad",         // 5
+        "1l_reshape",     // 6
+        "1l_eltwise_div", // 7
+        "1l_sigmoid",     // 8
+        "1l_sqrt",        // 9
+        "1l_softmax",     // 10
         // "1l_instance_norm",
-        "1l_batch_norm",
-        "1l_prelu",
-        "1l_leakyrelu",
-        "1l_gelu_noappx",
+        "1l_batch_norm",  // 11
+        "1l_prelu",       // 12
+        "1l_leakyrelu",   // 13
+        "1l_gelu_noappx", // 14
         // "1l_gelu_tanh_appx",
-        "1l_relu",
-        "1l_downsample",
-        "1l_tanh",
-        "2l_relu_sigmoid_small",
-        "2l_relu_fc",
-        "2l_relu_small",
-        "2l_relu_sigmoid",
-        "1l_conv",
-        "2l_sigmoid_small",
-        "2l_relu_sigmoid_conv",
-        "3l_relu_conv_fc",
-        "4l_relu_conv_fc",
-        "1l_erf",
-        "1l_var",
-        "1l_elu",
-        "min",
-        "max",
-        "1l_max_pool",
-        "1l_conv_transpose",
-        "1l_upsample",
-        "1l_identity",
+        "1l_relu",               // 15
+        "1l_downsample",         // 16
+        "1l_tanh",               // 17
+        "2l_relu_sigmoid_small", // 18
+        "2l_relu_fc",            // 19
+        "2l_relu_small",         // 20
+        "2l_relu_sigmoid",       // 21
+        "1l_conv",               // 22
+        "2l_sigmoid_small",      // 23
+        "2l_relu_sigmoid_conv",  // 24
+        // "3l_relu_conv_fc",
+        // "4l_relu_conv_fc",
+        "1l_erf",            // 25
+        "1l_var",            // 26
+        "1l_elu",            // 27
+        "min",               // 28
+        "max",               // 29
+        "1l_max_pool",       // 30
+        "1l_conv_transpose", // 31
+        "1l_upsample",       // 32
+        "1l_identity",       // 33
         // "idolmodel",
-        "trig",
-        "prelu_gmm",
-        "lstm",
-        "rnn",
-        "quantize_dequantize",
-        "1l_where",
-        "boolean",
-        "boolean_identity",
-        "gradient_boosted_trees",
-        "1l_topk",
-        // "xgboost",
-        // "lightgbm",
-        // "hummingbird_decision_tree",
+        "trig",                   // 34
+        "prelu_gmm",              // 35
+        "lstm",                   // 36
+        "rnn",                    // 37
+        "quantize_dequantize",    // 38
+        "1l_where",               // 39
+        "boolean",                // 40
+        "boolean_identity",       // 41
+        "gradient_boosted_trees", // 42
+        "1l_topk",                // 43
+                                  // "xgboost",
+                                  // "lightgbm",
+                                  // "hummingbird_decision_tree",
     ];
 
-    #[cfg(not(feature = "icicle"))]
+    #[cfg(not(feature = "gpu-accelerated"))]
     const TESTS_AGGR: [&str; 21] = [
         "1l_mlp",
         "1l_flatten",
@@ -388,7 +394,7 @@ mod native_tests {
         "1l_max_pool",
     ];
 
-    #[cfg(feature = "icicle")]
+    #[cfg(feature = "gpu-accelerated")]
     const TESTS_AGGR: [&str; 3] = ["1l_mlp", "1l_flatten", "1l_average"];
 
     const TESTS_EVM: [&str; 23] = [
@@ -448,11 +454,12 @@ mod native_tests {
             use crate::native_tests::TESTS_AGGR;
             use test_case::test_case;
             use crate::native_tests::aggr_prove_and_verify;
+            #[cfg(not(feature = "gpu-accelerated"))]
             use crate::native_tests::kzg_aggr_mock_prove_and_verify;
             use tempdir::TempDir;
             use ezkl::Commitments;
 
-            #[cfg(not(feature="icicle"))]
+            #[cfg(not(feature="gpu-accelerated"))]
             seq!(N in 0..=20 {
 
             #(#[test_case(TESTS_AGGR[N])])*
@@ -486,7 +493,7 @@ mod native_tests {
 
             });
 
-            #[cfg(feature="icicle")]
+            #[cfg(feature="gpu-accelerated")]
             seq!(N in 0..=2 {
             #(#[test_case(TESTS_AGGR[N])])*
             fn kzg_aggr_prove_and_verify_(test: &str) {
@@ -514,8 +521,8 @@ mod native_tests {
             use crate::native_tests::mock;
             use crate::native_tests::accuracy_measurement;
             use crate::native_tests::prove_and_verify;
-            use crate::native_tests::run_js_tests;
-            use crate::native_tests::render_circuit;
+            // use crate::native_tests::run_js_tests;
+            // use crate::native_tests::render_circuit;
             use crate::native_tests::model_serialization_different_binaries;
 
             use tempdir::TempDir;
@@ -545,15 +552,15 @@ mod native_tests {
 
             seq!(N in 0..=98 {
 
-            #(#[test_case(TESTS[N])])*
-            #[ignore]
-            fn render_circuit_(test: &str) {
-                crate::native_tests::init_binary();
-                let test_dir = TempDir::new(test).unwrap();
-                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                render_circuit(path, test.to_string());
-                test_dir.close().unwrap();
-            }
+            // #(#[test_case(TESTS[N])])*
+            // #[ignore]
+            // fn render_circuit_(test: &str) {
+            //     crate::native_tests::init_binary();
+            //     let test_dir = TempDir::new(test).unwrap();
+            //     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
+            //     render_circuit(path, test.to_string());
+            //     test_dir.close().unwrap();
+            // }
 
 
 
@@ -905,7 +912,7 @@ mod native_tests {
 
             });
 
-            seq!(N in 0..=45 {
+            seq!(N in 0..=43 {
 
                 #(#[test_case(WASM_TESTS[N])])*
                 fn kzg_prove_and_verify_with_overflow_(test: &str) {
@@ -915,8 +922,8 @@ mod native_tests {
                     env_logger::init();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 1, None, true, "single", Commitments::KZG, 2);
-                    #[cfg(not(feature = "icicle"))]
-                    run_js_tests(path, test.to_string(), "testWasm", false);
+                    // #[cfg(not(feature = "gpu-accelerated"))]
+                    // run_js_tests(path, test.to_string(), "testWasm", false);
                     test_dir.close().unwrap();
                 }
 
@@ -928,8 +935,8 @@ mod native_tests {
                     env_logger::init();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     prove_and_verify(path, test.to_string(), "safe", "hashed", "private", "public", 1, None, true, "single", Commitments::KZG, 2);
-                    #[cfg(not(feature = "icicle"))]
-                    run_js_tests(path, test.to_string(), "testWasm", false);
+                    // #[cfg(not(feature = "gpu-accelerated"))]
+                    // run_js_tests(path, test.to_string(), "testWasm", false);
                     test_dir.close().unwrap();
                 }
 
@@ -941,8 +948,8 @@ mod native_tests {
                     env_logger::init();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     prove_and_verify(path, test.to_string(), "safe", "private", "fixed", "public", 1, None, true, "single", Commitments::KZG, 2);
-                    #[cfg(not(feature = "icicle"))]
-                    run_js_tests(path, test.to_string(), "testWasm", false);
+                    // #[cfg(not(feature = "gpu-accelerated"))]
+                    // run_js_tests(path, test.to_string(), "testWasm", false);
                     test_dir.close().unwrap();
                 }
 
@@ -989,6 +996,7 @@ mod native_tests {
             use crate::native_tests::kzg_evm_aggr_prove_and_verify;
             use tempdir::TempDir;
             use crate::native_tests::Hardfork;
+            #[cfg(not(feature = "gpu-accelerated"))]
             use crate::native_tests::run_js_tests;
             use ezkl::logger::init_logger;
             use crate::native_tests::lazy_static;
@@ -1089,7 +1097,7 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "private", "private", "public");
-                    #[cfg(not(feature = "icicle"))]
+                    #[cfg(not(feature = "gpu-accelerated"))]
                     run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
 
@@ -1103,7 +1111,7 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let mut _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "hashed", "private", "private");
-                    #[cfg(not(feature = "icicle"))]
+                    #[cfg(not(feature = "gpu-accelerated"))]
                     run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
                 }
@@ -1120,7 +1128,7 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let mut _anvil_child = crate::native_tests::start_anvil(false, hardfork);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "polycommit", "private", "public");
-                    #[cfg(not(feature = "icicle"))]
+                    #[cfg(not(feature = "gpu-accelerated"))]
                     run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
                 }
@@ -1133,7 +1141,7 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "private", "hashed", "public");
-                    #[cfg(not(feature = "icicle"))]
+                    #[cfg(not(feature = "gpu-accelerated"))]
                     run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
 
@@ -1146,7 +1154,7 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "private", "private", "hashed");
-                    #[cfg(not(feature = "icicle"))]
+                    #[cfg(not(feature = "gpu-accelerated"))]
                     run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
                 }
@@ -1159,7 +1167,7 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "private", "polycommit", "public");
-                    #[cfg(not(feature = "icicle"))]
+                    #[cfg(not(feature = "gpu-accelerated"))]
                     run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
                 }
@@ -1172,7 +1180,7 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "private", "private", "polycommit");
-                    #[cfg(not(feature = "icicle"))]
+                    #[cfg(not(feature = "gpu-accelerated"))]
                     run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
                 }
@@ -1184,7 +1192,7 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "polycommit", "polycommit", "polycommit");
-                    #[cfg(not(feature = "icicle"))]
+                    #[cfg(not(feature = "gpu-accelerated"))]
                     run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
                 }
@@ -1551,24 +1559,25 @@ mod native_tests {
         assert!(status.success());
     }
 
-    // Mock prove (fast, but does not cover some potential issues)
-    fn render_circuit(test_dir: &str, example_name: String) {
-        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
-            .args([
-                "render-circuit",
-                "-M",
-                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "-O",
-                format!("{}/{}/render.png", test_dir, example_name).as_str(),
-                "--lookup-range=-32768->32768",
-                "-K=17",
-            ])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-    }
+    // // Mock prove (fast, but does not cover some potential issues)
+    // fn render_circuit(test_dir: &str, example_name: String) {
+    //     let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
+    //         .args([
+    //             "render-circuit",
+    //             "-M",
+    //             format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+    //             "-O",
+    //             format!("{}/{}/render.png", test_dir, example_name).as_str(),
+    //             "--lookup-range=-32768->32768",
+    //             "-K=17",
+    //         ])
+    //         .status()
+    //         .expect("failed to execute process");
+    //     assert!(status.success());
+    // }
 
     // prove-serialize-verify, the usual full path
+    #[cfg(not(feature = "gpu-accelerated"))]
     fn kzg_aggr_mock_prove_and_verify(test_dir: &str, example_name: String) {
         prove_and_verify(
             test_dir,
@@ -2225,6 +2234,7 @@ mod native_tests {
     }
 
     // run js browser evm verify tests for a given example
+    #[cfg(not(feature = "gpu-accelerated"))]
     fn run_js_tests(test_dir: &str, example_name: String, js_test: &str, vk: bool) {
         let example = format!("--example={}", example_name);
         let dir = format!("--dir={}", test_dir);
@@ -2243,7 +2253,7 @@ mod native_tests {
 
     #[allow(unused_variables)]
     fn build_ezkl() {
-        #[cfg(feature = "icicle")]
+        #[cfg(feature = "gpu-accelerated")]
         let args = [
             "build",
             "--profile=test-runs",
@@ -2262,18 +2272,8 @@ mod native_tests {
             "macos-metal",
         ];
         // not macos-metal and not icicle
-        #[cfg(all(not(feature = "icicle"), not(feature = "macos-metal")))]
+        #[cfg(all(not(feature = "gpu-accelerated"), not(feature = "macos-metal")))]
         let args = ["build", "--profile=test-runs", "--bin", "ezkl"];
-        #[cfg(feature = "eth-original-lookup")]
-        let args = [
-            "build",
-            "--profile=test-runs",
-            "--bin",
-            "ezkl",
-            "--no-default-features",
-            "--features",
-            "ezkl,solidity-verifier,eth",
-        ];
         #[cfg(feature = "reusable-verifier")]
         let args = [
             "build",

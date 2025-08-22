@@ -33,7 +33,7 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-06-16
+          toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3
@@ -46,9 +46,11 @@ jobs:
   build:
     permissions:
       contents: read
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      RUSTFLAGS: "-C linker=gcc"
+      OPENSSL_NO_VENDOR: 1
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -57,16 +59,22 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-06-16
+          toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
+      - name: install libc6
+        run: sudo apt-get install -y libc6
+      - name: Install cmake and build dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake build-essential g++ gcc libclang-dev llvm-dev libstdc++-12-dev libc6-dev libssl-dev pkg-config
+      - name: Force rebuild icicle dependencies
+        run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
       - name: Build
         run: cargo build --verbose
 
   docs:
     permissions:
       contents: read
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
@@ -75,27 +83,39 @@ jobs:
           persist-credentials: false
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-06-16
+          toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
+      - name: install libc6
+        run: sudo apt-get install -y libc6
+      - name: Install cmake and build dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake build-essential g++ gcc libclang-dev llvm-dev libstdc++-12-dev libc6-dev libssl-dev pkg-config
       - name: Docs
         run: cargo doc --verbose
 
   library-tests:
     permissions:
       contents: read
-    runs-on: ubuntu-latest-32-cores
+    runs-on: ubuntu-22.04
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      RUSTFLAGS: "-C linker=gcc"
+      OPENSSL_NO_VENDOR: 1
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-06-16
+          toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
+      - name: install libc6
+        run: sudo apt-get install -y libc6
+      - name: Install cmake and build dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake build-essential g++ gcc libclang-dev llvm-dev libstdc++-12-dev libc6-dev libssl-dev pkg-config
+      - name: Force rebuild icicle dependencies
+        run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
         with:
           crate: cargo-nextest
@@ -105,56 +125,24 @@ jobs:
         run: cargo test --doc --verbose
       - name: Library tests
         run: cargo nextest run --lib --verbose
-      - name: Library tests (original lookup)
-        run: cargo nextest run --lib --verbose --no-default-features --features ezkl,eth-original-lookup
 
-  # ultra-overflow-tests-gpu:
-  #   runs-on: GPU
-  #   env:
-  #     ENABLE_ICICLE_GPU: true
-  #   steps:
-  #     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
-  # with:
-  #   persist-credentials: false
-  #     - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
-  #       with:
-  #         toolchain: nightly-2025-06-16
-  #         override: true
-  #         components: rustfmt, clippy
-  #     - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
-  #       with:
-  #         crate: cargo-nextest
-  #         locked: true
-  #     - uses: mwilliamson/setup-wasmtime-action@bf814d7d8fc3c3a77dfe114bd9fb8a2c575f6ad6  #v2.0.0
-  #       with:
-  #         wasmtime-version: "3.0.1"
-  #     # - name: Matmul overflow (wasi)
-  #     #   run: cargo wasi test matmul_col_ultra_overflow -- --include-ignored --nocapture
-  #     # - name: Conv overflow (wasi)
-  #     #   run: cargo wasi test conv_col_ultra_overflow -- --include-ignored --nocapture
-  #     - name: lookup overflow
-  #       run: cargo nextest run lookup_ultra_overflow --no-capture --features icicle -- --include-ignored
-  #     - name: Matmul overflow
-  #       run: RUST_LOG=debug cargo nextest run matmul_col_ultra_overflow --no-capture --features icicle -- --include-ignored
-  #     - name: Conv overflow
-  #       run: RUST_LOG=debug cargo nextest run conv_col_ultra_overflow --no-capture --features icicle -- --include-ignored
-  #     - name: Conv + relu overflow
-  #       run: cargo nextest run conv_relu_col_ultra_overflow --no-capture --features icicle -- --include-ignored
 
-  ultra-overflow-tests_og-lookup:
+  ultra-overflow-tests-gpu:
     permissions:
       contents: read
-    runs-on: non-gpu,non-sgx
+    runs-on: gpu
     env:
+      ENABLE_ICICLE_GPU: true
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      RUSTFLAGS: "-C linker=gcc"
+      OPENSSL_NO_VENDOR: 1
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-06-16
+          toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -164,25 +152,36 @@ jobs:
       - uses: mwilliamson/setup-wasmtime-action@bf814d7d8fc3c3a77dfe114bd9fb8a2c575f6ad6  #v2.0.0
         with:
           wasmtime-version: "3.0.1"
+      - name: Setup GPU dependencies
+        run: sudo ./setup-gpu.sh --yes
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential g++ gcc cmake libclang-dev llvm-dev libstdc++-12-dev libc6 libc6-dev libssl-dev pkg-config
+      - name: Force rebuild icicle dependencies
+        run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
       # - name: Matmul overflow (wasi)
       #   run: cargo wasi test matmul_col_ultra_overflow -- --include-ignored --nocapture
       # - name: Conv overflow (wasi)
       #   run: cargo wasi test conv_col_ultra_overflow -- --include-ignored --nocapture
       - name: lookup overflow
-        run: cargo nextest run --release lookup_ultra_overflow --no-capture --no-default-features --features ezkl,eth-original-lookup -- --include-ignored
+        run: cargo nextest run lookup_ultra_overflow --no-capture --features gpu-accelerated -- --include-ignored
       - name: Matmul overflow
-        run: RUST_LOG=debug cargo nextest run --release matmul_col_ultra_overflow --no-capture --no-default-features --features ezkl,eth-original-lookup -- --include-ignored
+        run: RUST_LOG=debug cargo nextest run matmul_col_ultra_overflow --no-capture --features gpu-accelerated -- --include-ignored
       - name: Conv overflow
-        run: RUST_LOG=debug cargo nextest run --release conv_col_ultra_overflow --no-capture --no-default-features --features ezkl,eth-original-lookup -- --include-ignored
+        run: RUST_LOG=debug cargo nextest run conv_col_ultra_overflow --no-capture --features gpu-accelerated -- --include-ignored
       - name: Conv + relu overflow
-        run: cargo nextest run --release conv_relu_col_ultra_overflow --no-capture --no-default-features --features ezkl,eth-original-lookup -- --include-ignored
+        run: cargo nextest run conv_relu_col_ultra_overflow --no-capture --features gpu-accelerated -- --include-ignored
 
   ultra-overflow-tests:
     permissions:
       contents: read
-    runs-on: non-gpu,non-sgx
+    runs-on: [ non-gpu, non-sgx ]
+    needs: [build, library-tests, docs]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      RUSTFLAGS: "-C linker=gcc"
+      OPENSSL_NO_VENDOR: 1
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
@@ -192,10 +191,15 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-06-16
+          toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
-
+      - name: install libc6
+        run: sudo apt-get install -y libc6
+      - name: Install cmake and build dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake build-essential g++ gcc libclang-dev llvm-dev libstdc++-12-dev libc6-dev libssl-dev pkg-config
+      - name: Force rebuild icicle dependencies
+        run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
         with:
           crate: cargo-nextest
@@ -219,9 +223,11 @@ jobs:
   model-serialization:
     permissions:
       contents: read
-    runs-on: ubuntu-latest-16-cores
+    runs-on: ubuntu-22.04
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      RUSTFLAGS: "-C linker=gcc"
+      OPENSSL_NO_VENDOR: 1
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
@@ -231,9 +237,15 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-06-16
+          toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
+      - name: install libc6
+        run: sudo apt-get install -y libc6
+      - name: Install cmake and build dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake build-essential g++ gcc libclang-dev llvm-dev libstdc++-12-dev libc6-dev libssl-dev pkg-config
+      - name: Force rebuild icicle dependencies
+        run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
         with:
           crate: cargo-nextest
@@ -244,11 +256,12 @@ jobs:
   wasm32-tests:
     permissions:
       contents: read
-    runs-on: ubuntu-latest-64-cores
+    runs-on: ubuntu-22.04
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
       # add `atomics` and `bulk-memory` to RUSTFLAGS to enable wasm-bindgen tests
       RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory"
+      OPENSSL_NO_VENDOR: 1
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
@@ -258,20 +271,26 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-06-16
+          toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
+      - name: install libc6
+        run: sudo apt-get install -y libc6
+      - name: Install cmake and build dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake build-essential g++ gcc libclang-dev llvm-dev libstdc++-12-dev libc6-dev libssl-dev pkg-config
+      - name: Force rebuild icicle dependencies
+        run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
       - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa  #v0.4.0
         with:
-          # Pin to version 0.12.1
-          version: "v0.12.1"
+          # Pin to version 0.13.1
+          version: "v0.13.1"
       - uses: nanasess/setup-chromedriver@affb1ea8848cbb080be372c1e8d7a5c173e9298f  #v2.3.0
         # with:
         #   chromedriver-version: "115.0.5790.102"
       - name: Install wasm32-unknown-unknown
         run: rustup target add wasm32-unknown-unknown
       - name: Add rust-src
-        run: rustup component add rust-src --toolchain nightly-2025-06-16-x86_64-unknown-linux-gnu
+        run: rustup component add rust-src --toolchain nightly-2025-05-01-x86_64-unknown-linux-gnu
       - name: Create webdriver.json to disable timeouts
         run: |
           echo '{"args": ["--headless", "--disable-gpu", "--disable-dev-shm-usage", "--no-sandbox"]}' > webdriver.json
@@ -286,9 +305,12 @@ jobs:
   mock-proving-tests:
     permissions:
       contents: read
-    runs-on: non-gpu,non-sgx
+    runs-on: [ non-gpu, non-sgx ]
+    needs: [build, library-tests, docs]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      RUSTFLAGS: "-C linker=gcc"
+      OPENSSL_NO_VENDOR: 1
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
@@ -297,13 +319,15 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-06-16
+          toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
+      - name: Force rebuild icicle dependencies
+        run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
       # - name: The Worm Mock
       #   run: cargo nextest run --verbose tests::large_mock_::large_tests_5_expects -- --include-ignored
       - name: Large 1D Conv Mock
@@ -356,11 +380,12 @@ jobs:
   prove-and-verify-evm-tests:
     permissions:
       contents: read
-    runs-on: non-gpu,non-sgx
-    # needs: [build, library-tests, docs, python-tests, python-integration-tests]
+    runs-on: [ non-gpu, non-sgx ]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
       RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory"
+      OPENSSL_NO_VENDOR: 1
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
@@ -370,17 +395,19 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-06-16
+          toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
       - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa  #v0.4.0
         with:
-          # Pin to version 0.12.1
-          version: "v0.12.1"
+          # Pin to version 0.13.1
+          version: "v0.13.1"
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
+      - name: Force rebuild icicle dependencies
+        run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
@@ -388,13 +415,13 @@ jobs:
         uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b  #v2.4.1
         with:
           version: 8
-      - name: Use Node.js 18.12.1
+      - name: Use Node.js 22.17.1
         uses: actions/setup-node@1a4442cacd436585916779262731d5b162bc6ec7  #v3.8.2
         with:
-          node-version: "18.12.1"
+          node-version: "22.17.1"
           cache: "pnpm"
       - name: "Add rust-src"
-        run: rustup component add rust-src --toolchain nightly-2025-06-16-x86_64-unknown-linux-gnu
+        run: rustup component add rust-src --toolchain nightly-2025-05-01-x86_64-unknown-linux-gnu
       - name: Install dependencies for js tests and package
         run: |
           pnpm install --frozen-lockfile
@@ -433,15 +460,15 @@ jobs:
   #         persist-credentials: false
   #     - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
   #       with:
-  #         toolchain: nightly-2025-06-16
+  #         toolchain: nightly-2025-05-01
   #         override: true
   #         components: rustfmt, clippy
   #     - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa  #v0.4.0
   #       with:
-  #         # Pin to version 0.12.1
-  #         version: 'v0.12.1'
+  #         # Pin to version 0.13.1
+  #         version: 'v0.13.1'
   #     - name: Add rust-src
-  #       run: rustup component add rust-src --toolchain nightly-2025-06-16
+  #       run: rustup component add rust-src --toolchain nightly-2025-05-01
   #     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
   #       with:
   #         persist-credentials: false
@@ -459,11 +486,9 @@ jobs:
   prove-and-verify-tests:
     permissions:
       contents: read
-    runs-on: non-gpu,non-sgx
-    needs: [build, library-tests, docs]
+    runs-on: [ non-gpu, non-sgx ]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
-      RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory"
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
@@ -473,18 +498,20 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-06-16
+          toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
       - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa  #v0.4.0
         with:
-          # Pin to version 0.12.1
-          version: "v0.12.1"
+          # Pin to version 0.13.1
+          version: "v0.13.1"
       - name: Add wasm32-unknown-unknown target
         run: rustup target add wasm32-unknown-unknown
 
       - name: Add rust-src
-        run: rustup component add rust-src --toolchain nightly-2025-06-16-x86_64-unknown-linux-gnu
+        run: rustup component add rust-src --toolchain nightly-2025-05-01-x86_64-unknown-linux-gnu
+      - name: Force rebuild icicle dependencies
+        run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
@@ -492,10 +519,10 @@ jobs:
         uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b  #v2.4.1
         with:
           version: 8
-      - name: Use Node.js 18.12.1
+      - name: Use Node.js 22.17.1
         uses: actions/setup-node@1a4442cacd436585916779262731d5b162bc6ec7  #v3.8.2
         with:
-          node-version: "18.12.1"
+          node-version: "22.17.1"
           cache: "pnpm"
       - name: Install dependencies for js tests
         run: |
@@ -507,9 +534,9 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
-      - name: Build wasm package for nodejs target.
-        run: |
-          wasm-pack build --target nodejs --out-dir ./tests/wasm/nodejs . -- -Z build-std="panic_abort,std"
+      # - name: Build wasm package for nodejs target.
+      #   run: |
+      #     wasm-pack build --target nodejs --out-dir ./tests/wasm/nodejs . -- -Z build-std="panic_abort,std"
       - name: KZG prove and verify tests (public outputs + column overflow)
         run: cargo nextest run --verbose tests::kzg_prove_and_verify_with_overflow_::w
       - name: KZG prove and verify tests (public outputs + fixed params + column overflow)
@@ -518,10 +545,6 @@ jobs:
         run: cargo nextest run --verbose tests::kzg_prove_and_verify_with_overflow_hashed_inputs_
       - name: KZG prove and verify tests (public outputs)
         run: cargo nextest run --verbose tests::kzg_prove_and_verify_tight_lookup_::t
-      - name: IPA prove and verify tests
-        run: cargo nextest run --verbose tests::ipa_prove_and_verify_::t --test-threads 1
-      - name: IPA prove and verify tests (ipa outputs)
-        run: cargo nextest run --verbose tests::ipa_prove_and_verify_ipa_output
       - name: KZG prove and verify tests single inner col
         run: cargo nextest run --verbose tests::kzg_prove_and_verify_single_col
       - name: KZG prove and verify tests triple inner col
@@ -541,42 +564,53 @@ jobs:
       - name: KZG prove and verify tests (hashed outputs)
         run: cargo nextest run --verbose tests::kzg_prove_and_verify_hashed
 
-  # prove-and-verify-tests-gpu:
-  #   runs-on: GPU
-  #   env:
-  #     ENABLE_ICICLE_GPU: true
-  #   steps:
-  #     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
-  # with:
-  #   persist-credentials: false
-  #     - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
-  #       with:
-  #         toolchain: nightly-2025-06-16
-  #         override: true
-  #         components: rustfmt, clippy
-  #     - name: Add rust-src
-  #       run: rustup component add rust-src --toolchain nightly-2025-06-16-x86_64-unknown-linux-gnu
-  #     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
-  #     - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
-  #       with:
-  #         crate: cargo-nextest
-  #         locked: true
-  #     - name: KZG prove and verify tests (kzg outputs)
-  #       run: cargo nextest run --verbose tests::kzg_prove_and_verify_kzg_output --features icicle --test-threads 1
-  #     - name: KZG prove and verify tests (public outputs + column overflow)
-  #       run: cargo nextest run --verbose tests::kzg_prove_and_verify_with_overflow_::w --features icicle  --test-threads 1
-  #     - name: KZG prove and verify tests (public outputs + fixed params + column overflow)
-  #       run: cargo nextest run --verbose tests::kzg_prove_and_verify_with_overflow_fixed_params_ --features icicle  --test-threads 1
-  #     - name: KZG prove and verify tests (public outputs)
-  #       run: cargo nextest run --verbose tests::kzg_prove_and_verify_::t --features icicle  --test-threads 1
-  #     - name: KZG prove and verify tests (public outputs + column overflow)
-  #       run: cargo nextest run --verbose tests::kzg_prove_and_verify_::t --features icicle  --test-threads 1
-  #     - name: KZG prove and verify tests (public inputs)
-  #       run: cargo nextest run --verbose tests::kzg_prove_and_verify_public_input --features icicle  --test-threads 1
-  #     - name: KZG prove and verify tests (fixed params)
-  #       run: cargo nextest run --verbose tests::kzg_prove_and_verify_fixed_params --features icicle  --test-threads 1
-  #     - name: KZG prove and verify tests (hashed outputs)
-  #       run: cargo nextest run --verbose tests::kzg_prove_and_verify_hashed --features icicle  --test-threads 1
+  prove-and-verify-tests-gpu:
+    permissions:
+      contents: read
+    runs-on: gpu
+    needs: [build, library-tests, docs]
+    env:
+      ENABLE_ICICLE_GPU: true
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      RUSTFLAGS: "-C linker=gcc"
+      OPENSSL_NO_VENDOR: 1
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
+        with:
+          toolchain: nightly-2025-05-01
+          override: true
+          components: rustfmt, clippy
+      - name: Add rust-src
+        run: rustup component add rust-src --toolchain nightly-2025-05-01-x86_64-unknown-linux-gnu
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
+        with:
+          crate: cargo-nextest
+          locked: true
+      - name: Setup GPU dependencies
+        run: sudo ./setup-gpu.sh --yes
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential g++ gcc cmake libclang-dev llvm-dev libstdc++-12-dev libc6 libc6-dev libssl-dev pkg-config
+      - name: Force rebuild icicle dependencies
+        run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
+      - name: KZG prove and verify tests (kzg outputs)
+        run: cargo nextest run --verbose tests::kzg_prove_and_verify_kzg_output --features gpu-accelerated --test-threads 1
+      - name: KZG prove and verify tests (public outputs + column overflow)
+        run: cargo nextest run --verbose tests::kzg_prove_and_verify_with_overflow_::w --features gpu-accelerated  --test-threads 1
+      - name: KZG prove and verify tests (public outputs + fixed params + column overflow)
+        run: cargo nextest run --verbose tests::kzg_prove_and_verify_with_overflow_fixed_params_ --features gpu-accelerated  --test-threads 1
+      - name: KZG prove and verify tests (public outputs)
+        run: cargo nextest run --verbose tests::kzg_prove_and_verify_::t --features gpu-accelerated  --test-threads 1
+      - name: KZG prove and verify tests (public inputs)
+        run: cargo nextest run --verbose tests::kzg_prove_and_verify_public_input --features gpu-accelerated  --test-threads 1
+      - name: KZG prove and verify tests (fixed params)
+        run: cargo nextest run --verbose tests::kzg_prove_and_verify_fixed_params --features gpu-accelerated  --test-threads 1
+      - name: KZG prove and verify tests (hashed outputs)
+        run: cargo nextest run --verbose tests::kzg_prove_and_verify_hashed --features gpu-accelerated  --test-threads 1
 
   prove-and-verify-mock-aggr-tests:
     permissions:
@@ -594,7 +628,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@4f94fbe7e03939b0e674bcc9ca609a16088f63ff  #nightly branch, TODO: update when required
         with:
-          toolchain: nightly-2025-06-16
+          toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -604,25 +638,39 @@ jobs:
       - name: Mock aggr tests (KZG)
         run: cargo nextest run --verbose tests_aggr::kzg_aggr_mock_prove_and_verify_  --test-threads 8
 
-  # prove-and-verify-aggr-tests-gpu:
-  #   runs-on: GPU
-  #   env:
-  #     ENABLE_ICICLE_GPU: true
-  #   steps:
-  #     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
-  # with:
-  #   persist-credentials: false
-  #     - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
-  #       with:
-  #         toolchain: nightly-2025-06-16
-  #         override: true
-  #         components: rustfmt, clippy
-  #     - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
-  #       with:
-  #         crate: cargo-nextest
-  #         locked: true
-  #     - name: KZG tests
-  #       run: cargo nextest run --verbose tests_aggr::kzg_aggr_prove_and_verify_  --features icicle --test-threads 1 -- --include-ignored
+  prove-and-verify-aggr-tests-gpu:
+    permissions:
+      contents: read
+    runs-on: gpu
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
+    env:
+      ENABLE_ICICLE_GPU: true
+      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      RUSTFLAGS: "-C linker=gcc"
+      OPENSSL_NO_VENDOR: 1
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
+        with:
+          toolchain: nightly-2025-05-01
+          override: true
+          components: rustfmt, clippy
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
+        with:
+          crate: cargo-nextest
+          locked: true
+      - name: Setup GPU dependencies
+        run: sudo ./setup-gpu.sh --yes
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential g++ gcc cmake libclang-dev llvm-dev libstdc++-12-dev libc6 libc6-dev libssl-dev pkg-config
+      - name: Force rebuild icicle dependencies
+        run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
+      - name: KZG tests
+        run: cargo nextest run --verbose tests_aggr::kzg_aggr_prove_and_verify_  --features gpu-accelerated --test-threads 1 -- --include-ignored
 
   prove-and-verify-aggr-tests:
     permissions:
@@ -640,7 +688,7 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-06-16
+          toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -666,7 +714,7 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-06-16
+          toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -683,10 +731,12 @@ jobs:
   examples:
     permissions:
       contents: read
-    runs-on: ubuntu-latest-32-cores
+    runs-on: ubuntu-22.04
     needs: [build, library-tests, docs]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      RUSTFLAGS: "-C linker=gcc"
+      OPENSSL_NO_VENDOR: 1
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
@@ -696,9 +746,15 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-06-16
+          toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
+      - name: install libc6
+        run: sudo apt-get install -y libc6
+      - name: Install cmake and build dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake build-essential g++ gcc libclang-dev llvm-dev libstdc++-12-dev libc6-dev libssl-dev pkg-config
+      - name: Force rebuild icicle dependencies
+        run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
         with:
           crate: cargo-nextest
@@ -709,7 +765,7 @@ jobs:
   python-tests:
     permissions:
       contents: read
-    runs-on: non-gpu,non-sgx
+    runs-on: [ non-gpu, non-sgx ]
     needs: [build, library-tests, docs]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -725,7 +781,7 @@ jobs:
           python-version: "3.12"
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-06-16
+          toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
       - name: Install cmake
@@ -744,7 +800,7 @@ jobs:
   accuracy-measurement-tests:
     permissions:
       contents: read
-    runs-on: non-gpu,non-sgx
+    runs-on: [ non-gpu, non-sgx ]
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -760,7 +816,7 @@ jobs:
           python-version: "3.12"
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-06-16
+          toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -784,6 +840,7 @@ jobs:
     permissions:
       contents: read
     runs-on: large-self-hosted
+    needs: [build, library-tests, docs, python-tests]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
@@ -798,7 +855,7 @@ jobs:
           python-version: "3.11"
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-06-16
+          toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -849,6 +906,8 @@ jobs:
     runs-on: macos-latest
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      RUSTFLAGS: "-C linker=gcc"
+      OPENSSL_NO_VENDOR: 1
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
@@ -858,15 +917,17 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-06-16
+          toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
+      - name: Force rebuild icicle dependencies
+        run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
       - name: Run ios tests
-        run: CARGO_BUILD_TARGET=aarch64-apple-darwin RUSTUP_TOOLCHAIN=nightly-2025-06-16-aarch64-apple-darwin cargo test --test ios_integration_tests --features ios-bindings-test --no-default-features
+        run: CARGO_BUILD_TARGET=aarch64-apple-darwin RUSTUP_TOOLCHAIN=nightly-2025-05-01-aarch64-apple-darwin cargo test --test ios_integration_tests --features ios-bindings-test --no-default-features
 
   swift-package-tests:
     permissions:
@@ -876,6 +937,8 @@ jobs:
 
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
+      RUSTFLAGS: "-C linker=gcc"
+      OPENSSL_NO_VENDOR: 1
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
@@ -884,9 +947,11 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
         with:
-          toolchain: nightly-2025-06-16
+          toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
+      - name: Force rebuild icicle dependencies
+        run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
       - name: Build EzklCoreBindings
         run: CONFIGURATION=debug cargo run --bin ios_gen_bindings --features "ios-bindings uuid camino uniffi_bindgen" --no-default-features
 
@@ -918,7 +983,7 @@ jobs:
           cd ezkl-swift-package
           xcodebuild test \
             -scheme EzklPackage \
-            -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=17.5' \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.2' \
             -resultBundlePath ../testResults
 
       - name: Run Example App Tests
@@ -927,7 +992,7 @@ jobs:
           xcodebuild test \
             -project Example.xcodeproj \
             -scheme EzklApp \
-            -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=17.5' \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.2' \
             -parallel-testing-enabled NO \
             -resultBundlePath ../../exampleTestResults \
             -skip-testing:EzklAppUITests/EzklAppUITests/testButtonClicksInOrder

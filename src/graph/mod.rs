@@ -438,8 +438,6 @@ pub struct ShuffleParams {
     pub total_shuffle_col_size: usize,
 }
 
-
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 /// Parameters for einsum operations
 pub struct EinsumParams {
@@ -871,25 +869,63 @@ impl<'de> Deserialize<'de> for GraphSettings {
                 use serde::de::Error;
 
                 // For bincode compatibility, deserialize in the same order as tuple serialization
-                let run_args = seq.next_element()?.ok_or_else(|| Error::invalid_length(0, &self))?;
-                let num_rows = seq.next_element()?.ok_or_else(|| Error::invalid_length(1, &self))?;
-                let total_assignments = seq.next_element()?.ok_or_else(|| Error::invalid_length(2, &self))?;
-                let total_const_size = seq.next_element()?.ok_or_else(|| Error::invalid_length(3, &self))?;
-                let dynamic_lookup_params = seq.next_element()?.ok_or_else(|| Error::invalid_length(4, &self))?;
-                let shuffle_params = seq.next_element()?.ok_or_else(|| Error::invalid_length(5, &self))?;
-                let einsum_params = seq.next_element()?.ok_or_else(|| Error::invalid_length(6, &self))?;
-                let model_instance_shapes = seq.next_element()?.ok_or_else(|| Error::invalid_length(7, &self))?;
-                let model_output_scales = seq.next_element()?.ok_or_else(|| Error::invalid_length(8, &self))?;
-                let model_input_scales = seq.next_element()?.ok_or_else(|| Error::invalid_length(9, &self))?;
-                let module_sizes = seq.next_element()?.ok_or_else(|| Error::invalid_length(10, &self))?;
-                let required_lookups = seq.next_element()?.ok_or_else(|| Error::invalid_length(11, &self))?;
-                let required_range_checks = seq.next_element()?.ok_or_else(|| Error::invalid_length(12, &self))?;
-                let check_mode = seq.next_element()?.ok_or_else(|| Error::invalid_length(13, &self))?;
-                let version = seq.next_element()?.ok_or_else(|| Error::invalid_length(14, &self))?;
-                let num_blinding_factors = seq.next_element()?.ok_or_else(|| Error::invalid_length(15, &self))?;
-                let timestamp = seq.next_element()?.ok_or_else(|| Error::invalid_length(16, &self))?;
-                let input_types = seq.next_element()?.ok_or_else(|| Error::invalid_length(17, &self))?;
-                let output_types = seq.next_element()?.ok_or_else(|| Error::invalid_length(18, &self))?;
+                let run_args = seq
+                    .next_element()?
+                    .ok_or_else(|| Error::invalid_length(0, &self))?;
+                let num_rows = seq
+                    .next_element()?
+                    .ok_or_else(|| Error::invalid_length(1, &self))?;
+                let total_assignments = seq
+                    .next_element()?
+                    .ok_or_else(|| Error::invalid_length(2, &self))?;
+                let total_const_size = seq
+                    .next_element()?
+                    .ok_or_else(|| Error::invalid_length(3, &self))?;
+                let dynamic_lookup_params = seq
+                    .next_element()?
+                    .ok_or_else(|| Error::invalid_length(4, &self))?;
+                let shuffle_params = seq
+                    .next_element()?
+                    .ok_or_else(|| Error::invalid_length(5, &self))?;
+                let einsum_params = seq
+                    .next_element()?
+                    .ok_or_else(|| Error::invalid_length(6, &self))?;
+                let model_instance_shapes = seq
+                    .next_element()?
+                    .ok_or_else(|| Error::invalid_length(7, &self))?;
+                let model_output_scales = seq
+                    .next_element()?
+                    .ok_or_else(|| Error::invalid_length(8, &self))?;
+                let model_input_scales = seq
+                    .next_element()?
+                    .ok_or_else(|| Error::invalid_length(9, &self))?;
+                let module_sizes = seq
+                    .next_element()?
+                    .ok_or_else(|| Error::invalid_length(10, &self))?;
+                let required_lookups = seq
+                    .next_element()?
+                    .ok_or_else(|| Error::invalid_length(11, &self))?;
+                let required_range_checks = seq
+                    .next_element()?
+                    .ok_or_else(|| Error::invalid_length(12, &self))?;
+                let check_mode = seq
+                    .next_element()?
+                    .ok_or_else(|| Error::invalid_length(13, &self))?;
+                let version = seq
+                    .next_element()?
+                    .ok_or_else(|| Error::invalid_length(14, &self))?;
+                let num_blinding_factors = seq
+                    .next_element()?
+                    .ok_or_else(|| Error::invalid_length(15, &self))?;
+                let timestamp = seq
+                    .next_element()?
+                    .ok_or_else(|| Error::invalid_length(16, &self))?;
+                let input_types = seq
+                    .next_element()?
+                    .ok_or_else(|| Error::invalid_length(17, &self))?;
+                let output_types = seq
+                    .next_element()?
+                    .ok_or_else(|| Error::invalid_length(18, &self))?;
 
                 Ok(GraphSettings {
                     run_args,
@@ -913,20 +949,36 @@ impl<'de> Deserialize<'de> for GraphSettings {
                     output_types,
                 })
             }
-
         }
 
         // Universal deserializer that works with both JSON (map) and bincode (tuple)
         if deserializer.is_human_readable() {
             // JSON format - use struct/map deserialization with flattened fields
             const FIELDS: &'static [&'static str] = &[
-                "run_args", "num_rows", "total_assignments", "total_const_size",
-                "total_dynamic_col_size", "max_dynamic_input_len", "num_dynamic_lookups",
-                "num_shuffles", "total_shuffle_col_size", "einsum_params", "model_instance_shapes",
-                "model_output_scales", "model_input_scales", "module_sizes",
-                "required_lookups", "required_range_checks", "check_mode", "version",
-                "num_blinding_factors", "timestamp", "input_types", "output_types",
-                "dynamic_lookup_params", "shuffle_params",
+                "run_args",
+                "num_rows",
+                "total_assignments",
+                "total_const_size",
+                "total_dynamic_col_size",
+                "max_dynamic_input_len",
+                "num_dynamic_lookups",
+                "num_shuffles",
+                "total_shuffle_col_size",
+                "einsum_params",
+                "model_instance_shapes",
+                "model_output_scales",
+                "model_input_scales",
+                "module_sizes",
+                "required_lookups",
+                "required_range_checks",
+                "check_mode",
+                "version",
+                "num_blinding_factors",
+                "timestamp",
+                "input_types",
+                "output_types",
+                "dynamic_lookup_params",
+                "shuffle_params",
             ];
             deserializer.deserialize_struct("GraphSettings", FIELDS, GraphSettingsVisitor)
         } else {
@@ -2192,7 +2244,6 @@ pub mod tests {
         let deserialized: GraphSettings = serde_json::from_str(&json_str).unwrap();
         assert_eq!(original, deserialized);
 
-
         // now do JSON bytes
         let json_bytes = serde_json::to_vec(&original).unwrap();
         let deserialized_from_bytes: GraphSettings = serde_json::from_slice(&json_bytes).unwrap();
@@ -2283,6 +2334,5 @@ pub mod tests {
 }"#;
 
         let _backwards_compatible: GraphSettings = serde_json::from_str(old_format_json).unwrap();
-
     }
 }

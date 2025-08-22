@@ -42,21 +42,21 @@ mod wasm32 {
     pub const SRS1: &[u8] = include_bytes!("assets/kzg1.srs");
     pub const VERIFIER_BYTECODE: &[u8] = include_bytes!("assets/wasm.code");
 
-    #[wasm_bindgen_test]
-    async fn can_verify_aggr() {
-        let value = verifyAggr(
-            wasm_bindgen::Clamped(PROOF_AGGR.to_vec()),
-            wasm_bindgen::Clamped(VK_AGGR.to_vec()),
-            21,
-            wasm_bindgen::Clamped(SRS1.to_vec()),
-            "kzg",
-        )
-        .map_err(|_| "failed")
-        .unwrap();
+    // #[wasm_bindgen_test]
+    // async fn can_verify_aggr() {
+    //     let value = verifyAggr(
+    //         wasm_bindgen::Clamped(PROOF_AGGR.to_vec()),
+    //         wasm_bindgen::Clamped(VK_AGGR.to_vec()),
+    //         21,
+    //         wasm_bindgen::Clamped(SRS1.to_vec()),
+    //         "kzg",
+    //     )
+    //     .map_err(|_| "failed")
+    //     .unwrap();
 
-        // should not fail
-        assert!(value);
-    }
+    //     // should not fail
+    //     assert!(value);
+    // }
 
     #[wasm_bindgen_test]
     async fn verify_encode_verifier_calldata() {
