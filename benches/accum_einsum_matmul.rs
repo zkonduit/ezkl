@@ -24,7 +24,6 @@ use itertools::Itertools;
 use rand::rngs::OsRng;
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use std::time::Instant;
 
 static mut LEN: usize = 4;
 static mut K: usize = 15;
@@ -92,23 +91,11 @@ impl Circuit<Fr> for MyCircuit<Fr> {
         equations.insert(params.equation, params.input_axes_to_dims);
         let analysis = analyze_einsum_usage(&equations).unwrap();
         let num_einsum_inner_cols = 2;
-        // freivalds : adjust shape based on logrows
-        // original version : does not adjust shape based on logrows, so we have to change num inner columns
-
-        // 1) make one factor constant
-        // 2) find best configuration
         unsafe {
             config
                 .configure_einsums(cs, &analysis, num_einsum_inner_cols, K)
                 .unwrap();
         }
-
-        unsafe {
-            println!("logrows of circuit : {K}");
-        }
-        println!("number of advice columns : {}", cs.num_advice_columns());
-        println!("number of selectors : {}", cs.num_selectors());
-        println!("degree of the circuit : {}", cs.degree());
 
         config
     }
@@ -147,7 +134,6 @@ impl Circuit<Fr> for MyCircuit<Fr> {
         mut config: Self::Config,
         mut layouter: impl Layouter<Fr>,
     ) -> Result<(), Error> {
-        let now = Instant::now();
         let challenges = config
             .einsums
             .challenges()
@@ -178,7 +164,6 @@ impl Circuit<Fr> for MyCircuit<Fr> {
                 Ok(())
             },
         )?;
-        println!("synthesize time : {:?}", now.elapsed());
         Ok(())
     }
 }
@@ -192,7 +177,7 @@ fn runmatmul(c: &mut Criterion) {
     unsafe {
         LEN = len;
     }
-    for k in 18..19 {
+    for k in 19..20 {
         let params = unsafe {
             K = k;
             gen_srs::<KZGCommitmentScheme<_>>(K as u32)
@@ -211,18 +196,18 @@ fn runmatmul(c: &mut Criterion) {
             einsum,
         };
 
-        // group.throughput(Throughput::Elements(len as u64));
-        // group.bench_with_input(BenchmarkId::new("pk", k), &k, |b, &_| {
-        //     b.iter(|| {
-        //         create_keys::<KZGCommitmentScheme<Bn256>, MyCircuit<Fr>>(&circuit, &params, true)
-        //             .unwrap();
-        //     });
-        // });
+        group.throughput(Throughput::Elements(len as u64));
+        group.bench_with_input(BenchmarkId::new("pk", k), &k, |b, &_| {
+            b.iter(|| {
+                create_keys::<KZGCommitmentScheme<Bn256>, MyCircuit<Fr>>(&circuit, &params, true)
+                    .unwrap();
+            });
+        });
 
         let pk = create_keys::<KZGCommitmentScheme<Bn256>, MyCircuit<Fr>>(&circuit, &params, false)
             .unwrap();
 
-        // group.throughput(Throughput::Elements(len as u64));
+        group.throughput(Throughput::Elements(len as u64));
         group.bench_with_input(BenchmarkId::new("prove", k), &k, |b, &_| {
             b.iter(|| {
                 let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);

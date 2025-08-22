@@ -129,7 +129,7 @@ impl Circuit<Fr> for MyCircuit<Fr> {
     ) -> Result<(), Error> {
         let challenges = config
             .einsums
-            .challenges
+            .challenges()
             .iter()
             .map(|c| layouter.get_challenge(*c))
             .collect_vec();

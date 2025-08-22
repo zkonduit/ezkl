@@ -374,7 +374,7 @@ struct EinsumOpConfig<F: PrimeField + TensorType + PartialOrd> {
     inputs: [VarTensor; 4],
     // phase 1
     output: VarTensor,
-    // (phase sum, BaseOp, block index, inner column index) -> selector
+    // (phase, BaseOp, block index, inner column index) -> selector
     selectors: BTreeMap<(usize, BaseOp, usize, usize), Selector>,
     _marker: PhantomData<F>,
 }
@@ -382,20 +382,20 @@ struct EinsumOpConfig<F: PrimeField + TensorType + PartialOrd> {
 impl<F: PrimeField + TensorType + PartialOrd> EinsumOpConfig<F> {
     fn new(meta: &mut ConstraintSystem<F>, inputs: &[VarTensor; 4], output: &VarTensor) -> Self {
         let mut selectors = BTreeMap::new();
-        for phase_sum in [0, 1] {
+        for phase in [0, 1] {
             for i in 0..output.num_blocks() {
                 for j in 0..output.num_inner_cols() {
-                    selectors.insert((phase_sum, BaseOp::Mult, i, j), meta.selector());
+                    selectors.insert((phase, BaseOp::Mult, i, j), meta.selector());
                 }
             }
         }
 
-        for phase_sum in [0, 1] {
+        for phase in [0, 1] {
             for i in 0..output.num_blocks() {
-                selectors.insert((phase_sum, BaseOp::DotInit, i, 0), meta.selector());
-                selectors.insert((phase_sum, BaseOp::Dot, i, 0), meta.selector());
-                selectors.insert((phase_sum, BaseOp::SumInit, i, 0), meta.selector());
-                selectors.insert((phase_sum, BaseOp::Sum, i, 0), meta.selector());
+                selectors.insert((phase, BaseOp::DotInit, i, 0), meta.selector());
+                selectors.insert((phase, BaseOp::Dot, i, 0), meta.selector());
+                selectors.insert((phase, BaseOp::SumInit, i, 0), meta.selector());
+                selectors.insert((phase, BaseOp::Sum, i, 0), meta.selector());
             }
         }
         selectors.insert(
@@ -482,17 +482,6 @@ impl<F: PrimeField + TensorType + PartialOrd> EinsumOpConfig<F> {
             _marker: PhantomData,
         }
     }
-
-    // fn input_phases_to_input_tensor_indices(&self, input_phases: &[usize]) -> Vec<usize> {
-    //     match input_phases {
-    //         &[0] => vec![0],
-    //         &[1] => vec![2],
-    //         &[0, 0] => vec![0, 1],
-    //         &[0, 1] => vec![1, 2],
-    //         &[1, 1] => vec![2, 3],
-    //         _ => unreachable!(),
-    //     }
-    // }
 }
 
 /// `RLCConfig` is the custom gate used for random linear combination with the specific challenge

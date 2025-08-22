@@ -153,7 +153,17 @@ impl VarTensor {
         }
     }
 
-    /// TODO
+    /// Creates a new VarTensor::Advice with standard (blinded) columns, used when
+    /// the values need to be hidden in the proof.
+    ///
+    /// # Arguments
+    /// * `cs` - The constraint system to create columns in
+    /// * `logrows` - Log base 2 of the total number of rows
+    /// * `num_inner_cols` - Number of columns in each inner block
+    /// * `capacity` - Total number of advice cells to allocate
+    ///
+    /// # Returns
+    /// A new VarTensor::Advice in SecondPhase with blinded columns enabled for equality constraints
     pub fn new_advice_in_second_phase<F: PrimeField>(
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
@@ -706,7 +716,6 @@ impl VarTensor {
             ValTensor::Value { inner: v, dims, .. } => {
                 let duplication_freq = self.col_size();
                 let num_repeats = 1;
-                // Question: shouldn't this be the row number inside a inner block
                 let (_, _, duplication_offset) = self.cartesian_coord(offset);
 
                 // duplicates every nth element to adjust for column overflow
