@@ -22,9 +22,8 @@ use crate::{
     tensor::{
         create_unit_tensor, get_broadcasted_shape,
         ops::{accumulated, add, mult, sub},
-        Tensor, TensorError, ValType,
+        DataFormat, KernelFormat, Tensor, TensorError, ValType,
     },
-    tensor::{DataFormat, KernelFormat},
 };
 
 use super::*;
@@ -832,6 +831,14 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     inputs: &[&ValTensor<F>],
     equation: &str,
 ) -> Result<ValTensor<F>, CircuitError> {
+    // Track the einsum equation
+    region.add_used_einsum_equation(equation.to_string())?;
+
+    // dispatch to freivalds' argument
+    if !config.einsums.challenges().is_empty() {
+        return freivalds(config, region, inputs, equation);
+    }
+
     let mut equation = equation.split("->");
     let inputs_eq = equation.next().ok_or(CircuitError::InvalidEinsum)?;
     let output_eq = equation.next().ok_or(CircuitError::InvalidEinsum)?;
@@ -1035,6 +1042,35 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     region.apply_in_loop(&mut output, inner_loop_function)?;
 
     let output: ValTensor<F> = output.into();
+
+    Ok(output)
+}
+
+///
+pub fn freivalds<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    inputs: &[&ValTensor<F>],
+    equation: &str,
+) -> Result<ValTensor<F>, CircuitError> {
+    let input_values = inputs
+        .iter()
+        .map(|t| t.get_inner())
+        .collect::<Result<Vec<_>, TensorError>>()?;
+    let (output_tensor, _) =
+        crate::tensor::ops::accumulated::einsum(equation, &input_values.iter().collect_vec())?;
+
+    config.einsums.assign_einsum(
+        region,
+        inputs,
+        &output_tensor.clone().into(),
+        equation,
+        &config.check_mode,
+    )?;
+
+    region.increment_einsum_index(1);
+
+    let output: ValTensor<F> = output_tensor.into();
 
     Ok(output)
 }

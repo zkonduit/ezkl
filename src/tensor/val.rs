@@ -940,6 +940,22 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
         Ok(())
     }
 
+    /// remove axes that have dimensions 1
+    pub fn remove_trivial_axes(&mut self) -> Result<(), TensorError> {
+        match self {
+            ValTensor::Value {
+                inner: v, dims: d, ..
+            } => {
+                *v = v.remove_trivial_axes()?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::Instance { .. } => {
+                return Err(TensorError::WrongMethod);
+            }
+        };
+        Ok(())
+    }
+
     /// Takes a slice of the tensor along a given axis
     ///
     /// # Arguments

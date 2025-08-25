@@ -36,6 +36,10 @@
     "total_dynamic_col_size": 0,
     "max_dynamic_input_len": 0,
     "num_dynamic_lookups": 0,
+    "einsum_params": {
+        "equations": [],
+        "total_einsum_col_size": 0
+    },
     "num_shuffles": 0,
     "total_shuffle_col_size": 0,
     "model_instance_shapes": [

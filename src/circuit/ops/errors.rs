@@ -46,6 +46,9 @@ pub enum CircuitError {
     /// Failed to get shuffle
     #[error("failed to get shuffle for op: {0}")]
     GetShuffleError(String),
+    /// Failed to get einsum
+    #[error("failed to get einsum for op: {0}")]
+    GetEinsumError(String),
     /// Failed to get constants
     #[error("failed to get constants for op: {0}")]
     GetConstantsError(String),
@@ -61,6 +64,9 @@ pub enum CircuitError {
     /// Missing product in einsum
     #[error("missing product in einsum")]
     MissingEinsumProduct,
+    /// ???
+    #[error("missing config in einsum")]
+    MissingEinsumConfig,
     /// Mismatched lookup length
     #[error("mismatched lookup lengths: {0} and {1}")]
     MismatchedLookupLength(usize, usize),

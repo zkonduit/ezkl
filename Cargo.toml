@@ -275,7 +275,7 @@ mv-lookup = ["halo2_proofs/mv-lookup", "snark-verifier/mv-lookup"]
 asm = ["halo2curves/asm", "halo2_proofs/asm"]
 precompute-coset = ["halo2_proofs/precompute-coset"]
 det-prove = []
-gpu-accelerated = ["halo2_proofs/gpu-accelerated", "dep:icicle-runtime"]
+# gpu-accelerated = ["halo2_proofs/gpu-accelerated", "dep:icicle-runtime"]
 empty-cmd = []
 no-banner = []
 no-update = []
@@ -286,20 +286,23 @@ mimalloc = ["dep:mimalloc"]
 reusable-verifier = []
 
 
-[patch.'https://github.com/zkonduit/halo2']
-halo2_proofs = { git = "https://github.com/zkonduit/halo2#1dd2090741f006fd031a07da7f3c9dfce5e0015e", package = "halo2_proofs", branch= "ac/conditional-compilation-icicle2", features = [
-    "circuit-params", "mv-lookup"
-] }
+# [patch.'https://github.com/zkonduit/halo2']
+# halo2_proofs = { git = "https://github.com/zkonduit/halo2#1dd2090741f006fd031a07da7f3c9dfce5e0015e", package = "halo2_proofs", branch= "ac/conditional-compilation-icicle2", features = [
+#     "circuit-params", "mv-lookup"
+# ] }
 
-[patch.'https://github.com/zkonduit/halo2#f441c920be45f8f05d2c06a173d82e8885a5ed4d']
-halo2_proofs = { git = "https://github.com/zkonduit/halo2#1dd2090741f006fd031a07da7f3c9dfce5e0015e", package = "halo2_proofs", branch= "ac/conditional-compilation-icicle2", features = [
-    "circuit-params", "mv-lookup"
-] }
+# FIXME : temporary replacement of halo2_proofs to work around different phase assignment issue
+[patch."https://github.com/zkonduit/halo2"]
+halo2_proofs = { git = "https://github.com/DoHoonKim8/halo2", branch = "feat/cross-phase-assignment" }
+
+# [patch.'https://github.com/zkonduit/halo2#f441c920be45f8f05d2c06a173d82e8885a5ed4d']
+# halo2_proofs = { git = "https://github.com/zkonduit/halo2#1dd2090741f006fd031a07da7f3c9dfce5e0015e", package = "halo2_proofs", branch= "ac/conditional-compilation-icicle2", features = [
+#     "circuit-params", "mv-lookup"
+# ] }
 
 
 [patch.crates-io]
 uniffi_testing = { git = "https://github.com/ElusAegis/uniffi-rs", branch = "feat/testing-feature-build-fix" }
-
 
 [profile.release]
 # debug = true
