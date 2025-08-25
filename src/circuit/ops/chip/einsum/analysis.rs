@@ -91,14 +91,18 @@ pub fn analyze_single_equation(
             .map(|input| {
                 input
                     .chars()
-                    .filter(|char| input_axes_to_dim.get(char).is_some())
+                    .filter(|char| {
+                        input_axes_to_dim.get(char).is_some() && *input_axes_to_dim.get(char).unwrap() > 1
+                    })
                     .collect()
             })
             .collect();
 
         let output = output_str
             .chars()
-            .filter(|c| input_axes_to_dim.get(c).is_some())
+            .filter(|c| {
+                input_axes_to_dim.get(c).is_some() && *input_axes_to_dim.get(c).unwrap() > 1
+            })
             .collect();
 
         [inputs.join(","), output].join("->")

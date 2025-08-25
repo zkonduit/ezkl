@@ -3,7 +3,7 @@ use halo2curves::ff::PrimeField;
 use log::{error, trace};
 
 use crate::{
-    circuit::{base::BaseOp, region::RegionCtx, CircuitError},
+    circuit::{base::BaseOp, einsum::BaseOpInfo, region::RegionCtx, CheckMode, CircuitError},
     tensor::{
         get_broadcasted_shape,
         ops::{accumulated, add, mult, sub},
@@ -11,11 +11,11 @@ use crate::{
     },
 };
 
-use super::EinsumOpConfig;
+use super::ContractionConfig;
 
 /// Pairwise (elementwise) op layout
 pub fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
-    config: &EinsumOpConfig<F>,
+    config: &ContractionConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[&ValTensor<F>; 2],
     op: BaseOp,
@@ -26,7 +26,6 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     } else {
         (values[1].clone(), values[0].clone())
     };
-    let min_phase = std::cmp::min(phases[0], phases[1]);
 
     let broadcasted_shape = get_broadcasted_shape(lhs.dims(), rhs.dims())?;
 
@@ -42,9 +41,11 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     region.flush_einsum()?;
 
+    let vars = config.get_vartensors(phases.as_slice().into());
+
     let inputs = [lhs, rhs]
         .iter()
-        .zip(config.inputs.iter().skip(min_phase * 2))
+        .zip(vars)
         .map(|(val, var)| {
             let res = region.assign_einsum(var, val)?;
             Ok(res.get_inner()?)
@@ -71,8 +72,12 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     if !region.is_dummy() {
         (0..assigned_len)
             .map(|i| {
-                let (x, y, z) = config.inputs[0].cartesian_coord(region.einsum_col_coord() + i);
-                let selector = config.selectors.get(&(min_phase, op.clone(), x, y));
+                let (x, y, z) = config.output.cartesian_coord(region.einsum_col_coord() + i);
+                let op_info = BaseOpInfo {
+                    op_kind: op.clone(),
+                    input_phases: phases.as_slice().into(),
+                };
+                let selector = config.selectors.get(&(op_info, x, y));
 
                 region.enable(selector, z)?;
 
@@ -88,10 +93,11 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 }
 
 pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
-    config: &EinsumOpConfig<F>,
+    config: &ContractionConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[&ValTensor<F>; 1],
     phase: usize,
+    check_mode: &CheckMode,
 ) -> Result<ValTensor<F>, CircuitError> {
     if values[0].len() == 1 {
         return Ok(values[0].clone());
@@ -109,8 +115,9 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         // `NotEnoughColumnsForConstants` in halo2 because trying to assign constant
         // value to advice column, how to workaround this issue?
         input.pad_to_zero_rem(block_width, ValType::Value(Value::known(F::ZERO)))?;
+        let var = config.get_vartensors([phase].as_slice().into())[0];
         let (res, len) = region
-            .assign_einsum_with_duplication_unconstrained(&config.inputs[phase * 2], &input)?;
+            .assign_einsum_with_duplication_unconstrained(var, &input)?;
         assigned_len = len;
         res.get_inner()?
     };
@@ -121,7 +128,7 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let (output, output_assigned_len) = region.assign_einsum_with_duplication_constrained(
         &config.output,
         &accumulated_sum.into(),
-        &crate::circuit::CheckMode::UNSAFE,
+        check_mode,
     )?;
 
     // enable the selectors
@@ -135,9 +142,17 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
                 continue;
             }
             let selector = if i == 0 {
-                config.selectors.get(&(phase, BaseOp::SumInit, x, 0))
+                let op_info = BaseOpInfo {
+                    op_kind: BaseOp::SumInit,
+                    input_phases: [phase].as_slice().into(),
+                };
+                config.selectors.get(&(op_info, x, 0))
             } else {
-                config.selectors.get(&(phase, BaseOp::Sum, x, 0))
+                let op_info = BaseOpInfo {
+                    op_kind: BaseOp::Sum,
+                    input_phases: [phase].as_slice().into(),
+                };
+                config.selectors.get(&(op_info, x, 0))
             };
 
             region.enable(selector, z)?;
@@ -153,10 +168,11 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 }
 
 pub fn prod<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
-    config: &EinsumOpConfig<F>,
+    config: &ContractionConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[&ValTensor<F>; 1],
     phase: usize,
+    check_mode: &CheckMode,
 ) -> Result<ValTensor<F>, CircuitError> {
     assert!(phase == 0 || phase == 1);
     region.flush_einsum()?;
@@ -168,8 +184,9 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         // `NotEnoughColumnsForConstants` in halo2 because trying to assign constant
         // value to advice column, how to workaround this issue?
         input.pad_to_zero_rem(block_width, ValType::Value(Value::known(F::ONE)))?;
+        let var = config.get_vartensors([phase].as_slice().into())[0];
         let (res, len) = region
-            .assign_einsum_with_duplication_unconstrained(&config.inputs[phase * 2], &input)?;
+            .assign_einsum_with_duplication_unconstrained(var, &input)?;
         assigned_len = len;
         res.get_inner()?
     };
@@ -180,7 +197,7 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let (output, output_assigned_len) = region.assign_einsum_with_duplication_constrained(
         &config.output,
         &accumulated_prod.into(),
-        &crate::circuit::CheckMode::UNSAFE,
+        check_mode,
     )?;
 
     // enable the selectors
@@ -195,9 +212,17 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
                     return Ok(());
                 }
                 let selector = if i == 0 {
-                    config.selectors.get(&(phase, BaseOp::CumProdInit, x, 0))
+                    let op_info = BaseOpInfo {
+                        op_kind: BaseOp::CumProdInit,
+                        input_phases: [phase].as_slice().into(),
+                    };
+                    config.selectors.get(&(op_info, x, 0))
                 } else {
-                    config.selectors.get(&(phase, BaseOp::CumProd, x, 0))
+                    let op_info = BaseOpInfo {
+                        op_kind: BaseOp::CumProd,
+                        input_phases: [phase].as_slice().into(),
+                    };
+                    config.selectors.get(&(op_info, x, 0))
                 };
 
                 region.enable(selector, z)?;
@@ -215,10 +240,11 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 }
 
 pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
-    config: &EinsumOpConfig<F>,
+    config: &ContractionConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[&ValTensor<F>; 2],
     phases: &[usize; 2],
+    check_mode: &CheckMode,
 ) -> Result<ValTensor<F>, CircuitError> {
     if values[0].len() != values[1].len() {
         return Err(TensorError::DimMismatch("dot".to_string()).into());
@@ -233,16 +259,13 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     } else {
         [values[1].clone(), values[0].clone()]
     };
-    let min_phase = std::cmp::min(phases[0], phases[1]);
+    let vars = config.get_vartensors(phases.as_slice().into());
 
     let mut inputs = vec![];
     let block_width = config.output.num_inner_cols();
 
     let mut assigned_len = 0;
-    for (val, var) in values
-        .iter_mut()
-        .zip(config.inputs.iter().skip(min_phase * 2))
-    {
+    for (val, var) in values.iter_mut().zip(vars) {
         // FIXME : should pad with constant zero but currently this incurs an error
         // `NotEnoughColumnsForConstants` in halo2 because trying to assign constant
         // value to advice column, how to workaround this issue?
@@ -261,8 +284,8 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let (output, output_assigned_len) = region.assign_einsum_with_duplication_constrained(
         &config.output,
         &accumulated_dot.into(),
-        &crate::circuit::CheckMode::UNSAFE,
-    )?;
+        check_mode,
+    ).expect("failed to assign einsum with duplication constrained");
 
     // enable the selectors
     if !region.is_dummy() {
@@ -276,9 +299,17 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
                     return Ok(());
                 }
                 let selector = if i == 0 {
-                    config.selectors.get(&(min_phase, BaseOp::DotInit, x, 0))
+                    let op_info = BaseOpInfo {
+                        op_kind: BaseOp::DotInit,
+                        input_phases: phases.as_slice().into(),
+                    };
+                    config.selectors.get(&(op_info, x, 0))
                 } else {
-                    config.selectors.get(&(min_phase, BaseOp::Dot, x, 0))
+                    let op_info = BaseOpInfo {
+                        op_kind: BaseOp::Dot,
+                        input_phases: phases.as_slice().into(),
+                    };
+                    config.selectors.get(&(op_info, x, 0))
                 };
                 region.enable(selector, z)?;
 
@@ -299,10 +330,11 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
 /// Dot product of more than two tensors
 pub fn multi_dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
-    config: &EinsumOpConfig<F>,
+    config: &ContractionConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[&ValTensor<F>],
     phases: &[usize],
+    check_mode: &CheckMode,
 ) -> Result<ValTensor<F>, CircuitError> {
     assert!(phases.iter().all(|phase| *phase == 0 || *phase == 1));
     if !values.iter().all(|value| value.len() == values[0].len()) {
@@ -313,7 +345,7 @@ pub fn multi_dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     let values: Vec<ValTensor<F>> = values.iter().copied().cloned().collect();
     // do pairwise dot product between intermediate tensor and the next tensor
-    let (intermediate, _) = values
+    let (intermediate, output_phase) = values
         .into_iter()
         .zip(phases.iter().cloned())
         .reduce(|(intermediate, intermediate_phase), (input, phase)| {
@@ -331,10 +363,7 @@ pub fn multi_dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         })
         .unwrap();
 
-    // Sum the final tensor
-    // In current freivalds' algorithm, we ensure that there is no tensor contraction between phase 0 tensors,
-    // so the phase of the resulting tensor is set to 1
-    let accumulated_dot = sum(config, region, &[&intermediate], 1)?;
+    let accumulated_dot = sum(config, region, &[&intermediate], output_phase, check_mode)?;
     let last_elem = accumulated_dot.last()?;
 
     let elapsed = global_start.elapsed();
