@@ -3,6 +3,7 @@ use criterion::{
     Throughput,
 };
 use ezkl::circuit::einsum::analysis::analyze_einsum_usage;
+use ezkl::circuit::einsum::circuit_params::SingleEinsumParams;
 use ezkl::circuit::poly::PolyOp;
 use ezkl::circuit::*;
 use ezkl::pfsys::create_keys;
@@ -31,54 +32,13 @@ static mut K: usize = 15;
 #[derive(Clone)]
 struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
     inputs: [ValTensor<F>; 2],
-    einsum: Einsum<F>,
-}
-
-#[derive(Clone, Default)]
-struct Einsum<F: PrimeField + TensorType + PartialOrd> {
-    equation: String,
-    input_axes_to_dims: HashMap<char, usize>,
-    _marker: PhantomData<F>,
-}
-
-impl<F: PrimeField + TensorType + PartialOrd> Einsum<F> {
-    pub fn new(equation: &str, inputs: &[&Tensor<Value<F>>]) -> Result<Self, CircuitError> {
-        let mut eq = equation.split("->");
-        let inputs_eq = eq.next().ok_or(CircuitError::InvalidEinsum)?;
-        let inputs_eq = inputs_eq.split(',').collect::<Vec<_>>();
-
-        // Check that the number of inputs matches the number of inputs in the equation
-        if inputs.len() != inputs_eq.len() {
-            return Err(TensorError::DimMismatch("einsum".to_string()).into());
-        }
-
-        let mut input_axes_to_dims = HashMap::new();
-        for (i, input) in inputs.iter().enumerate() {
-            for j in 0..inputs_eq[i].len() {
-                let c = inputs_eq[i]
-                    .chars()
-                    .nth(j)
-                    .ok_or(CircuitError::InvalidEinsum)?;
-                if let std::collections::hash_map::Entry::Vacant(e) = input_axes_to_dims.entry(c) {
-                    e.insert(input.dims()[j]);
-                } else if input_axes_to_dims[&c] != input.dims()[j] {
-                    return Err(TensorError::DimMismatch("einsum".to_string()).into());
-                }
-            }
-        }
-
-        Ok(Self {
-            equation: equation.to_owned(),
-            input_axes_to_dims,
-            _marker: PhantomData,
-        })
-    }
+    einsum_params: SingleEinsumParams<F>,
 }
 
 impl Circuit<Fr> for MyCircuit<Fr> {
     type Config = BaseConfig<Fr>;
     type FloorPlanner = V1;
-    type Params = Einsum<Fr>;
+    type Params = SingleEinsumParams<Fr>;
 
     fn without_witnesses(&self) -> Self {
         self.clone()
@@ -101,8 +61,8 @@ impl Circuit<Fr> for MyCircuit<Fr> {
     }
 
     fn params(&self) -> Self::Params {
-        Einsum::<Fr>::new(
-            &self.einsum.equation,
+        SingleEinsumParams::<Fr>::new(
+            &self.einsum_params.equation,
             &[
                 &self.inputs[0].get_inner().unwrap(),
                 &self.inputs[1].get_inner().unwrap(),
@@ -157,7 +117,7 @@ impl Circuit<Fr> for MyCircuit<Fr> {
                         &mut region,
                         &self.inputs.iter().collect_vec(),
                         Box::new(PolyOp::Einsum {
-                            equation: self.einsum.equation.clone(),
+                            equation: self.einsum_params.equation.clone(),
                         }),
                     )
                     .unwrap();
@@ -189,11 +149,11 @@ fn runmatmul(c: &mut Criterion) {
         let mut b = Tensor::from((0..len * len).map(|_| Value::known(Fr::random(OsRng))));
         b.reshape(&[len, len]).unwrap();
 
-        let einsum = Einsum::<Fr>::new("ij,jk->ik", &[&a, &b]).unwrap();
+        let einsum_params = SingleEinsumParams::<Fr>::new("ij,jk->ik", &[&a, &b]).unwrap();
 
         let circuit = MyCircuit {
             inputs: [ValTensor::from(a), ValTensor::from(b)],
-            einsum,
+            einsum_params,
         };
 
         group.throughput(Throughput::Elements(len as u64));

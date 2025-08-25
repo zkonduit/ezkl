@@ -2729,7 +2729,10 @@ pub mod accumulated {
 
         // Output dims
         let out_idx: Vec<char> = output_expr.chars().collect();
-        let out_dims: Vec<usize> = out_idx.iter().map(|c| *dim_of.get(c).unwrap_or(&1)).collect();
+        let out_dims: Vec<usize> = out_idx
+            .iter()
+            .map(|c| *dim_of.get(c).unwrap_or(&1))
+            .collect();
 
         // Reduction indices
         let all_idx: HashSet<char> = dim_of.keys().copied().collect();
@@ -2738,8 +2741,10 @@ pub mod accumulated {
         let red_dims: Vec<usize> = red_idx.iter().map(|c| dim_of[c]).collect();
 
         // Fast index->pos
-        let out_pos: HashMap<char, usize> = out_idx.iter().enumerate().map(|(i, &c)| (c, i)).collect();
-        let red_pos: HashMap<char, usize> = red_idx.iter().enumerate().map(|(i, &c)| (c, i)).collect();
+        let out_pos: HashMap<char, usize> =
+            out_idx.iter().enumerate().map(|(i, &c)| (c, i)).collect();
+        let red_pos: HashMap<char, usize> =
+            red_idx.iter().enumerate().map(|(i, &c)| (c, i)).collect();
 
         // Precompute strides per input and contributions
         struct Contrib {
@@ -2762,7 +2767,10 @@ pub mod accumulated {
                         red_stride[q] = s;
                     }
                 }
-                Contrib { out_stride, red_stride }
+                Contrib {
+                    out_stride,
+                    red_stride,
+                }
             })
             .collect();
 
@@ -2777,8 +2785,7 @@ pub mod accumulated {
         let red_rank = red_dims.len();
 
         // Materialize output elements one by one
-        out
-            .par_iter_mut()
+        out.par_iter_mut()
             .enumerate()
             .for_each(|(out_linear_coord, out)| {
                 let mut out_index = vec![0usize; out_rank];

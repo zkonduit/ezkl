@@ -3,7 +3,7 @@ use crate::circuit::chip::einsum::analysis::{analyze_single_equation, EinsumAnal
 use crate::circuit::einsum::layouts::{pairwise, sum};
 use crate::circuit::einsum::reduction_planner::Reduction;
 use crate::circuit::region::RegionCtx;
-use crate::circuit::CircuitError;
+use crate::circuit::{CheckMode, CircuitError};
 use crate::tensor::{Tensor, TensorError, TensorType, ValTensor, ValType, VarTensor};
 use halo2_proofs::circuit::Value;
 use halo2_proofs::plonk::{
@@ -17,6 +17,8 @@ use std::marker::PhantomData;
 
 ///
 pub mod analysis;
+///
+pub mod circuit_params;
 mod layouts;
 mod reduction_planner;
 
@@ -24,7 +26,7 @@ mod reduction_planner;
 #[derive(Clone, Debug, Default)]
 pub struct Einsums<F: PrimeField + TensorType + PartialOrd> {
     /// custom gate to constrain tensor contractions
-    custom_gate: EinsumOpConfig<F>,
+    custom_gate: ContractionConfig<F>,
     /// custom gate to constrain random linear combinations used by Freivalds' argument
     rlc_gates: Vec<RLCConfig<F>>,
 }
@@ -33,12 +35,10 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
     ///
     pub fn dummy(col_size: usize, num_inner_cols: usize) -> Self {
         let dummy_var = VarTensor::dummy(col_size, num_inner_cols);
-        let dummy_custom_gate = EinsumOpConfig {
+        let dummy_custom_gate = ContractionConfig {
             inputs: [
-                dummy_var.clone(),
-                dummy_var.clone(),
-                dummy_var.clone(),
-                dummy_var.clone(),
+                [dummy_var.clone(), dummy_var.clone()],
+                [dummy_var.clone(), dummy_var.clone()],
             ],
             output: dummy_var.clone(),
             selectors: BTreeMap::default(),
@@ -73,7 +73,11 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             VarTensor::new_advice_in_second_phase(meta, logrows, num_inner_cols, capacity),
         ];
         let output = VarTensor::new_advice_in_second_phase(meta, logrows, num_inner_cols, capacity);
-        let custom_gate = EinsumOpConfig::new(meta, &inputs, &output);
+        let custom_gate = ContractionConfig::new(
+            meta,
+            &[&[&inputs[0], &inputs[1]], &[&inputs[2], &inputs[3]]],
+            &output,
+        );
 
         let mut rlc_gates = vec![];
         for _ in 0..analysis.max_num_output_axes {
@@ -94,6 +98,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         input_tensors: &[&ValTensor<F>],
         output_tensor: &ValTensor<F>,
         equation: &str,
+        check_mode: &CheckMode,
     ) -> Result<(), CircuitError> {
         region.set_num_einsum_inner_cols(self.custom_gate.output.num_inner_cols());
 
@@ -235,6 +240,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
                             dot_product_len,
                             &output_dims,
                             input_phases,
+                            check_mode,
                         )?
                     }
                     None => {
@@ -258,7 +264,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             .map(|t| t.get_inner_tensor().unwrap().get_scalar())
             .collect_vec()
             .into();
-        let squashed_input = prod(&self.custom_gate, region, &[&scalars], 1)?;
+        let squashed_input = prod(&self.custom_gate, region, &[&scalars], 1, check_mode)?;
 
         region.constrain_equal(&squashed_input, &squashed_output)
     }
@@ -300,7 +306,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
 }
 
 fn assign_pairwise_mult<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
-    config: &EinsumOpConfig<F>,
+    config: &ContractionConfig<F>,
     region: &mut RegionCtx<F>,
     flattened_tensors: Vec<ValTensor<F>>,
     input_phases: &[usize],
@@ -327,12 +333,13 @@ fn assign_pairwise_mult<F: PrimeField + TensorType + PartialOrd + std::hash::Has
 }
 
 fn assign_input_contraction<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
-    config: &EinsumOpConfig<F>,
+    config: &ContractionConfig<F>,
     region: &mut RegionCtx<F>,
     flattened_tensors: Vec<ValTensor<F>>,
     dot_product_len: usize,
     output_shape: &[usize],
     input_phases: &[usize],
+    check_mode: &CheckMode,
 ) -> Result<ValTensor<F>, CircuitError> {
     assert_eq!(flattened_tensors.len(), input_phases.len());
     let num_dot_products = output_shape.iter().product();
@@ -344,13 +351,14 @@ fn assign_input_contraction<F: PrimeField + TensorType + PartialOrd + std::hash:
             .map(|tensor| tensor.get_slice(&[start..(start + dot_product_len)]))
             .collect::<Result<Vec<_>, TensorError>>()?;
         let result = if tensors.len() == 1 {
-            sum(config, region, &[&tensors[0]], input_phases[0])?
+            sum(config, region, &[&tensors[0]], input_phases[0], check_mode)?
         } else if tensors.len() == 2 {
             dot(
                 config,
                 region,
                 &[&tensors[0], &tensors[1]],
                 &[input_phases[0], input_phases[1]],
+                check_mode,
             )?
         } else {
             multi_dot(
@@ -358,6 +366,7 @@ fn assign_input_contraction<F: PrimeField + TensorType + PartialOrd + std::hash:
                 region,
                 tensors.iter().collect_vec().as_slice(),
                 input_phases,
+                check_mode,
             )?
         };
         dot_product_results.push(result.get_inner_tensor()?.get_scalar());
@@ -367,107 +376,219 @@ fn assign_input_contraction<F: PrimeField + TensorType + PartialOrd + std::hash:
     Ok(tensor)
 }
 
-/// `EinsumOpConfig` is the custom gate used for einsum contraction operations
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash)]
+enum InputPhases {
+    FirstPhase,
+    SecondPhase,
+    BothFirstPhase,  // [0, 0]
+    Mixed,           // [0, 1] or [1, 0]
+    BothSecondPhase, // [1, 1]
+}
+
+impl From<&[usize]> for InputPhases {
+    fn from(phases: &[usize]) -> Self {
+        match phases {
+            [0] => Self::FirstPhase,
+            [1] => Self::SecondPhase,
+            [0, 0] => Self::BothFirstPhase,
+            [0, 1] | [1, 0] => Self::Mixed,
+            [1, 1] => Self::BothSecondPhase,
+            _ => panic!("Invalid phase combination"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct BaseOpInfo {
+    pub op_kind: BaseOp,
+    pub input_phases: InputPhases,
+}
+
+/// `ContractionConfig` is the custom gate used for einsum contraction operations
 #[derive(Clone, Debug, Default)]
-struct EinsumOpConfig<F: PrimeField + TensorType + PartialOrd> {
-    // [phase 0, phase 0, phase 1, phase 1]
-    inputs: [VarTensor; 4],
+struct ContractionConfig<F: PrimeField + TensorType + PartialOrd> {
+    // [[phase 0, phase 0], [phase 1, phase 1]]
+    inputs: [[VarTensor; 2]; 2],
     // phase 1
     output: VarTensor,
-    // (phase, BaseOp, block index, inner column index) -> selector
-    selectors: BTreeMap<(usize, BaseOp, usize, usize), Selector>,
+    // (BaseOpInfo, block index, inner column index) -> selector
+    selectors: BTreeMap<(BaseOpInfo, usize, usize), Selector>,
     _marker: PhantomData<F>,
 }
 
-impl<F: PrimeField + TensorType + PartialOrd> EinsumOpConfig<F> {
-    fn new(meta: &mut ConstraintSystem<F>, inputs: &[VarTensor; 4], output: &VarTensor) -> Self {
+impl<F: PrimeField + TensorType + PartialOrd> ContractionConfig<F> {
+    fn get_vartensors(&self, input_phases: InputPhases) -> Vec<&VarTensor> {
+        match input_phases {
+            InputPhases::FirstPhase => vec![&self.inputs[0][0]],
+            InputPhases::SecondPhase => vec![&self.inputs[1][0]],
+            InputPhases::BothFirstPhase => vec![&self.inputs[0][0], &self.inputs[0][1]],
+            InputPhases::Mixed => vec![&self.inputs[0][0], &self.inputs[1][0]],
+            InputPhases::BothSecondPhase => vec![&self.inputs[1][0], &self.inputs[1][1]],
+        }
+    }
+
+    fn new(
+        meta: &mut ConstraintSystem<F>,
+        inputs: &[&[&VarTensor; 2]; 2],
+        output: &VarTensor,
+    ) -> Self {
         let mut selectors = BTreeMap::new();
-        for phase in [0, 1] {
+        for input_phases in [
+            InputPhases::BothFirstPhase,
+            InputPhases::Mixed,
+            InputPhases::BothSecondPhase,
+        ] {
             for i in 0..output.num_blocks() {
                 for j in 0..output.num_inner_cols() {
-                    selectors.insert((phase, BaseOp::Mult, i, j), meta.selector());
+                    selectors.insert(
+                        (
+                            BaseOpInfo {
+                                op_kind: BaseOp::Mult,
+                                input_phases,
+                            },
+                            i,
+                            j,
+                        ),
+                        meta.selector(),
+                    );
+                }
+                for i in 0..output.num_blocks() {
+                    selectors.insert(
+                        (
+                            BaseOpInfo {
+                                op_kind: BaseOp::DotInit,
+                                input_phases,
+                            },
+                            i,
+                            0,
+                        ),
+                        meta.selector(),
+                    );
+                    selectors.insert(
+                        (
+                            BaseOpInfo {
+                                op_kind: BaseOp::Dot,
+                                input_phases,
+                            },
+                            i,
+                            0,
+                        ),
+                        meta.selector(),
+                    );
                 }
             }
         }
 
-        for phase in [0, 1] {
+        for input_phases in [
+            InputPhases::FirstPhase,
+            InputPhases::SecondPhase,
+        ] {
             for i in 0..output.num_blocks() {
-                selectors.insert((phase, BaseOp::DotInit, i, 0), meta.selector());
-                selectors.insert((phase, BaseOp::Dot, i, 0), meta.selector());
-                selectors.insert((phase, BaseOp::SumInit, i, 0), meta.selector());
-                selectors.insert((phase, BaseOp::Sum, i, 0), meta.selector());
+                selectors.insert(
+                    (
+                        BaseOpInfo {
+                            op_kind: BaseOp::SumInit,
+                            input_phases,
+                        },
+                        i,
+                        0,
+                    ),
+                    meta.selector(),
+                );
+                selectors.insert(
+                    (
+                        BaseOpInfo {
+                            op_kind: BaseOp::Sum,
+                            input_phases,
+                        },
+                        i,
+                        0,
+                    ),
+                    meta.selector(),
+                );
+                selectors.insert(
+                    (
+                        BaseOpInfo {
+                            op_kind: BaseOp::CumProdInit,
+                            input_phases,
+                        },
+                        i,
+                        0,
+                    ),
+                    meta.selector(),
+                );
+                selectors.insert(
+                    (
+                        BaseOpInfo {
+                            op_kind: BaseOp::CumProd,
+                            input_phases,
+                        },
+                        i,
+                        0,
+                    ),
+                    meta.selector(),
+                );
             }
         }
-        selectors.insert(
-            (1, BaseOp::CumProdInit, output.num_blocks() - 1, 0),
-            meta.selector(),
-        );
-        selectors.insert(
-            (1, BaseOp::CumProd, output.num_blocks() - 1, 0),
-            meta.selector(),
-        );
-        for ((phase, base_op, block_idx, inner_col_idx), selector) in selectors.iter() {
-            match base_op {
+        for ((base_op, block_idx, inner_col_idx), selector) in selectors.iter() {
+            let inputs = match base_op.input_phases {
+                InputPhases::FirstPhase => vec![inputs[0][0]],
+                InputPhases::SecondPhase => vec![inputs[1][0]],
+                InputPhases::BothFirstPhase => vec![inputs[0][0], inputs[0][1]],
+                InputPhases::Mixed => vec![inputs[0][0], inputs[1][0]],
+                InputPhases::BothSecondPhase => vec![inputs[1][0], inputs[1][1]],
+            };
+            assert_eq!(inputs.len(), base_op.op_kind.num_inputs());
+            match base_op.op_kind {
                 BaseOp::Mult => {
-                    meta.create_gate(base_op.as_str(), |meta| {
+                    meta.create_gate(base_op.op_kind.as_str(), |meta| {
                         let selector = meta.query_selector(*selector);
 
                         let zero = Expression::<F>::Constant(F::ZERO);
-                        let mut qis = vec![zero; 4];
-                        for (i, q_i) in qis
-                            .iter_mut()
-                            .enumerate()
-                            .skip(*phase * 2)
-                            .take(base_op.num_inputs())
-                        {
-                            *q_i = inputs[i]
+                        let mut qis = vec![zero; 2];
+                        for (q_i, input) in qis.iter_mut().zip(inputs) {
+                            *q_i = input
                                 .query_rng(meta, *block_idx, *inner_col_idx, 0, 1)
                                 .expect("einsum op config: input query failed")[0]
                                 .clone()
                         }
                         // Get output expressions for each input channel
-                        let (rotation_offset, rng) = base_op.query_offset_rng();
+                        let (rotation_offset, rng) = base_op.op_kind.query_offset_rng();
                         let constraints = {
                             let expected_output: Tensor<Expression<F>> = output
                                 .query_rng(meta, *block_idx, *inner_col_idx, rotation_offset, rng)
                                 .expect("einsum op config: output query failed");
 
-                            let res = base_op
-                                .nonaccum_f((qis[2 * *phase].clone(), qis[2 * *phase + 1].clone()));
-                            vec![expected_output[base_op.constraint_idx()].clone() - res]
+                            let res = base_op.op_kind.nonaccum_f((qis[0].clone(), qis[1].clone()));
+                            vec![expected_output[base_op.op_kind.constraint_idx()].clone() - res]
                         };
                         Constraints::with_selector(selector, constraints)
                     });
                 }
                 _ => {
-                    meta.create_gate(base_op.as_str(), |meta| {
+                    meta.create_gate(base_op.op_kind.as_str(), |meta| {
                         let selector = meta.query_selector(*selector);
-                        let mut qis = vec![vec![]; 4];
-                        for (i, q_i) in qis
-                            .iter_mut()
-                            .enumerate()
-                            .skip(*phase * 2)
-                            .take(base_op.num_inputs())
-                        {
-                            *q_i = inputs[i]
+                        let mut qis = vec![vec![]; 2];
+                        for (q_i, input) in qis.iter_mut().zip(inputs) {
+                            *q_i = input
                                 .query_whole_block(meta, *block_idx, 0, 1)
                                 .expect("einsum op config: input query failed")
                                 .into_iter()
                                 .collect()
                         }
                         // Get output expressions for each input channel
-                        let (rotation_offset, rng) = base_op.query_offset_rng();
+                        let (rotation_offset, rng) = base_op.op_kind.query_offset_rng();
                         let expected_output: Tensor<Expression<F>> = output
                             .query_rng(meta, *block_idx, 0, rotation_offset, rng)
                             .expect("einsum op config: output query failed");
 
-                        let res = base_op.accum_f(
+                        let res = base_op.op_kind.accum_f(
                             expected_output[0].clone(),
-                            qis[2 * phase + 1].clone(),
-                            qis[2 * *phase].clone(),
+                            qis[1].clone(),
+                            qis[0].clone(),
                         );
                         let constraints =
-                            vec![expected_output[base_op.constraint_idx()].clone() - res];
+                            vec![expected_output[base_op.op_kind.constraint_idx()].clone() - res];
 
                         Constraints::with_selector(selector, constraints)
                     });
@@ -475,8 +596,23 @@ impl<F: PrimeField + TensorType + PartialOrd> EinsumOpConfig<F> {
             }
         }
 
+        let first_phase_inputs: [VarTensor; 2] = inputs[0]
+            .iter()
+            .copied()
+            .cloned()
+            .collect_vec()
+            .try_into()
+            .unwrap();
+        let second_phase_inputs: [VarTensor; 2] = inputs[1]
+            .iter()
+            .copied()
+            .cloned()
+            .collect_vec()
+            .try_into()
+            .unwrap();
+
         Self {
-            inputs: inputs.clone(),
+            inputs: [first_phase_inputs, second_phase_inputs],
             output: output.clone(),
             selectors,
             _marker: PhantomData,
