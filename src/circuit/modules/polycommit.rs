@@ -50,8 +50,24 @@ impl PolyCommitChip {
     ) -> Vec<G1Affine> {
         let k = params.k();
         let domain = halo2_proofs::poly::EvaluationDomain::new(2, k);
-        let n = 2_u64.pow(k) - num_unusable_rows as u64;
-        let num_poly = (message.len() / n as usize) + 1;
+
+        // Total domain size
+        let total_rows = 2_u64.pow(k);
+        // Basic sanity checks on unusable rows
+        assert!(num_unusable_rows as u64 <= total_rows, "num_unusable_rows exceeds domain size");
+
+        // Number of usable rows per polynomial
+        let n = total_rows - num_unusable_rows as u64;
+        assert!(n > 0, "no usable rows available in the evaluation domain");
+
+        // If the message is empty, produce no commitments
+        if message.is_empty() {
+            return vec![];
+        }
+
+        // Number of polynomials needed (ceil division)
+        let n_usize = n as usize;
+        let num_poly = (message.len() + n_usize - 1) / n_usize;
         let mut poly = vec![domain.empty_lagrange(); num_poly];
 
         (0..num_unusable_rows).for_each(|i| {
@@ -61,8 +77,8 @@ impl PolyCommitChip {
         });
 
         for (i, m) in message.iter().enumerate() {
-            let x = i / (n as usize);
-            let y = i % (n as usize);
+            let x = i / n_usize;
+            let y = i % n_usize;
             poly[x][y] = *m;
         }
 
