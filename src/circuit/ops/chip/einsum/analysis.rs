@@ -47,7 +47,7 @@ pub struct SingleEquationAnalysis {
 
 ///
 pub fn analyze_einsum_usage(
-    equations: &HashMap<String, HashMap<char, usize>>,
+    equations: &HashMap<(usize, String), HashMap<char, usize>>,
 ) -> Result<EinsumAnalysis, CircuitError> {
     let mut max_num_inputs = 0;
     let mut max_input_size = 0;
@@ -56,7 +56,7 @@ pub fn analyze_einsum_usage(
     let mut longest_challenge_vector = 0;
     let mut reduction_length = 0;
 
-    for (equation, input_axes_to_dim) in equations.iter() {
+    for ((_, equation), input_axes_to_dim) in equations.iter() {
         let analysis = analyze_single_equation(equation, input_axes_to_dim)?;
         max_input_size = max_input_size.max(analysis.max_input_size);
         longest_challenge_vector = longest_challenge_vector.max(analysis.longest_challenge_vector);
@@ -126,7 +126,7 @@ pub fn analyze_single_equation(
         .iter()
         .map(|c| input_axes_to_dim.get(&c).unwrap());
     let output_size = output_dims.clone().product();
-    let longest_challenge_vector = *output_dims.clone().max().unwrap();
+    let longest_challenge_vector = *output_dims.clone().max().unwrap_or(&0);
 
     let output_reduction_length = {
         let mut output_dims = output_dims.rev().cloned().collect_vec();

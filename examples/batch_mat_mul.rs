@@ -85,7 +85,7 @@ impl Circuit<Fr> for MyCircuit<Fr> {
         let mut config = Self::Config::configure(cs, &[a, b], &output, CheckMode::UNSAFE);
 
         let mut equations = HashMap::new();
-        equations.insert(params.equation, params.input_axes_to_dims);
+        equations.insert((0, params.equation), params.input_axes_to_dims);
         let analysis = analyze_einsum_usage(&equations).unwrap();
         let num_einsum_inner_cols = 1;
         config
@@ -106,20 +106,8 @@ impl Circuit<Fr> for MyCircuit<Fr> {
         .unwrap()
     }
 
-    fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
-        let mut config = Self::Config::default();
-
-        let default_params = Self::Params::default();
-
-        let mut equations = HashMap::new();
-        equations.insert(default_params.equation, default_params.input_axes_to_dims);
-        let analysis = analyze_einsum_usage(&equations).unwrap();
-        let num_einsum_inner_cols = 1;
-        config
-            .configure_einsums(cs, &analysis, num_einsum_inner_cols, K)
-            .unwrap();
-
-        config
+    fn configure(_cs: &mut ConstraintSystem<Fr>) -> Self::Config {
+        unimplemented!("call configure_with_params instead")
     }
 
     fn synthesize(

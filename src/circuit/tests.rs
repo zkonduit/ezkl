@@ -54,7 +54,7 @@ mod matmul {
         ) -> Self::Config {
             let mut config = Self::Config::default();
             let mut equations = HashMap::new();
-            equations.insert(params.equation, params.input_axes_to_dims);
+            equations.insert((0, params.equation), params.input_axes_to_dims);
             let analysis = analyze_einsum_usage(&equations).unwrap();
             let num_einsum_inner_cols = 1;
             config
@@ -175,7 +175,7 @@ mod matmul_col_overflow_double_col {
         ) -> Self::Config {
             let mut config = Self::Config::default();
             let mut equations = HashMap::new();
-            equations.insert(params.equation, params.input_axes_to_dims);
+            equations.insert((0, params.equation), params.input_axes_to_dims);
             let analysis = analyze_einsum_usage(&equations).unwrap();
             let num_einsum_inner_cols = 1;
             config
@@ -300,7 +300,7 @@ mod matmul_col_overflow {
         ) -> Self::Config {
             let mut config = Self::Config::default();
             let mut equations = HashMap::new();
-            equations.insert(params.equation, params.input_axes_to_dims);
+            equations.insert((0, params.equation), params.input_axes_to_dims);
             let analysis = analyze_einsum_usage(&equations).unwrap();
             let num_einsum_inner_cols = 1;
             config
@@ -417,11 +417,12 @@ mod matmul_col_ultra_overflow_double_col {
         ) -> Self::Config {
             let mut config = Self::Config::default();
             let mut equations = HashMap::new();
-            equations.insert(params.equation, params.input_axes_to_dims);
+            equations.insert((0, params.equation), params.input_axes_to_dims);
             let analysis = analyze_einsum_usage(&equations).unwrap();
             config
                 .configure_einsums(cs, &analysis, NUM_INNER_COLS, K)
                 .unwrap();
+            let _constant = VarTensor::constant_cols(cs, K, 2, false);
             config
         }
 
@@ -577,7 +578,7 @@ mod matmul_col_ultra_overflow {
         ) -> Self::Config {
             let mut config = Self::Config::default();
             let mut equations = HashMap::new();
-            equations.insert(params.equation, params.input_axes_to_dims);
+            equations.insert((0, params.equation), params.input_axes_to_dims);
             let analysis = analyze_einsum_usage(&equations).unwrap();
             let num_einsum_inner_cols = 1;
             config
@@ -608,7 +609,6 @@ mod matmul_col_ultra_overflow {
                 .iter()
                 .map(|c| layouter.get_challenge(*c))
                 .collect_vec();
-            println!("challenges: {:?}", challenges);
 
             layouter
                 .assign_region(
@@ -2537,7 +2537,7 @@ mod matmul_relu {
     #[derive(Clone)]
     struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
         inputs: [ValTensor<F>; 2],
-        _marker: PhantomData<F>,
+        einsum_params: SingleEinsumParams<F>,
     }
 
     // A columnar ReLu MLP
@@ -2548,11 +2548,52 @@ mod matmul_relu {
 
     impl Circuit<F> for MyCircuit<F> {
         type Config = MyConfig<F>;
-        type FloorPlanner = SimpleFloorPlanner;
-        type Params = TestParams;
+        type FloorPlanner = V1;
+        type Params = SingleEinsumParams<F>;
 
         fn without_witnesses(&self) -> Self {
             self.clone()
+        }
+
+        fn params(&self) -> Self::Params {
+            SingleEinsumParams::<F>::new(
+                &self.einsum_params.equation,
+                &[
+                    &self.inputs[0].get_inner().unwrap(),
+                    &self.inputs[1].get_inner().unwrap(),
+                ],
+            )
+            .unwrap()
+        }
+
+        fn configure_with_params(
+            cs: &mut ConstraintSystem<F>,
+            params: Self::Params,
+        ) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, 1, LEN);
+            let b = VarTensor::new_advice(cs, K, 1, LEN);
+            let output = VarTensor::new_advice(cs, K, 1, LEN);
+
+            let mut base_config =
+                BaseConfig::configure(cs, &[a.clone(), b.clone()], &output, CheckMode::SAFE);
+
+            base_config
+                .configure_range_check(cs, &a, &b, (-1, 1), K)
+                .unwrap();
+
+            base_config
+                .configure_range_check(cs, &a, &b, (0, 1023), K)
+                .unwrap();
+
+            let mut equations = HashMap::new();
+            equations.insert((0, params.equation), params.input_axes_to_dims);
+            let analysis = analyze_einsum_usage(&equations).unwrap();
+            base_config
+                .configure_einsums(cs, &analysis, 1, K)
+                .unwrap();
+            let _constant = VarTensor::constant_cols(cs, K, 8, false);
+
+            MyConfig { base_config }
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
@@ -2585,12 +2626,26 @@ mod matmul_relu {
                 .base_config
                 .layout_range_checks(&mut layouter)
                 .unwrap();
+            let challenges = config
+                .base_config
+                .einsums
+                .challenges()
+                .iter()
+                .map(|c| layouter.get_challenge(*c))
+                .collect_vec();
             layouter.assign_region(
                 || "",
                 |region| {
-                    let mut region = RegionCtx::new(region, 0, 1, 1024, 2);
+                    let mut region = RegionCtx::new_with_challenges(
+                        region,
+                        0,
+                        1,
+                        1024,
+                        2,
+                        challenges.clone(),
+                    );
                     let op = PolyOp::Einsum {
-                        equation: "ij,jk->ik".to_string(),
+                        equation: self.einsum_params.equation.clone(),
                     };
                     let output = config
                         .base_config
@@ -2625,9 +2680,11 @@ mod matmul_relu {
         let mut b = Tensor::from((0..LEN).map(|_| Value::known(F::from(1))));
         b.reshape(&[LEN, 1]).unwrap();
 
+        let einsum_params = SingleEinsumParams::<F>::new("ij,jk->ik", &[&a, &b]).unwrap();
+
         let circuit = MyCircuit {
             inputs: [ValTensor::from(a), ValTensor::from(b)],
-            _marker: PhantomData,
+            einsum_params,
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();

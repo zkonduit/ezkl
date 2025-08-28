@@ -831,17 +831,9 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     inputs: &[&ValTensor<F>],
     equation: &str,
 ) -> Result<ValTensor<F>, CircuitError> {
-    // Track the einsum equation
-    region.add_used_einsum_equation(equation.to_string())?;
-
-    // dispatch to freivalds' argument
-    if !config.einsums.challenges().is_empty() {
-        return freivalds(config, region, inputs, equation);
-    }
-
-    let mut equation = equation.split("->");
-    let inputs_eq = equation.next().ok_or(CircuitError::InvalidEinsum)?;
-    let output_eq = equation.next().ok_or(CircuitError::InvalidEinsum)?;
+    let mut eq = equation.split("->");
+    let inputs_eq = eq.next().ok_or(CircuitError::InvalidEinsum)?;
+    let output_eq = eq.next().ok_or(CircuitError::InvalidEinsum)?;
     let inputs_eq = inputs_eq.split(',').collect::<Vec<_>>();
 
     // Check that the number of inputs matches the number of inputs in the equation
@@ -862,6 +854,14 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
                 return Err(TensorError::DimMismatch("einsum".to_string()).into());
             }
         }
+    }
+
+    // Track the einsum equation
+    region.add_used_einsum_equation(equation.to_string(), &indices_to_size)?;
+
+    // dispatch to freivalds' argument
+    if !config.einsums.challenges().is_empty() {
+        return freivalds(config, region, inputs, equation);
     }
 
     // maps unrepresented indices in the output to a trivial 1
@@ -1043,6 +1043,8 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     let output: ValTensor<F> = output.into();
 
+    region.increment_einsum_index(1);
+
     Ok(output)
 }
 
@@ -1068,9 +1070,9 @@ pub fn freivalds<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         &config.check_mode,
     )?;
 
-    region.increment_einsum_index(1);
-
     let output: ValTensor<F> = output_tensor.into();
+
+    region.increment_einsum_index(1);
 
     Ok(output)
 }

@@ -26,7 +26,7 @@ mod reduction_planner;
 #[derive(Clone, Debug, Default)]
 pub struct Einsums<F: PrimeField + TensorType + PartialOrd> {
     /// custom gate to constrain tensor contractions
-    custom_gate: ContractionConfig<F>,
+    contraction_gate: ContractionConfig<F>,
     /// custom gate to constrain random linear combinations used by Freivalds' argument
     rlc_gates: Vec<RLCConfig<F>>,
 }
@@ -35,17 +35,17 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
     ///
     pub fn dummy(col_size: usize, num_inner_cols: usize) -> Self {
         let dummy_var = VarTensor::dummy(col_size, num_inner_cols);
-        let dummy_custom_gate = ContractionConfig {
+        let dummy_contraction_gate = ContractionConfig {
             inputs: [
                 [dummy_var.clone(), dummy_var.clone()],
                 [dummy_var.clone(), dummy_var.clone()],
             ],
-            output: dummy_var.clone(),
+            outputs: [dummy_var.clone(), dummy_var.clone()],
             selectors: BTreeMap::default(),
             _marker: PhantomData,
         };
         Self {
-            custom_gate: dummy_custom_gate,
+            contraction_gate: dummy_contraction_gate,
             rlc_gates: vec![],
         }
     }
@@ -72,21 +72,24 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             VarTensor::new_advice_in_second_phase(meta, logrows, num_inner_cols, capacity),
             VarTensor::new_advice_in_second_phase(meta, logrows, num_inner_cols, capacity),
         ];
-        let output = VarTensor::new_advice_in_second_phase(meta, logrows, num_inner_cols, capacity);
-        let custom_gate = ContractionConfig::new(
+        let outputs = [
+            VarTensor::new_advice(meta, logrows, num_inner_cols, capacity),
+            VarTensor::new_advice_in_second_phase(meta, logrows, num_inner_cols, capacity)
+        ];
+        let contraction_gate = ContractionConfig::new(
             meta,
             &[&[&inputs[0], &inputs[1]], &[&inputs[2], &inputs[3]]],
-            &output,
+            &[&outputs[0], &outputs[1]],
         );
 
         let mut rlc_gates = vec![];
         for _ in 0..analysis.max_num_output_axes {
-            let rlc_gate = RLCConfig::new(meta, &[inputs[0].clone(), inputs[2].clone()], &output);
+            let rlc_gate = RLCConfig::new(meta, &[inputs[0].clone(), inputs[2].clone()], &outputs[1]);
             rlc_gates.push(rlc_gate);
         }
 
         Self {
-            custom_gate,
+            contraction_gate,
             rlc_gates,
         }
     }
@@ -100,7 +103,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         equation: &str,
         check_mode: &CheckMode,
     ) -> Result<(), CircuitError> {
-        region.set_num_einsum_inner_cols(self.custom_gate.output.num_inner_cols());
+        region.set_num_einsum_inner_cols(self.contraction_gate.block_width());
 
         let (input_exprs, _) = equation.split_once("->").unwrap();
         let input_exprs = input_exprs.split(",").collect_vec();
@@ -109,22 +112,14 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         let mut input_tensors = input_tensors.iter().copied().cloned().collect_vec();
         let mut output_tensor = output_tensor.clone();
 
-        // Remove trivial axes from tensors
-        input_tensors
-            .iter_mut()
-            .map(|tensor| tensor.remove_trivial_axes())
-            .collect::<Result<Vec<_>, TensorError>>()?;
-        output_tensor.remove_trivial_axes()?;
-
         let mut input_axes_to_dim: HashMap<char, usize> = HashMap::new();
         input_exprs
             .iter()
             .zip(input_tensors.iter())
             .for_each(|(indices, tensor)| {
-                let tensor_dim = tensor.dims();
                 indices
                     .chars()
-                    .zip(tensor_dim.iter())
+                    .zip(tensor.dims())
                     .for_each(|(index, dim)| {
                         if let std::collections::hash_map::Entry::Vacant(e) =
                             input_axes_to_dim.entry(index)
@@ -133,6 +128,13 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
                         }
                     });
             });
+
+        // Remove trivial axes from tensors
+        input_tensors
+            .iter_mut()
+            .map(|tensor| tensor.remove_trivial_axes())
+            .collect::<Result<Vec<_>, TensorError>>()?;
+        output_tensor.remove_trivial_axes()?;
 
         let equation_analysis = analyze_single_equation(&equation, &input_axes_to_dim)?;
         let equation = equation_analysis.equation;
@@ -234,7 +236,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
                     Some(axis) => {
                         let dot_product_len = input_axes_to_dim[axis];
                         assign_input_contraction(
-                            &self.custom_gate,
+                            &self.contraction_gate,
                             region,
                             flattened_input_tensors,
                             dot_product_len,
@@ -245,7 +247,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
                     }
                     None => {
                         let mut result = assign_pairwise_mult(
-                            &self.custom_gate,
+                            &self.contraction_gate,
                             region,
                             flattened_input_tensors,
                             input_phases,
@@ -264,7 +266,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             .map(|t| t.get_inner_tensor().unwrap().get_scalar())
             .collect_vec()
             .into();
-        let squashed_input = prod(&self.custom_gate, region, &[&scalars], 1, check_mode)?;
+        let squashed_input = prod(&self.contraction_gate, region, &[&scalars], 1, check_mode)?;
 
         region.constrain_equal(&squashed_input, &squashed_output)
     }
@@ -404,20 +406,20 @@ struct BaseOpInfo {
     pub input_phases: InputPhases,
 }
 
-/// `ContractionConfig` is the custom gate used for einsum contraction operations
+/// `ContractionConfig` is the custom gate to constrain tensor contractions
 #[derive(Clone, Debug, Default)]
 struct ContractionConfig<F: PrimeField + TensorType + PartialOrd> {
-    // [[phase 0, phase 0], [phase 1, phase 1]]
+    // [[first phase, first phase], [second phase, second phase]]
     inputs: [[VarTensor; 2]; 2],
-    // phase 1
-    output: VarTensor,
+    // [first phase, second phase]
+    outputs: [VarTensor; 2],
     // (BaseOpInfo, block index, inner column index) -> selector
     selectors: BTreeMap<(BaseOpInfo, usize, usize), Selector>,
     _marker: PhantomData<F>,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> ContractionConfig<F> {
-    fn get_vartensors(&self, input_phases: InputPhases) -> Vec<&VarTensor> {
+    fn get_input_vars(&self, input_phases: InputPhases) -> Vec<&VarTensor> {
         match input_phases {
             InputPhases::FirstPhase => vec![&self.inputs[0][0]],
             InputPhases::SecondPhase => vec![&self.inputs[1][0]],
@@ -427,19 +429,35 @@ impl<F: PrimeField + TensorType + PartialOrd> ContractionConfig<F> {
         }
     }
 
+    fn get_output_var(&self, input_phases: InputPhases) -> &VarTensor {
+        match input_phases {
+            InputPhases::FirstPhase => &self.outputs[0],
+            InputPhases::SecondPhase => &self.outputs[1],
+            InputPhases::BothFirstPhase => &self.outputs[0],
+            InputPhases::Mixed => &self.outputs[1],
+            InputPhases::BothSecondPhase => &self.outputs[1],
+        }
+    }
+
+    fn block_width(&self) -> usize {
+        self.outputs[0].num_inner_cols()
+    }
+
     fn new(
         meta: &mut ConstraintSystem<F>,
         inputs: &[&[&VarTensor; 2]; 2],
-        output: &VarTensor,
+        outputs: &[&VarTensor; 2],
     ) -> Self {
         let mut selectors = BTreeMap::new();
+        let num_blocks = outputs[0].num_blocks();
+        let block_width = outputs[0].num_inner_cols();
         for input_phases in [
             InputPhases::BothFirstPhase,
             InputPhases::Mixed,
             InputPhases::BothSecondPhase,
         ] {
-            for i in 0..output.num_blocks() {
-                for j in 0..output.num_inner_cols() {
+            for i in 0..num_blocks {
+                for j in 0..block_width {
                     selectors.insert(
                         (
                             BaseOpInfo {
@@ -452,7 +470,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ContractionConfig<F> {
                         meta.selector(),
                     );
                 }
-                for i in 0..output.num_blocks() {
+                for i in 0..num_blocks {
                     selectors.insert(
                         (
                             BaseOpInfo {
@@ -483,7 +501,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ContractionConfig<F> {
             InputPhases::FirstPhase,
             InputPhases::SecondPhase,
         ] {
-            for i in 0..output.num_blocks() {
+            for i in 0..num_blocks {
                 selectors.insert(
                     (
                         BaseOpInfo {
@@ -538,6 +556,13 @@ impl<F: PrimeField + TensorType + PartialOrd> ContractionConfig<F> {
                 InputPhases::Mixed => vec![inputs[0][0], inputs[1][0]],
                 InputPhases::BothSecondPhase => vec![inputs[1][0], inputs[1][1]],
             };
+            let output = match base_op.input_phases {
+                InputPhases::FirstPhase => outputs[0],
+                InputPhases::SecondPhase => outputs[1],
+                InputPhases::BothFirstPhase => outputs[0],
+                InputPhases::Mixed => outputs[1],
+                InputPhases::BothSecondPhase => outputs[1],
+            };
             assert_eq!(inputs.len(), base_op.op_kind.num_inputs());
             match base_op.op_kind {
                 BaseOp::Mult => {
@@ -549,7 +574,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ContractionConfig<F> {
                         for (q_i, input) in qis.iter_mut().zip(inputs) {
                             *q_i = input
                                 .query_rng(meta, *block_idx, *inner_col_idx, 0, 1)
-                                .expect("einsum op config: input query failed")[0]
+                                .expect("contraction config: input query failed")[0]
                                 .clone()
                         }
                         // Get output expressions for each input channel
@@ -557,7 +582,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ContractionConfig<F> {
                         let constraints = {
                             let expected_output: Tensor<Expression<F>> = output
                                 .query_rng(meta, *block_idx, *inner_col_idx, rotation_offset, rng)
-                                .expect("einsum op config: output query failed");
+                                .expect("contraction config: output query failed");
 
                             let res = base_op.op_kind.nonaccum_f((qis[0].clone(), qis[1].clone()));
                             vec![expected_output[base_op.op_kind.constraint_idx()].clone() - res]
@@ -572,7 +597,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ContractionConfig<F> {
                         for (q_i, input) in qis.iter_mut().zip(inputs) {
                             *q_i = input
                                 .query_whole_block(meta, *block_idx, 0, 1)
-                                .expect("einsum op config: input query failed")
+                                .expect("contraction config: input query failed")
                                 .into_iter()
                                 .collect()
                         }
@@ -580,7 +605,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ContractionConfig<F> {
                         let (rotation_offset, rng) = base_op.op_kind.query_offset_rng();
                         let expected_output: Tensor<Expression<F>> = output
                             .query_rng(meta, *block_idx, 0, rotation_offset, rng)
-                            .expect("einsum op config: output query failed");
+                            .expect("contraction config: output query failed");
 
                         let res = base_op.op_kind.accum_f(
                             expected_output[0].clone(),
@@ -613,7 +638,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ContractionConfig<F> {
 
         Self {
             inputs: [first_phase_inputs, second_phase_inputs],
-            output: output.clone(),
+            outputs: [outputs[0].clone(), outputs[1].clone()],
             selectors,
             _marker: PhantomData,
         }
@@ -624,7 +649,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ContractionConfig<F> {
 #[derive(Clone, Debug)]
 struct RLCConfig<F: PrimeField + TensorType + PartialOrd> {
     pub challenge: Challenge,
-    /// [phase 0, phase 1]
+    /// [first phase, second phase]
     pub inputs: [VarTensor; 2],
     pub output: VarTensor,
     /// (phase of input, block index) -> (init selector, acc selector)
@@ -731,7 +756,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RLCConfig<F> {
                         .zip(powers_of_challenge.iter().rev())
                         .map(|(v, c_power)| {
                             c_power.and_then(|c_power| {
-                                Value::known(c_power * v.get_felt_eval().unwrap())
+                                v.get_felt_eval().and_then(|v| {
+                                    Some(Value::known(c_power * v))
+                                }).unwrap_or(Value::unknown())
                             })
                         })
                         .reduce(|acc, v| acc + v)
@@ -743,7 +770,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RLCConfig<F> {
 
             let assigned_len = {
                 let mut input: ValTensor<F> = tensor.iter().collect_vec().into();
-                input.pad_to_zero_rem(block_width, ValType::Value(Value::known(F::ZERO)))?;
+                input.pad_to_zero_rem(block_width, ValType::Constant(F::ZERO))?;
                 let (_, len) = region
                     .assign_einsum_with_duplication_unconstrained(&self.inputs[phase], &input)?;
                 len

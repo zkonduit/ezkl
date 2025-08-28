@@ -90,7 +90,8 @@ impl ShuffleIndex {
 pub struct EinsumIndex {
     index: usize,
     col_coord: usize,
-    equations: HashSet<String>,
+    // (einsum index, einsum equation) -> (input axes to dimensions map)
+    equations: HashMap<(usize, String), HashMap<char, usize>>,
     num_inner_cols: usize,
 }
 
@@ -100,7 +101,7 @@ impl EinsumIndex {
         EinsumIndex {
             index,
             col_coord,
-            equations: HashSet::new(),
+            equations: HashMap::new(),
             num_inner_cols,
         }
     }
@@ -113,11 +114,6 @@ impl EinsumIndex {
     /// Get the column coord
     pub fn col_coord(&self) -> usize {
         self.col_coord
-    }
-
-    /// Get the equations
-    pub fn equations(&self) -> &HashSet<String> {
-        &self.equations
     }
 
     /// update with another einsum index
@@ -605,8 +601,12 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     }
 
     /// add used einsum equation
-    pub fn add_used_einsum_equation(&mut self, equation: String) -> Result<(), CircuitError> {
-        self.einsum_index.equations.insert(equation);
+    pub fn add_used_einsum_equation(
+        &mut self,
+        equation: String,
+        input_axes_to_dims: &HashMap<char, usize>,
+    ) -> Result<(), CircuitError> {
+        self.einsum_index.equations.insert((self.einsum_index(), equation), input_axes_to_dims.clone());
         Ok(())
     }
 
@@ -656,7 +656,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     }
 
     /// get used einsum equations
-    pub fn used_einsum_equations(&self) -> HashSet<String> {
+    pub fn used_einsum_equations(&self) -> HashMap<(usize, String), HashMap<char, usize>> {
         self.einsum_index.equations.clone()
     }
 

@@ -64,6 +64,7 @@ use pyo3::types::PyDictMethods;
 use pyo3::IntoPyObject;
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::ops::Deref;
 pub use utilities::*;
 pub use vars::*;
@@ -442,7 +443,7 @@ pub struct ShuffleParams {
 /// Parameters for einsum operations
 pub struct EinsumParams {
     /// einsum equations
-    pub equations: Vec<String>,
+    pub equations: Vec<(String, HashMap<char, usize>)>,
     /// total einsum column size
     pub total_einsum_col_size: usize,
 }

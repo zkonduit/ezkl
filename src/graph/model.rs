@@ -3,6 +3,7 @@ use super::extract_const_quantized_values;
 use super::node::*;
 use super::vars::*;
 use super::GraphSettings;
+use crate::circuit::einsum::analysis::analyze_einsum_usage;
 use crate::circuit::hybrid::HybridOp;
 use crate::circuit::region::ConstantsMap;
 use crate::circuit::region::RegionCtx;
@@ -37,7 +38,6 @@ use log::{debug, info, trace};
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeMap;
-#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
@@ -1050,6 +1050,7 @@ impl Model {
 
         let lookup_range = settings.run_args.lookup_range;
         let logrows = settings.run_args.logrows as usize;
+        let num_inner_cols = settings.run_args.num_inner_cols;
         let required_lookups = settings.required_lookups.clone();
         let required_range_checks = settings.required_range_checks.clone();
 
@@ -1097,6 +1098,25 @@ impl Model {
                 vars.advices[3..6].try_into()?,
             )?;
         }
+
+        // Configures the circuit to use Freivalds' argument
+        // If some models get slow down, conditionally configure to use Freivalds' argument
+        let used_einsums: HashMap<(usize, String), HashMap<char, usize>> = settings
+            .einsum_params
+            .equations
+            .iter()
+            .enumerate()
+            .map(|(idx, (equation, indices_to_dims))| {
+                ((idx, equation.clone()), indices_to_dims.clone())
+            })
+            .collect();
+        let analysis = analyze_einsum_usage(&used_einsums)?;
+        base_gate.configure_einsums(
+            meta,
+            &analysis,
+            num_inner_cols,
+            logrows
+        )?;
 
         Ok(base_gate)
     }
@@ -1150,17 +1170,26 @@ impl Model {
 
         let original_constants = constants.clone();
 
+        let challenges = config
+            .base
+            .einsums
+            .challenges()
+            .iter()
+            .map(|c| layouter.get_challenge(*c))
+            .collect_vec();
+
         let outputs = layouter.assign_region(
             || "model",
             |region| {
-                let mut thread_safe_region = RegionCtx::new_with_constants(
+                let mut thread_safe_region = RegionCtx::new_with_challenges(
                     region,
                     0,
                     run_args.num_inner_cols,
                     run_args.decomp_base,
                     run_args.decomp_legs,
-                    original_constants.clone(),
+                    challenges.clone(),
                 );
+                thread_safe_region.update_constants(original_constants.clone());
                 // we need to do this as this loop is called multiple times
                 vars.set_instance_idx(instance_idx);
 
@@ -1533,7 +1562,11 @@ impl Model {
                 total_shuffle_col_size: region.shuffle_col_coord(),
             },
             einsum_params: crate::graph::EinsumParams {
-                equations: region.used_einsum_equations().into_iter().collect(),
+                equations: region
+                    .used_einsum_equations()
+                    .into_iter()
+                    .map(|((_, equation), axes_to_dims)| (equation, axes_to_dims))
+                    .collect(),
                 total_einsum_col_size: region.einsum_col_coord(),
             },
             total_const_size: region.total_constants(),

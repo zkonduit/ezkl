@@ -6,13 +6,14 @@ use ezkl::circuit::einsum::analysis::analyze_einsum_usage;
 use ezkl::circuit::einsum::circuit_params::SingleEinsumParams;
 use ezkl::circuit::poly::PolyOp;
 use ezkl::circuit::*;
-use ezkl::pfsys::create_keys;
+use ezkl::pfsys::{create_keys, create_proof_circuit, TranscriptType};
 use ezkl::pfsys::srs::gen_srs;
 use ezkl::tensor::*;
 use halo2_proofs::circuit::floor_planner::V1;
 use halo2_proofs::plonk::create_proof;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
-use halo2_proofs::poly::kzg::multiopen::ProverSHPLONK;
+use halo2_proofs::poly::kzg::multiopen::{ProverSHPLONK, VerifierSHPLONK};
+use halo2_proofs::poly::kzg::strategy::SingleStrategy;
 use halo2_proofs::transcript::{Blake2bWrite, Challenge255, TranscriptWriterBuffer};
 use halo2_proofs::{
     arithmetic::Field,
@@ -23,6 +24,7 @@ use halo2curves::bn256::{Bn256, Fr};
 use halo2curves::ff::PrimeField;
 use itertools::Itertools;
 use rand::rngs::OsRng;
+use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 
@@ -48,13 +50,14 @@ impl Circuit<Fr> for MyCircuit<Fr> {
         let mut config = Self::Config::default();
 
         let mut equations = HashMap::new();
-        equations.insert(params.equation, params.input_axes_to_dims);
+        equations.insert((0, params.equation), params.input_axes_to_dims);
         let analysis = analyze_einsum_usage(&equations).unwrap();
         let num_einsum_inner_cols = 2;
         unsafe {
             config
                 .configure_einsums(cs, &analysis, num_einsum_inner_cols, K)
                 .unwrap();
+            let _constant = VarTensor::constant_cols(cs, K, 2, false);
         }
 
         config
@@ -72,21 +75,7 @@ impl Circuit<Fr> for MyCircuit<Fr> {
     }
 
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
-        let mut config = Self::Config::default();
-
-        let default_params = Self::Params::default();
-
-        let mut equations = HashMap::new();
-        equations.insert(default_params.equation, default_params.input_axes_to_dims);
-        let analysis = analyze_einsum_usage(&equations).unwrap();
-        let num_einsum_inner_cols = 1;
-        unsafe {
-            config
-                .configure_einsums(cs, &analysis, num_einsum_inner_cols, K)
-                .unwrap();
-        }
-
-        config
+        unimplemented!("call configure_with_params instead")
     }
 
     fn synthesize(
@@ -133,11 +122,11 @@ fn runmatmul(c: &mut Criterion) {
     group.plot_config(PlotConfiguration::default().summary_scale(AxisScale::Linear));
     group.sampling_mode(criterion::SamplingMode::Flat);
     group.sample_size(10);
-    let len = 512;
+    let len = 128;
     unsafe {
         LEN = len;
     }
-    for k in 19..20 {
+    for k in 15..16 {
         let params = unsafe {
             K = k;
             gen_srs::<KZGCommitmentScheme<_>>(K as u32)
@@ -170,24 +159,36 @@ fn runmatmul(c: &mut Criterion) {
         group.throughput(Throughput::Elements(len as u64));
         group.bench_with_input(BenchmarkId::new("prove", k), &k, |b, &_| {
             b.iter(|| {
-                let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
-
-                create_proof::<KZGCommitmentScheme<_>, ProverSHPLONK<_>, _, _, _, _>(
+                let prover = create_proof_circuit::<
+                    KZGCommitmentScheme<_>,
+                    MyCircuit<Fr>,
+                    ProverSHPLONK<_>,
+                    VerifierSHPLONK<_>,
+                    SingleStrategy<_>,
+                    _,
+                    EvmTranscript<_, _, _, _>,
+                    EvmTranscript<_, _, _, _>,
+                >(
+                    circuit.clone(),
+                    vec![],
                     &params,
                     &pk,
-                    &[circuit.clone()],
-                    &[&[]],
-                    OsRng,
-                    &mut transcript,
-                )
-                .expect("proof generation should not fail");
-
-                transcript.finalize();
+                    CheckMode::UNSAFE,
+                    ezkl::Commitments::KZG,
+                    TranscriptType::EVM,
+                    None,
+                    None,
+                );
+                prover.unwrap();
             });
         });
     }
     group.finish();
 }
 
-criterion_group!(benches, runmatmul);
+criterion_group! {
+  name = benches;
+  config = Criterion::default().with_plots();
+  targets = runmatmul
+}
 criterion_main!(benches);

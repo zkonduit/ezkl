@@ -1,4 +1,3 @@
-use halo2_proofs::circuit::Value;
 use halo2curves::ff::PrimeField;
 use log::{error, trace};
 
@@ -41,11 +40,12 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     region.flush_einsum()?;
 
-    let vars = config.get_vartensors(phases.as_slice().into());
+    let input_vars = config.get_input_vars(phases.as_slice().into());
+    let output_var = config.get_output_var(phases.as_slice().into());
 
     let inputs = [lhs, rhs]
         .iter()
-        .zip(vars)
+        .zip(input_vars)
         .map(|(val, var)| {
             let res = region.assign_einsum(var, val)?;
             Ok(res.get_inner()?)
@@ -66,13 +66,13 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     })?;
 
     let assigned_len = op_result.len();
-    let mut output = region.assign_einsum(&config.output, &op_result.into())?;
+    let mut output = region.assign_einsum(output_var, &op_result.into())?;
 
     // Enable the selectors
     if !region.is_dummy() {
         (0..assigned_len)
             .map(|i| {
-                let (x, y, z) = config.output.cartesian_coord(region.einsum_col_coord() + i);
+                let (x, y, z) = output_var.cartesian_coord(region.einsum_col_coord() + i);
                 let op_info = BaseOpInfo {
                     op_kind: op.clone(),
                     input_phases: phases.as_slice().into(),
@@ -107,15 +107,12 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     region.flush_einsum()?;
     let mut input = values[0].clone();
 
-    let block_width = config.output.num_inner_cols();
+    let block_width = config.block_width();
 
     let assigned_len: usize;
     let input = {
-        // FIXME : should pad with constant zero but currently this incurs an error
-        // `NotEnoughColumnsForConstants` in halo2 because trying to assign constant
-        // value to advice column, how to workaround this issue?
-        input.pad_to_zero_rem(block_width, ValType::Value(Value::known(F::ZERO)))?;
-        let var = config.get_vartensors([phase].as_slice().into())[0];
+        input.pad_to_zero_rem(block_width, ValType::Constant(F::ZERO))?;
+        let var = config.get_input_vars([phase].as_slice().into())[0];
         let (res, len) = region
             .assign_einsum_with_duplication_unconstrained(var, &input)?;
         assigned_len = len;
@@ -125,8 +122,9 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     // Now we can assign the dot product
     let accumulated_sum = accumulated::sum(&input, block_width)?;
 
+    let output_var = config.get_output_var([phase].as_slice().into());
     let (output, output_assigned_len) = region.assign_einsum_with_duplication_constrained(
-        &config.output,
+        output_var,
         &accumulated_sum.into(),
         check_mode,
     )?;
@@ -134,9 +132,7 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     // enable the selectors
     if !region.is_dummy() {
         for i in 0..output_assigned_len {
-            let (x, _, z) = config
-                .output
-                .cartesian_coord(region.einsum_col_coord() + i * block_width);
+            let (x, _, z) = output_var.cartesian_coord(region.einsum_col_coord() + i * block_width);
             // skip over duplicates at start of column
             if z == 0 && i > 0 {
                 continue;
@@ -176,15 +172,12 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ) -> Result<ValTensor<F>, CircuitError> {
     assert!(phase == 0 || phase == 1);
     region.flush_einsum()?;
-    let block_width = config.output.num_inner_cols();
+    let block_width = config.block_width();
     let assigned_len: usize;
     let input = {
         let mut input = values[0].clone();
-        // FIXME : should pad with constant one but currently this incurs an error
-        // `NotEnoughColumnsForConstants` in halo2 because trying to assign constant
-        // value to advice column, how to workaround this issue?
-        input.pad_to_zero_rem(block_width, ValType::Value(Value::known(F::ONE)))?;
-        let var = config.get_vartensors([phase].as_slice().into())[0];
+        input.pad_to_zero_rem(block_width, ValType::Constant(F::ONE))?;
+        let var = config.get_input_vars([phase].as_slice().into())[0];
         let (res, len) = region
             .assign_einsum_with_duplication_unconstrained(var, &input)?;
         assigned_len = len;
@@ -194,8 +187,9 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     // Now we can assign the dot product
     let accumulated_prod = accumulated::prod(&input, block_width)?;
 
+    let output_var = config.get_output_var([phase].as_slice().into());
     let (output, output_assigned_len) = region.assign_einsum_with_duplication_constrained(
-        &config.output,
+        output_var,
         &accumulated_prod.into(),
         check_mode,
     )?;
@@ -204,9 +198,7 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     if !region.is_dummy() {
         (0..output_assigned_len)
             .map(|i| {
-                let (x, _, z) = config
-                    .output
-                    .cartesian_coord(region.einsum_col_coord() + i * block_width);
+                let (x, _, z) = output_var.cartesian_coord(region.einsum_col_coord() + i * block_width);
                 // skip over duplicates at start of column
                 if z == 0 && i > 0 {
                     return Ok(());
@@ -259,17 +251,14 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     } else {
         [values[1].clone(), values[0].clone()]
     };
-    let vars = config.get_vartensors(phases.as_slice().into());
+    let vars = config.get_input_vars(phases.as_slice().into());
 
     let mut inputs = vec![];
-    let block_width = config.output.num_inner_cols();
+    let block_width = config.block_width();
 
     let mut assigned_len = 0;
     for (val, var) in values.iter_mut().zip(vars) {
-        // FIXME : should pad with constant zero but currently this incurs an error
-        // `NotEnoughColumnsForConstants` in halo2 because trying to assign constant
-        // value to advice column, how to workaround this issue?
-        val.pad_to_zero_rem(block_width, ValType::Value(Value::known(F::ZERO)))?;
+        val.pad_to_zero_rem(block_width, ValType::Constant(F::ZERO))?;
         let inp = {
             let (res, len) = region.assign_einsum_with_duplication_unconstrained(var, &val)?;
             assigned_len = len;
@@ -281,8 +270,9 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     // Now we can assign the dot product
     // time this step
     let accumulated_dot = accumulated::dot(&inputs[0], &inputs[1], block_width)?;
+    let output_var = config.get_output_var(phases.as_slice().into());
     let (output, output_assigned_len) = region.assign_einsum_with_duplication_constrained(
-        &config.output,
+        output_var,
         &accumulated_dot.into(),
         check_mode,
     ).expect("failed to assign einsum with duplication constrained");
@@ -291,9 +281,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     if !region.is_dummy() {
         (0..output_assigned_len)
             .map(|i| {
-                let (x, _, z) = config
-                    .output
-                    .cartesian_coord(region.einsum_col_coord() + i * block_width);
+                let (x, _, z) = output_var.cartesian_coord(region.einsum_col_coord() + i * block_width);
                 // hop over duplicates at start of column
                 if z == 0 && i > 0 {
                     return Ok(());
