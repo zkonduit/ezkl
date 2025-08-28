@@ -31,6 +31,8 @@ pub enum Reduction {
         input_index: TensorIndex,
         /// phase of input tensor
         input_phase: usize,
+        /// phase of output tensor
+        output_phase: usize,
         challenge_index: usize,
     },
     Contraction {
@@ -41,6 +43,8 @@ pub enum Reduction {
         input_indices: Vec<TensorIndex>,
         /// phases of input tensors
         input_phases: Vec<usize>,
+        /// phase of output tensor
+        output_phase: usize,
     },
 }
 
@@ -67,6 +71,13 @@ impl Reduction {
         match self {
             Reduction::Contraction { input_indices, .. } => input_indices.clone(),
             Reduction::RLC { input_index, .. } => vec![*input_index],
+        }
+    }
+
+    pub fn output_phase(&self) -> usize {
+        match self {
+            Reduction::Contraction { output_phase, .. } => *output_phase,
+            Reduction::RLC { output_phase, .. } => *output_phase,
         }
     }
 }
@@ -111,10 +122,8 @@ pub fn input_reductions(expression: &str) -> Result<Vec<Reduction>, CircuitError
                 .collect();
             output.iter().collect()
         };
-        let mut output_phase = input_phases.iter().copied().max().unwrap();
 
         let reduction = if is_output_axis == true && inputs.len() == 1 {
-            output_phase = 1;
             let mut expression = inputs_axes.join(",");
             expression.push_str(format!(",{axis}").as_str());
             expression.push_str("->");
@@ -124,10 +133,12 @@ pub fn input_reductions(expression: &str) -> Result<Vec<Reduction>, CircuitError
                 axis,
                 input_index: input_indices[0],
                 input_phase: input_phases[0],
+                output_phase: 1,
                 challenge_index: output_expr.chars().position(|c| c == axis).unwrap(),
             }
         } else if is_output_axis == true {
             let mut expression = inputs_axes.join(",");
+            let output_phase = input_phases.iter().copied().max().unwrap();
             expression.push_str("->");
             expression.push_str(&output);
             Reduction::Contraction {
@@ -135,9 +146,11 @@ pub fn input_reductions(expression: &str) -> Result<Vec<Reduction>, CircuitError
                 axis: None,
                 input_indices: input_indices,
                 input_phases,
+                output_phase,
             }
         } else {
             let mut expression = inputs_axes.join(",");
+            let output_phase = input_phases.iter().copied().max().unwrap();
             expression.push_str("->");
             expression.push_str(&output);
             Reduction::Contraction {
@@ -145,6 +158,7 @@ pub fn input_reductions(expression: &str) -> Result<Vec<Reduction>, CircuitError
                 axis: Some(axis),
                 input_indices: input_indices,
                 input_phases,
+                output_phase,
             }
         };
 
@@ -152,7 +166,7 @@ pub fn input_reductions(expression: &str) -> Result<Vec<Reduction>, CircuitError
         let mut input_exprs = input_exprs.clone();
         input_exprs.retain(|((_, input_eq), _)| !inputs_axes.contains(input_eq));
         input_exprs.push((
-            (output_phase, output.clone()),
+            (reduction.output_phase(), output.clone()),
             TensorIndex(input_tensor_counter),
         ));
         input_tensor_counter += 1;

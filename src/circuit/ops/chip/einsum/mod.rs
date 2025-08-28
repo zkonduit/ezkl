@@ -129,15 +129,15 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
                     });
             });
 
+        let equation_analysis = analyze_single_equation(&equation, &input_axes_to_dim)?;
+        let equation = equation_analysis.equation;
+
         // Remove trivial axes from tensors
         input_tensors
             .iter_mut()
             .map(|tensor| tensor.remove_trivial_axes())
             .collect::<Result<Vec<_>, TensorError>>()?;
         output_tensor.remove_trivial_axes()?;
-
-        let equation_analysis = analyze_single_equation(&equation, &input_axes_to_dim)?;
-        let equation = equation_analysis.equation;
 
         let output_shape = equation_analysis
             .output_indices
@@ -149,6 +149,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         // reorder the reduction of input tensors and reduce
         let reordered_input_reductions = reduction_planner::input_reductions(&equation).unwrap();
         let mut tensors = input_tensors;
+        let mut reduced_input_phase = 0;
 
         for reduction in reordered_input_reductions.iter() {
             let (input_expr, output_expr) = reduction.expression().split_once("->").unwrap();
@@ -258,6 +259,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
                 },
             };
             tensors.push(contracted_output);
+            reduced_input_phase = reduction.output_phase();
         }
         tensors.retain(|tensor| tensor.is_singleton());
 
@@ -266,7 +268,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             .map(|t| t.get_inner_tensor().unwrap().get_scalar())
             .collect_vec()
             .into();
-        let squashed_input = prod(&self.contraction_gate, region, &[&scalars], 1, check_mode)?;
+        let squashed_input = prod(&self.contraction_gate, region, &[&scalars], reduced_input_phase, check_mode)?;
 
         region.constrain_equal(&squashed_input, &squashed_output)
     }
@@ -291,7 +293,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             .rlc_gates
             .iter()
             .take(output_shape.len())
-            .zip(challenges)
+            .zip(challenges.iter())
             .rev()
             .enumerate()
         {
@@ -299,11 +301,16 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             intermediate_values.flatten();
             let phase = if idx > 0 { 1 } else { 0 };
             intermediate_values =
-                rlc_config.assign_rlc(region, &intermediate_values, challenge, rlc_len, phase)?;
+                rlc_config.assign_rlc(region, &intermediate_values, *challenge, rlc_len, phase)?;
             output_shape.pop();
         }
 
-        Ok(intermediate_values)
+        let phase = if challenges.len() > 0 { 1 } else { 0 };
+        let output_var = self.contraction_gate.get_output_var([phase].as_slice().into());
+        let res = region.assign_einsum(output_var, &intermediate_values)?;
+        region.increment_einsum_col_coord(1);
+
+        Ok(res)
     }
 }
 
