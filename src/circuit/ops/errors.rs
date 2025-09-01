@@ -115,4 +115,7 @@ pub enum CircuitError {
     /// A decomposition base overflowed
     #[error("decomposition base overflowed")]
     DecompositionBaseOverflow,
+    /// Challenge not set
+    #[error("challenge not set")]
+    ChallengeNotSet,
 }

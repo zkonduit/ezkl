@@ -1,5 +1,5 @@
 use crate::{
-    circuit::table::Range,
+    circuit::{einsum::NUM_MAX_EINSUM_CHALLENGES, table::Range},
     fieldutils::IntegerRep,
     tensor::{Tensor, TensorType, ValTensor, ValType, VarTensor},
 };
@@ -90,8 +90,8 @@ impl ShuffleIndex {
 pub struct EinsumIndex {
     index: usize,
     col_coord: usize,
-    // (einsum index, einsum equation) -> (input axes to dimensions map)
-    equations: HashMap<(usize, String), HashMap<char, usize>>,
+    // (einsum equation, input axes to dimensions map)
+    equations: Vec<(String, HashMap<char, usize>)>,
     num_inner_cols: usize,
 }
 
@@ -101,7 +101,7 @@ impl EinsumIndex {
         EinsumIndex {
             index,
             col_coord,
-            equations: HashMap::new(),
+            equations: Vec::new(),
             num_inner_cols,
         }
     }
@@ -396,7 +396,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             statistics: RegionStatistics::default(),
             settings,
             assigned_constants: HashMap::new(),
-            challenges: vec![],
+            challenges: vec![Value::unknown(); NUM_MAX_EINSUM_CHALLENGES],
             max_dynamic_input_len: 0,
         }
     }
@@ -407,6 +407,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         linear_coord: usize,
         num_inner_cols: usize,
         settings: RegionSettings,
+        challenges: Vec<Value<F>>,
     ) -> RegionCtx<'a, F> {
         let region = None;
         RegionCtx {
@@ -420,7 +421,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             statistics: RegionStatistics::default(),
             settings,
             assigned_constants: HashMap::new(),
-            challenges: vec![],
+            challenges,
             max_dynamic_input_len: 0,
         }
     }
@@ -489,6 +490,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
                 starting_linear_coord,
                 self.num_inner_cols,
                 self.settings.clone(),
+                self.challenges.clone(),
             );
             let res = inner_loop_function(idx, &mut local_reg);
             // we update the offset and constants
@@ -606,7 +608,9 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         equation: String,
         input_axes_to_dims: &HashMap<char, usize>,
     ) -> Result<(), CircuitError> {
-        self.einsum_index.equations.insert((self.einsum_index(), equation), input_axes_to_dims.clone());
+        self.einsum_index
+            .equations
+            .push((equation, input_axes_to_dims.clone()));
         Ok(())
     }
 
@@ -656,7 +660,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     }
 
     /// get used einsum equations
-    pub fn used_einsum_equations(&self) -> HashMap<(usize, String), HashMap<char, usize>> {
+    pub fn used_einsum_equations(&self) -> Vec<(String, HashMap<char, usize>)> {
         self.einsum_index.equations.clone()
     }
 

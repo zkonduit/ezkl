@@ -113,8 +113,7 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let input = {
         input.pad_to_zero_rem(block_width, ValType::Constant(F::ZERO))?;
         let var = config.get_input_vars([phase].as_slice().into())[0];
-        let (res, len) = region
-            .assign_einsum_with_duplication_unconstrained(var, &input)?;
+        let (res, len) = region.assign_einsum_with_duplication_unconstrained(var, &input)?;
         assigned_len = len;
         res.get_inner()?
     };
@@ -178,8 +177,7 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         let mut input = values[0].clone();
         input.pad_to_zero_rem(block_width, ValType::Constant(F::ONE))?;
         let var = config.get_input_vars([phase].as_slice().into())[0];
-        let (res, len) = region
-            .assign_einsum_with_duplication_unconstrained(var, &input)?;
+        let (res, len) = region.assign_einsum_with_duplication_unconstrained(var, &input)?;
         assigned_len = len;
         res.get_inner()?
     };
@@ -198,7 +196,8 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     if !region.is_dummy() {
         (0..output_assigned_len)
             .map(|i| {
-                let (x, _, z) = output_var.cartesian_coord(region.einsum_col_coord() + i * block_width);
+                let (x, _, z) =
+                    output_var.cartesian_coord(region.einsum_col_coord() + i * block_width);
                 // skip over duplicates at start of column
                 if z == 0 && i > 0 {
                     return Ok(());
@@ -271,17 +270,16 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     // time this step
     let accumulated_dot = accumulated::dot(&inputs[0], &inputs[1], block_width)?;
     let output_var = config.get_output_var(phases.as_slice().into());
-    let (output, output_assigned_len) = region.assign_einsum_with_duplication_constrained(
-        output_var,
-        &accumulated_dot.into(),
-        check_mode,
-    ).expect("failed to assign einsum with duplication constrained");
+    let (output, output_assigned_len) = region
+        .assign_einsum_with_duplication_constrained(output_var, &accumulated_dot.into(), check_mode)
+        .expect("failed to assign einsum with duplication constrained");
 
     // enable the selectors
     if !region.is_dummy() {
         (0..output_assigned_len)
             .map(|i| {
-                let (x, _, z) = output_var.cartesian_coord(region.einsum_col_coord() + i * block_width);
+                let (x, _, z) =
+                    output_var.cartesian_coord(region.einsum_col_coord() + i * block_width);
                 // hop over duplicates at start of column
                 if z == 0 && i > 0 {
                     return Ok(());

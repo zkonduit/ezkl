@@ -1069,6 +1069,13 @@ impl GraphSettings {
             .ceil() as u32
     }
 
+    ///
+    pub fn einsum_logrows(&self) -> u32 {
+        (self.einsum_params.total_einsum_col_size as f64 / self.run_args.num_inner_cols as f64)
+            .log2()
+            .ceil() as u32
+    }
+
     /// calculate the total number of instances
     pub fn total_instances(&self) -> Vec<usize> {
         let mut instances: Vec<usize> = self.module_sizes.num_instances();
@@ -1607,6 +1614,7 @@ impl GraphCircuit {
         let instance_logrows = self.settings().log2_total_instances();
         let module_constraint_logrows = self.settings().module_constraint_logrows();
         let dynamic_lookup_logrows = self.settings().dynamic_lookup_and_shuffle_logrows();
+        let einsum_logrows = self.settings().einsum_logrows();
         min_logrows = std::cmp::max(
             min_logrows,
             // max of the instance logrows and the module constraint logrows and the dynamic lookup logrows is the lower limit
@@ -1614,6 +1622,7 @@ impl GraphCircuit {
                 instance_logrows,
                 module_constraint_logrows,
                 dynamic_lookup_logrows,
+                einsum_logrows,
             ]
             .iter()
             .max()

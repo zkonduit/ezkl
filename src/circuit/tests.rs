@@ -89,6 +89,7 @@ mod matmul {
             let challenges = config
                 .einsums
                 .challenges()
+                .unwrap()
                 .iter()
                 .map(|c| layouter.get_challenge(*c))
                 .collect_vec();
@@ -210,6 +211,7 @@ mod matmul_col_overflow_double_col {
             let challenges = config
                 .einsums
                 .challenges()
+                .unwrap()
                 .iter()
                 .map(|c| layouter.get_challenge(*c))
                 .collect_vec();
@@ -321,6 +323,7 @@ mod matmul_col_overflow {
             let challenges = config
                 .einsums
                 .challenges()
+                .unwrap()
                 .iter()
                 .map(|c| layouter.get_challenge(*c))
                 .collect_vec();
@@ -445,6 +448,7 @@ mod matmul_col_ultra_overflow_double_col {
             let challenges = config
                 .einsums
                 .challenges()
+                .unwrap()
                 .iter()
                 .map(|c| layouter.get_challenge(*c))
                 .collect_vec();
@@ -606,6 +610,7 @@ mod matmul_col_ultra_overflow {
             let challenges = config
                 .einsums
                 .challenges()
+                .unwrap()
                 .iter()
                 .map(|c| layouter.get_challenge(*c))
                 .collect_vec();
@@ -2588,9 +2593,7 @@ mod matmul_relu {
             let mut equations = HashMap::new();
             equations.insert((0, params.equation), params.input_axes_to_dims);
             let analysis = analyze_einsum_usage(&equations).unwrap();
-            base_config
-                .configure_einsums(cs, &analysis, 1, K)
-                .unwrap();
+            base_config.configure_einsums(cs, &analysis, 1, K).unwrap();
             let _constant = VarTensor::constant_cols(cs, K, 8, false);
 
             MyConfig { base_config }
@@ -2630,20 +2633,15 @@ mod matmul_relu {
                 .base_config
                 .einsums
                 .challenges()
+                .unwrap()
                 .iter()
                 .map(|c| layouter.get_challenge(*c))
                 .collect_vec();
             layouter.assign_region(
                 || "",
                 |region| {
-                    let mut region = RegionCtx::new_with_challenges(
-                        region,
-                        0,
-                        1,
-                        1024,
-                        2,
-                        challenges.clone(),
-                    );
+                    let mut region =
+                        RegionCtx::new_with_challenges(region, 0, 1, 1024, 2, challenges.clone());
                     let op = PolyOp::Einsum {
                         equation: self.einsum_params.equation.clone(),
                     };

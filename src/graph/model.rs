@@ -1111,12 +1111,7 @@ impl Model {
             })
             .collect();
         let analysis = analyze_einsum_usage(&used_einsums)?;
-        base_gate.configure_einsums(
-            meta,
-            &analysis,
-            num_inner_cols,
-            logrows
-        )?;
+        base_gate.configure_einsums(meta, &analysis, num_inner_cols, logrows)?;
 
         Ok(base_gate)
     }
@@ -1173,7 +1168,7 @@ impl Model {
         let challenges = config
             .base
             .einsums
-            .challenges()
+            .challenges()?
             .iter()
             .map(|c| layouter.get_challenge(*c))
             .collect_vec();
@@ -1562,11 +1557,7 @@ impl Model {
                 total_shuffle_col_size: region.shuffle_col_coord(),
             },
             einsum_params: crate::graph::EinsumParams {
-                equations: region
-                    .used_einsum_equations()
-                    .into_iter()
-                    .map(|((_, equation), axes_to_dims)| (equation, axes_to_dims))
-                    .collect(),
+                equations: region.used_einsum_equations(),
                 total_einsum_col_size: region.einsum_col_coord(),
             },
             total_const_size: region.total_constants(),

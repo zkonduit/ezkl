@@ -6,8 +6,8 @@ use ezkl::circuit::einsum::analysis::analyze_einsum_usage;
 use ezkl::circuit::einsum::circuit_params::SingleEinsumParams;
 use ezkl::circuit::poly::PolyOp;
 use ezkl::circuit::*;
-use ezkl::pfsys::{create_keys, create_proof_circuit, TranscriptType};
 use ezkl::pfsys::srs::gen_srs;
+use ezkl::pfsys::{create_keys, create_proof_circuit, TranscriptType};
 use ezkl::tensor::*;
 use halo2_proofs::circuit::floor_planner::V1;
 use halo2_proofs::plonk::create_proof;
@@ -74,7 +74,7 @@ impl Circuit<Fr> for MyCircuit<Fr> {
         .unwrap()
     }
 
-    fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
+    fn configure(_cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         unimplemented!("call configure_with_params instead")
     }
 
@@ -86,6 +86,7 @@ impl Circuit<Fr> for MyCircuit<Fr> {
         let challenges = config
             .einsums
             .challenges()
+            .unwrap()
             .iter()
             .map(|c| layouter.get_challenge(*c))
             .collect_vec();

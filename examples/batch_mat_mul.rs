@@ -118,6 +118,7 @@ impl Circuit<Fr> for MyCircuit<Fr> {
         let challenges = config
             .einsums
             .challenges()
+            .unwrap()
             .iter()
             .map(|c| layouter.get_challenge(*c))
             .collect_vec();

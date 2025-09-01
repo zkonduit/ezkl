@@ -22,6 +22,9 @@ pub mod circuit_params;
 mod layouts;
 mod reduction_planner;
 
+/// The maximum number of challenges
+pub const NUM_MAX_EINSUM_CHALLENGES: usize = 10;
+
 /// A struct representing reductions for the einsums
 #[derive(Clone, Debug, Default)]
 pub struct Einsums<F: PrimeField + TensorType + PartialOrd> {
@@ -46,16 +49,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         };
         Self {
             contraction_gate: dummy_contraction_gate,
-            rlc_gates: vec![],
+            rlc_gates: (0..NUM_MAX_EINSUM_CHALLENGES).map(|_| RLCConfig::dummy(&dummy_var)).collect(),
         }
-    }
-
-    ///
-    pub fn challenges(&self) -> Vec<Challenge> {
-        self.rlc_gates
-            .iter()
-            .map(|gate| gate.challenge)
-            .collect_vec()
     }
 
     /// Configure the columns based on universal Einsum analysis
@@ -74,7 +69,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         ];
         let outputs = [
             VarTensor::new_advice(meta, logrows, num_inner_cols, capacity),
-            VarTensor::new_advice_in_second_phase(meta, logrows, num_inner_cols, capacity)
+            VarTensor::new_advice_in_second_phase(meta, logrows, num_inner_cols, capacity),
         ];
         let contraction_gate = ContractionConfig::new(
             meta,
@@ -84,7 +79,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
 
         let mut rlc_gates = vec![];
         for _ in 0..analysis.max_num_output_axes {
-            let rlc_gate = RLCConfig::new(meta, &[inputs[0].clone(), inputs[2].clone()], &outputs[1]);
+            let rlc_gate =
+                RLCConfig::new(meta, &[inputs[0].clone(), inputs[2].clone()], &outputs[1]);
             rlc_gates.push(rlc_gate);
         }
 
@@ -92,6 +88,14 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             contraction_gate,
             rlc_gates,
         }
+    }
+
+    /// In dummy layout phase, calling this function will return error
+    pub fn challenges(&self) -> Result<Vec<Challenge>, CircuitError> {
+        self.rlc_gates
+            .iter()
+            .map(|gate| gate.challenge.ok_or(CircuitError::ChallengeNotSet))
+            .collect::<Result<Vec<_>, _>>()
     }
 
     ///
@@ -117,16 +121,13 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             .iter()
             .zip(input_tensors.iter())
             .for_each(|(indices, tensor)| {
-                indices
-                    .chars()
-                    .zip(tensor.dims())
-                    .for_each(|(index, dim)| {
-                        if let std::collections::hash_map::Entry::Vacant(e) =
-                            input_axes_to_dim.entry(index)
-                        {
-                            e.insert(*dim);
-                        }
-                    });
+                indices.chars().zip(tensor.dims()).for_each(|(index, dim)| {
+                    if let std::collections::hash_map::Entry::Vacant(e) =
+                        input_axes_to_dim.entry(index)
+                    {
+                        e.insert(*dim);
+                    }
+                });
             });
 
         let equation_analysis = analyze_single_equation(&equation, &input_axes_to_dim)?;
@@ -268,7 +269,13 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             .map(|t| t.get_inner_tensor().unwrap().get_scalar())
             .collect_vec()
             .into();
-        let squashed_input = prod(&self.contraction_gate, region, &[&scalars], reduced_input_phase, check_mode)?;
+        let squashed_input = prod(
+            &self.contraction_gate,
+            region,
+            &[&scalars],
+            reduced_input_phase,
+            check_mode,
+        )?;
 
         region.constrain_equal(&squashed_input, &squashed_output)
     }
@@ -277,7 +284,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         &self,
         region: &mut RegionCtx<F>,
         output: &ValTensor<F>,
-        mut output_shape: Vec<usize>,
+        output_shape: Vec<usize>,
     ) -> Result<ValTensor<F>, CircuitError> {
         let mut intermediate_values = output.clone();
 
@@ -287,7 +294,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             .take(output_shape.len())
             .copied()
             .collect_vec();
-        // Intermediate values output from the previous reduction
+
         // Loop over the output axes
         for (idx, (rlc_config, challenge)) in self
             .rlc_gates
@@ -297,16 +304,17 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             .rev()
             .enumerate()
         {
-            let rlc_len = output_shape.last().copied().unwrap();
+            let rlc_len = output_shape[output_shape.len() - idx - 1];
             intermediate_values.flatten();
             let phase = if idx > 0 { 1 } else { 0 };
             intermediate_values =
                 rlc_config.assign_rlc(region, &intermediate_values, *challenge, rlc_len, phase)?;
-            output_shape.pop();
         }
 
         let phase = if challenges.len() > 0 { 1 } else { 0 };
-        let output_var = self.contraction_gate.get_output_var([phase].as_slice().into());
+        let output_var = self
+            .contraction_gate
+            .get_output_var([phase].as_slice().into());
         let res = region.assign_einsum(output_var, &intermediate_values)?;
         region.increment_einsum_col_coord(1);
 
@@ -504,10 +512,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ContractionConfig<F> {
             }
         }
 
-        for input_phases in [
-            InputPhases::FirstPhase,
-            InputPhases::SecondPhase,
-        ] {
+        for input_phases in [InputPhases::FirstPhase, InputPhases::SecondPhase] {
             for i in 0..num_blocks {
                 selectors.insert(
                     (
@@ -655,7 +660,9 @@ impl<F: PrimeField + TensorType + PartialOrd> ContractionConfig<F> {
 /// `RLCConfig` is the custom gate used for random linear combination with the specific challenge
 #[derive(Clone, Debug)]
 struct RLCConfig<F: PrimeField + TensorType + PartialOrd> {
-    pub challenge: Challenge,
+    /// The challenge used for the random linear combination
+    /// Challenge is `None` in the dummy configuration
+    pub challenge: Option<Challenge>,
     /// [first phase, second phase]
     pub inputs: [VarTensor; 2],
     pub output: VarTensor,
@@ -665,6 +672,20 @@ struct RLCConfig<F: PrimeField + TensorType + PartialOrd> {
 }
 
 impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RLCConfig<F> {
+    fn dummy(dummy_var: &VarTensor) -> Self {
+        let challenge = None;
+        let inputs = [dummy_var.clone(), dummy_var.clone()];
+        let output = dummy_var.clone();
+        let selectors = BTreeMap::new();
+        Self {
+            challenge,
+            inputs,
+            output,
+            selectors,
+            _marker: PhantomData,
+        }
+    }
+
     fn new(meta: &mut ConstraintSystem<F>, inputs: &[VarTensor; 2], output: &VarTensor) -> Self {
         let challenge = meta.challenge_usable_after(FirstPhase);
 
@@ -730,7 +751,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RLCConfig<F> {
             inputs: inputs.clone(),
             output: output.clone(),
             selectors,
-            challenge,
+            challenge: Some(challenge),
             _marker: PhantomData,
         }
     }
@@ -763,9 +784,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RLCConfig<F> {
                         .zip(powers_of_challenge.iter().rev())
                         .map(|(v, c_power)| {
                             c_power.and_then(|c_power| {
-                                v.get_felt_eval().and_then(|v| {
-                                    Some(Value::known(c_power * v))
-                                }).unwrap_or(Value::unknown())
+                                v.get_felt_eval()
+                                    .and_then(|v| Some(Value::known(c_power * v)))
+                                    .unwrap_or(Value::unknown())
                             })
                         })
                         .reduce(|acc, v| acc + v)
