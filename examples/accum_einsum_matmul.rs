@@ -110,6 +110,8 @@ impl Circuit<Fr> for MyCircuit<Fr> {
     ) -> Result<(), Error> {
         let challenges = config
             .einsums
+            .as_ref()
+            .ok_or(Error::Synthesis)?
             .challenges()
             .unwrap()
             .iter()

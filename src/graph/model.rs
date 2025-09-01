@@ -1168,6 +1168,8 @@ impl Model {
         let challenges = config
             .base
             .einsums
+            .as_ref()
+            .ok_or(GraphError::CircuitError(crate::circuit::CircuitError::MissingEinsumConfig))?
             .challenges()?
             .iter()
             .map(|c| layouter.get_challenge(*c))

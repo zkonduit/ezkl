@@ -74,11 +74,8 @@ mod matmul {
             .unwrap()
         }
 
-        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, 1, LEN * LEN);
-            let b = VarTensor::new_advice(cs, K, 1, LEN * LEN);
-            let output = VarTensor::new_advice(cs, K, 1, LEN * LEN);
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        fn configure(_cs: &mut ConstraintSystem<F>) -> Self::Config {
+            unimplemented!("call configure_with_params instead")
         }
 
         fn synthesize(
@@ -88,8 +85,10 @@ mod matmul {
         ) -> Result<(), Error> {
             let challenges = config
                 .einsums
+                .as_ref()
+                .ok_or(Error::Synthesis)?
                 .challenges()
-                .unwrap()
+                .map_err(|_| Error::Synthesis)?
                 .iter()
                 .map(|c| layouter.get_challenge(*c))
                 .collect_vec();
@@ -196,11 +195,8 @@ mod matmul_col_overflow_double_col {
             .unwrap()
         }
 
-        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, NUM_INNER_COLS, LEN * LEN * LEN);
-            let b = VarTensor::new_advice(cs, K, NUM_INNER_COLS, LEN * LEN * LEN);
-            let output = VarTensor::new_advice(cs, K, NUM_INNER_COLS, LEN * LEN * LEN);
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        fn configure(_cs: &mut ConstraintSystem<F>) -> Self::Config {
+            unimplemented!("call configure_with_params instead")
         }
 
         fn synthesize(
@@ -210,8 +206,10 @@ mod matmul_col_overflow_double_col {
         ) -> Result<(), Error> {
             let challenges = config
                 .einsums
+                .as_ref()
+                .ok_or(Error::Synthesis)?
                 .challenges()
-                .unwrap()
+                .map_err(|_| Error::Synthesis)?
                 .iter()
                 .map(|c| layouter.get_challenge(*c))
                 .collect_vec();
@@ -289,11 +287,8 @@ mod matmul_col_overflow {
             self.clone()
         }
 
-        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
-            let b = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
-            let output = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        fn configure(_cs: &mut ConstraintSystem<F>) -> Self::Config {
+            unimplemented!("call configure_with_params instead")
         }
 
         fn configure_with_params(
@@ -322,8 +317,10 @@ mod matmul_col_overflow {
         ) -> Result<(), Error> {
             let challenges = config
                 .einsums
+                .as_ref()
+                .ok_or(Error::Synthesis)?
                 .challenges()
-                .unwrap()
+                .map_err(|_| Error::Synthesis)?
                 .iter()
                 .map(|c| layouter.get_challenge(*c))
                 .collect_vec();
@@ -433,11 +430,8 @@ mod matmul_col_ultra_overflow_double_col {
             self.einsum_params.clone()
         }
 
-        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, NUM_INNER_COLS, LEN * LEN * LEN);
-            let b = VarTensor::new_advice(cs, K, NUM_INNER_COLS, LEN * LEN * LEN);
-            let output = VarTensor::new_advice(cs, K, NUM_INNER_COLS, LEN * LEN * LEN);
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        fn configure(_cs: &mut ConstraintSystem<F>) -> Self::Config {
+            unimplemented!("call configure_with_params instead")
         }
 
         fn synthesize(
@@ -447,8 +441,10 @@ mod matmul_col_ultra_overflow_double_col {
         ) -> Result<(), Error> {
             let challenges = config
                 .einsums
+                .as_ref()
+                .ok_or(Error::Synthesis)?
                 .challenges()
-                .unwrap()
+                .map_err(|_| Error::Synthesis)?
                 .iter()
                 .map(|c| layouter.get_challenge(*c))
                 .collect_vec();
@@ -595,11 +591,8 @@ mod matmul_col_ultra_overflow {
             self.einsum_params.clone()
         }
 
-        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
-            let b = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
-            let output = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        fn configure(_cs: &mut ConstraintSystem<F>) -> Self::Config {
+            unimplemented!("call configure_with_params instead")
         }
 
         fn synthesize(
@@ -609,8 +602,10 @@ mod matmul_col_ultra_overflow {
         ) -> Result<(), Error> {
             let challenges = config
                 .einsums
+                .as_ref()
+                .ok_or(Error::Synthesis)?
                 .challenges()
-                .unwrap()
+                .map_err(|_| Error::Synthesis)?
                 .iter()
                 .map(|c| layouter.get_challenge(*c))
                 .collect_vec();
@@ -2632,8 +2627,10 @@ mod matmul_relu {
             let challenges = config
                 .base_config
                 .einsums
+                .as_ref()
+                .ok_or(Error::Synthesis)?
                 .challenges()
-                .unwrap()
+                .map_err(|_| Error::Synthesis)?
                 .iter()
                 .map(|c| layouter.get_challenge(*c))
                 .collect_vec();

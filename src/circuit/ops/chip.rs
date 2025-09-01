@@ -271,7 +271,7 @@ pub struct BaseConfig<F: PrimeField + TensorType + PartialOrd> {
     /// [Selector]s for the shuffles
     pub shuffles: Shuffles,
     /// Einsum-specific configuration
-    pub einsums: einsum::Einsums<F>,
+    pub einsums: Option<einsum::Einsums<F>>,
     /// Activate sanity checks
     pub check_mode: CheckMode,
     _marker: PhantomData<F>,
@@ -286,7 +286,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
             custom_gates: CustomGates::dummy(col_size, num_inner_cols),
             static_lookups: StaticLookups::dummy(col_size, num_inner_cols),
             dynamic_lookups: DynamicLookups::dummy(col_size, num_inner_cols),
-            einsums: einsum::Einsums::<F>::dummy(col_size, num_inner_cols),
+            einsums: Some(einsum::Einsums::<F>::dummy(col_size, num_inner_cols)),
             shuffles: Shuffles::dummy(col_size, num_inner_cols),
             range_checks: RangeChecks::dummy(col_size, num_inner_cols),
             check_mode: CheckMode::SAFE,
@@ -421,7 +421,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
             },
             static_lookups: StaticLookups::default(),
             dynamic_lookups: DynamicLookups::default(),
-            einsums: einsum::Einsums::<F>::default(),
+            einsums: None,
             shuffles: Shuffles::default(),
             range_checks: RangeChecks::default(),
             shared_table_inputs: vec![],
@@ -708,7 +708,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
     where
         F: Field,
     {
-        self.einsums = einsum::Einsums::configure_universal(cs, analysis, num_inner_cols, logrows);
+        self.einsums = Some(einsum::Einsums::configure_universal(cs, analysis, num_inner_cols, logrows));
         Ok(())
     }
 
