@@ -708,7 +708,12 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
     where
         F: Field,
     {
-        self.einsums = Some(einsum::Einsums::configure_universal(cs, analysis, num_inner_cols, logrows));
+        self.einsums = Some(einsum::Einsums::configure_universal(
+            cs,
+            analysis,
+            num_inner_cols,
+            logrows,
+        ));
         Ok(())
     }
 

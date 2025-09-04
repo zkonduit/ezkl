@@ -1069,7 +1069,7 @@ impl GraphSettings {
             .ceil() as u32
     }
 
-    ///
+    /// Calculates the logrows for einsum computation area in which there is no column overflow
     pub fn einsum_logrows(&self) -> u32 {
         (self.einsum_params.total_einsum_col_size as f64 / self.run_args.num_inner_cols as f64)
             .log2()
@@ -1614,7 +1614,6 @@ impl GraphCircuit {
         let instance_logrows = self.settings().log2_total_instances();
         let module_constraint_logrows = self.settings().module_constraint_logrows();
         let dynamic_lookup_logrows = self.settings().dynamic_lookup_and_shuffle_logrows();
-        let einsum_logrows = self.settings().einsum_logrows();
         min_logrows = std::cmp::max(
             min_logrows,
             // max of the instance logrows and the module constraint logrows and the dynamic lookup logrows is the lower limit
@@ -1622,7 +1621,6 @@ impl GraphCircuit {
                 instance_logrows,
                 module_constraint_logrows,
                 dynamic_lookup_logrows,
-                einsum_logrows,
             ]
             .iter()
             .max()
@@ -1633,10 +1631,11 @@ impl GraphCircuit {
         let model_constraint_logrows = self.settings().model_constraint_logrows_with_blinding();
         let min_bits = self.table_size_logrows(safe_lookup_range, max_range_size)?;
         let constants_logrows = self.settings().constants_logrows();
+        let einsum_logrows = self.settings().einsum_logrows();
         max_logrows = std::cmp::min(
             max_logrows,
             // max of the model constraint logrows, min_bits, and the constants logrows is the upper limit
-            *[model_constraint_logrows, min_bits, constants_logrows]
+            *[model_constraint_logrows, min_bits, constants_logrows, einsum_logrows]
                 .iter()
                 .max()
                 .unwrap(),

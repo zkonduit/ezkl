@@ -91,10 +91,7 @@ pub fn analyze_single_equation(
             .map(|input| {
                 input
                     .chars()
-                    .filter(|char| {
-                        input_axes_to_dim.get(char).is_some()
-                            && *input_axes_to_dim.get(char).unwrap() > 1
-                    })
+                    .filter(|char| *input_axes_to_dim.get(char).unwrap() > 1)
                     .collect()
             })
             .collect();

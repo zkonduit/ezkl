@@ -10,11 +10,9 @@ use ezkl::pfsys::srs::gen_srs;
 use ezkl::pfsys::{create_keys, create_proof_circuit, TranscriptType};
 use ezkl::tensor::*;
 use halo2_proofs::circuit::floor_planner::V1;
-use halo2_proofs::plonk::create_proof;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
 use halo2_proofs::poly::kzg::multiopen::{ProverSHPLONK, VerifierSHPLONK};
 use halo2_proofs::poly::kzg::strategy::SingleStrategy;
-use halo2_proofs::transcript::{Blake2bWrite, Challenge255, TranscriptWriterBuffer};
 use halo2_proofs::{
     arithmetic::Field,
     circuit::{Layouter, Value},
@@ -26,7 +24,6 @@ use itertools::Itertools;
 use rand::rngs::OsRng;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::collections::HashMap;
-use std::marker::PhantomData;
 
 static mut LEN: usize = 4;
 static mut K: usize = 15;
@@ -85,6 +82,8 @@ impl Circuit<Fr> for MyCircuit<Fr> {
     ) -> Result<(), Error> {
         let challenges = config
             .einsums
+            .as_ref()
+            .ok_or(Error::Synthesis)?
             .challenges()
             .unwrap()
             .iter()

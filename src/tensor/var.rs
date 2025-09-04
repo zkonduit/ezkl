@@ -317,7 +317,7 @@ impl VarTensor {
     /// # Returns
     /// A tuple of (block_index, column_index, row_index)
     pub fn cartesian_coord(&self, linear_coord: usize) -> (usize, usize, usize) {
-        // x indexes over blocks of size num_inner_cols
+        // x (block idx) indexes over blocks of size num_inner_cols
         let x = linear_coord / self.block_size();
         // y indexes over the cols inside a block
         let y = linear_coord % self.num_inner_cols();
@@ -566,7 +566,7 @@ impl VarTensor {
         F: PrimeField + TensorType + PartialOrd + std::hash::Hash,
     >(
         &self,
-        row: usize,
+        _row: usize,
         offset: usize,
         values: &ValTensor<F>,
         single_inner_col: bool,
@@ -592,7 +592,7 @@ impl VarTensor {
                     self.num_inner_cols()
                 };
 
-                let duplication_offset = if single_inner_col { row } else { offset };
+                let (_, _, duplication_offset) = self.cartesian_coord(offset);
 
                 // duplicates every nth element to adjust for column overflow
                 let mut res: ValTensor<F> = v

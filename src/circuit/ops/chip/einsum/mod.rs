@@ -49,7 +49,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         };
         Self {
             contraction_gate: dummy_contraction_gate,
-            rlc_gates: (0..NUM_MAX_EINSUM_CHALLENGES).map(|_| RLCConfig::dummy(&dummy_var)).collect(),
+            rlc_gates: (0..NUM_MAX_EINSUM_CHALLENGES)
+                .map(|_| RLCConfig::dummy(&dummy_var))
+                .collect(),
         }
     }
 

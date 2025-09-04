@@ -1100,18 +1100,22 @@ impl Model {
         }
 
         // Configures the circuit to use Freivalds' argument
-        // If some models get slow down, conditionally configure to use Freivalds' argument
-        let used_einsums: HashMap<(usize, String), HashMap<char, usize>> = settings
-            .einsum_params
-            .equations
-            .iter()
-            .enumerate()
-            .map(|(idx, (equation, indices_to_dims))| {
-                ((idx, equation.clone()), indices_to_dims.clone())
-            })
-            .collect();
-        let analysis = analyze_einsum_usage(&used_einsums)?;
-        base_gate.configure_einsums(meta, &analysis, num_inner_cols, logrows)?;
+        // In the dummy phase, Freivalds' is configured as a default, but if einsum coordinate is 0,
+        // it means that all the einsum layouts are dispatched to use only base operations.
+        if settings.einsum_params.total_einsum_col_size > 0 {
+            println!("configuring einsums...");
+            let used_einsums: HashMap<(usize, String), HashMap<char, usize>> = settings
+                .einsum_params
+                .equations
+                .iter()
+                .enumerate()
+                .map(|(idx, (equation, indices_to_dims))| {
+                    ((idx, equation.clone()), indices_to_dims.clone())
+                })
+                .collect();
+            let analysis = analyze_einsum_usage(&used_einsums)?;
+            base_gate.configure_einsums(meta, &analysis, num_inner_cols, logrows)?;
+        }
 
         Ok(base_gate)
     }
@@ -1165,15 +1169,17 @@ impl Model {
 
         let original_constants = constants.clone();
 
-        let challenges = config
-            .base
-            .einsums
-            .as_ref()
-            .ok_or(GraphError::CircuitError(crate::circuit::CircuitError::MissingEinsumConfig))?
-            .challenges()?
-            .iter()
-            .map(|c| layouter.get_challenge(*c))
-            .collect_vec();
+        let challenges = {
+            if let Some(einsum_config) = &config.base.einsums {
+                einsum_config
+                    .challenges()?
+                    .iter()
+                    .map(|c| layouter.get_challenge(*c))
+                    .collect_vec()
+            } else {
+                vec![]
+            }
+        };
 
         let outputs = layouter.assign_region(
             || "model",
