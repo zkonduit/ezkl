@@ -243,9 +243,13 @@ pub fn trilu<T: TensorType + std::marker::Send + std::marker::Sync>(
     let batch_dims = &a.dims()[0..a.dims().len() - 2];
     let batch_cartiesian = batch_dims.iter().map(|d| 0..*d).multi_cartesian_product();
 
+    let len = a.dims().len();
+    let n = a.dims()[len - 2];
+    let m = a.dims()[len - 1];
+
     for b in batch_cartiesian {
-        for i in 0..a.dims()[1] {
-            for j in 0..a.dims()[2] {
+        for i in 0..n {
+            for j in 0..m {
                 let mut coord = b.clone();
                 coord.push(i);
                 coord.push(j);
