@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use itertools::Itertools;
 
@@ -18,10 +18,17 @@ pub struct EinsumAnalysis {
     pub max_num_inputs: usize,
     /// max number of output axes
     pub max_num_output_axes: usize,
-    ///
-    pub longest_challenge_vector: usize,
-    ///
+    /// the sum of the lengths of dot product to compute all the reductions
     pub reduction_length: usize,
+}
+
+/// The strategy to use for einsum
+#[derive(Debug, Clone)]
+pub enum EinsumStrategy {
+    /// Use only base ops
+    BaseOps,
+    /// Use Freivalds' argument
+    Freivalds,
 }
 
 ///
@@ -39,10 +46,10 @@ pub struct SingleEquationAnalysis {
     pub num_output_axes: usize,
     ///
     pub output_indices: Vec<char>,
-    ///
-    pub longest_challenge_vector: usize,
     /// the length of dot product to compute all the reductions
     pub reduction_length: usize,
+    /// the strategy to use for einsum
+    pub strategy: EinsumStrategy,
 }
 
 ///
@@ -53,13 +60,11 @@ pub fn analyze_einsum_usage(
     let mut max_input_size = 0;
     let mut max_output_size = 0;
     let mut max_num_output_axes = 0;
-    let mut longest_challenge_vector = 0;
     let mut reduction_length = 0;
 
     for ((_, equation), input_axes_to_dim) in equations.iter() {
         let analysis = analyze_single_equation(equation, input_axes_to_dim)?;
         max_input_size = max_input_size.max(analysis.max_input_size);
-        longest_challenge_vector = longest_challenge_vector.max(analysis.longest_challenge_vector);
         max_output_size = max_output_size.max(analysis.output_size);
         max_num_inputs = max_num_inputs.max(analysis.num_inputs);
         max_num_output_axes = max_num_output_axes.max(analysis.num_output_axes);
@@ -68,7 +73,6 @@ pub fn analyze_einsum_usage(
 
     Ok(EinsumAnalysis {
         max_input_size,
-        longest_challenge_vector,
         max_output_size,
         max_num_inputs,
         max_num_output_axes,
@@ -106,8 +110,8 @@ pub fn analyze_single_equation(
         [inputs.join(","), output].join("->")
     };
 
-    let (inputs_str, output_str) = equation.split_once("->").unwrap();
-    let input_equations: Vec<&str> = inputs_str.split(',').collect();
+    let (inputs_eq, output_eq) = equation.split_once("->").unwrap();
+    let input_equations: Vec<&str> = inputs_eq.split(',').collect();
 
     let max_input_size = input_equations
         .iter()
@@ -119,12 +123,11 @@ pub fn analyze_single_equation(
         .max()
         .unwrap();
 
-    let output_indices: Vec<char> = output_str.chars().collect();
+    let output_indices: Vec<char> = output_eq.chars().collect();
     let output_dims = output_indices
         .iter()
         .map(|c| input_axes_to_dim.get(&c).unwrap());
     let output_size = output_dims.clone().product();
-    let longest_challenge_vector = *output_dims.clone().max().unwrap_or(&0);
 
     let output_reduction_length = {
         let mut output_dims = output_dims.rev().cloned().collect_vec();
@@ -164,14 +167,44 @@ pub fn analyze_single_equation(
             .sum::<usize>()
     };
 
+    let dispatch_to_einsum_with_base_ops = {
+        let mut seen = HashSet::new();
+        let mut common_indices_to_inputs = vec![];
+        for input in input_equations.iter() {
+            for c in input.chars() {
+                if !seen.contains(&c) {
+                    seen.insert(c);
+                } else {
+                    common_indices_to_inputs.push(c);
+                }
+            }
+        }
+        let non_common_indices = input_axes_to_dim
+            .keys()
+            .filter(|&x| {
+                !common_indices_to_inputs.contains(x)
+                    && input_axes_to_dim.get(x).cloned().unwrap() > 1
+            })
+            .collect::<Vec<_>>();
+        !(output_indices.len() > 0
+            && common_indices_to_inputs.len() > 0
+            && non_common_indices.len() > 1)
+    };
+
+    let strategy = if dispatch_to_einsum_with_base_ops {
+        EinsumStrategy::BaseOps
+    } else {
+        EinsumStrategy::Freivalds
+    };
+
     Ok(SingleEquationAnalysis {
         output_size,
-        longest_challenge_vector,
         max_input_size,
         equation: equation.to_string(),
         num_inputs: input_equations.len(),
         num_output_axes: output_indices.len(),
         output_indices,
         reduction_length: output_reduction_length + input_reductions_length,
+        strategy,
     })
 }

@@ -2,8 +2,9 @@ use crate::circuit::base::BaseOp;
 use crate::circuit::chip::einsum::analysis::{analyze_single_equation, EinsumAnalysis};
 use crate::circuit::einsum::layouts::{pairwise, sum};
 use crate::circuit::einsum::reduction_planner::Reduction;
+use crate::circuit::layouts::einsum_with_base_ops;
 use crate::circuit::region::RegionCtx;
-use crate::circuit::{CheckMode, CircuitError};
+use crate::circuit::{BaseConfig, CheckMode, CircuitError};
 use crate::tensor::{Tensor, TensorError, TensorType, ValTensor, ValType, VarTensor};
 use halo2_proofs::circuit::Value;
 use halo2_proofs::plonk::{
@@ -103,6 +104,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
     ///
     pub fn assign_einsum(
         &self,
+        base_config: &BaseConfig<F>,
         region: &mut RegionCtx<F>,
         input_tensors: &[&ValTensor<F>],
         output_tensor: &ValTensor<F>,
@@ -142,12 +144,26 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             .collect::<Result<Vec<_>, TensorError>>()?;
         output_tensor.remove_trivial_axes()?;
 
+        if matches!(
+            equation_analysis.strategy,
+            analysis::EinsumStrategy::BaseOps
+        ) {
+            let _ = einsum_with_base_ops(
+                base_config,
+                region,
+                &input_tensors.iter().collect_vec(),
+                &equation,
+            )?;
+            return Ok(());
+        }
+
         let output_shape = equation_analysis
             .output_indices
             .iter()
             .map(|c| input_axes_to_dim.get(c).copied().unwrap())
             .collect_vec();
-        let squashed_output = self.assign_output(region, &output_tensor, output_shape)?;
+        let squashed_output =
+            self.assign_output(region, &output_tensor, output_shape, check_mode)?;
 
         // reorder the reduction of input tensors and reduce
         let reordered_input_reductions = reduction_planner::input_reductions(&equation).unwrap();
@@ -230,6 +246,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
                         region.challenges()[*challenge_index],
                         rlc_len,
                         *input_phase,
+                        check_mode,
                     )?;
                     result.reshape(&output_dims)?;
                     result
@@ -287,6 +304,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
         region: &mut RegionCtx<F>,
         output: &ValTensor<F>,
         output_shape: Vec<usize>,
+        check_mode: &CheckMode,
     ) -> Result<ValTensor<F>, CircuitError> {
         let mut intermediate_values = output.clone();
 
@@ -309,8 +327,14 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Einsums<F> {
             let rlc_len = output_shape[output_shape.len() - idx - 1];
             intermediate_values.flatten();
             let phase = if idx > 0 { 1 } else { 0 };
-            intermediate_values =
-                rlc_config.assign_rlc(region, &intermediate_values, *challenge, rlc_len, phase)?;
+            intermediate_values = rlc_config.assign_rlc(
+                region,
+                &intermediate_values,
+                *challenge,
+                rlc_len,
+                phase,
+                check_mode,
+            )?;
         }
 
         let phase = if challenges.len() > 0 { 1 } else { 0 };
@@ -765,6 +789,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RLCConfig<F> {
         challenge: Value<F>,
         rlc_len: usize,
         phase: usize,
+        check_mode: &CheckMode,
     ) -> Result<ValTensor<F>, CircuitError> {
         region.flush_einsum()?;
         let block_width = self.output.num_inner_cols();
@@ -810,7 +835,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RLCConfig<F> {
                 region.assign_einsum_with_duplication_constrained(
                     &self.output,
                     &running_sums.into(),
-                    &crate::circuit::CheckMode::UNSAFE,
+                    check_mode,
                 )?
             };
 

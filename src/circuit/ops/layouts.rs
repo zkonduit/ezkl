@@ -831,7 +831,6 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ) -> Result<ValTensor<F>, CircuitError> {
     let mut eq = equation.split("->");
     let inputs_eq = eq.next().ok_or(CircuitError::InvalidEinsum)?;
-    let output_eq = eq.next().ok_or(CircuitError::InvalidEinsum)?;
     let inputs_eq = inputs_eq.split(',').collect::<Vec<_>>();
 
     // Check that the number of inputs matches the number of inputs in the equation
@@ -861,41 +860,6 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         return einsum_with_base_ops(config, region, inputs, equation);
     }
 
-    let dispatch_to_einsum_with_base_ops = {
-        let mut seen = HashSet::new();
-        let mut common_indices_to_inputs = vec![];
-        for input in inputs_eq.iter().take(inputs.len()) {
-            for c in input.chars() {
-                if !seen.contains(&c) {
-                    seen.insert(c);
-                } else {
-                    common_indices_to_inputs.push(c);
-                }
-            }
-        }
-        let non_common_indices = indices_to_size
-            .keys()
-            .filter(|&x| !common_indices_to_inputs.contains(x))
-            .collect::<Vec<_>>();
-        let output_indices: HashSet<char> = output_eq
-            .chars()
-            .filter(|c| {
-                indices_to_size.contains_key(c) && indices_to_size.get(c).cloned().unwrap() > 1
-            })
-            .collect();
-        !(output_indices.iter().count() > 0
-            && common_indices_to_inputs.len() > 0
-            && non_common_indices
-                .iter()
-                .filter(|c| indices_to_size.get(c).cloned().unwrap() > 1)
-                .count()
-                > 0)
-    };
-
-    if dispatch_to_einsum_with_base_ops {
-        return einsum_with_base_ops(config, region, inputs, &equation);
-    }
-
     let input_values = inputs
         .iter()
         .map(|t| t.get_inner())
@@ -904,6 +868,7 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         crate::tensor::ops::accumulated::einsum(equation, &input_values.iter().collect_vec())?;
 
     config.einsums.as_ref().unwrap().assign_einsum(
+        config,
         region,
         inputs,
         &output_tensor.clone().into(),

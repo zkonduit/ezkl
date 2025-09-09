@@ -1103,7 +1103,7 @@ impl Model {
         // In the dummy phase, Freivalds' is configured as a default, but if einsum coordinate is 0,
         // it means that all the einsum layouts are dispatched to use only base operations.
         if settings.einsum_params.total_einsum_col_size > 0 {
-            println!("configuring einsums...");
+            debug!("configuring einsums...");
             let used_einsums: HashMap<(usize, String), HashMap<char, usize>> = settings
                 .einsum_params
                 .equations
