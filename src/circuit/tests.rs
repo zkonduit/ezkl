@@ -1,11 +1,9 @@
-use crate::circuit::einsum::analysis::analyze_einsum_usage;
-use crate::circuit::einsum::circuit_params::SingleEinsumParams;
 use crate::circuit::ops::poly::PolyOp;
 use crate::circuit::*;
 use crate::tensor::{DataFormat, KernelFormat};
 use crate::tensor::{Tensor, TensorType, ValTensor, VarTensor};
 use halo2_proofs::{
-    circuit::{floor_planner::V1, Layouter, SimpleFloorPlanner, Value},
+    circuit::{Layouter, SimpleFloorPlanner, Value},
     dev::MockProver,
     plonk::{Circuit, ConstraintSystem, Error},
 };
@@ -19,7 +17,6 @@ use itertools::Itertools;
 use ops::lookup::LookupOp;
 use ops::region::RegionCtx;
 use rand::rngs::OsRng;
-use std::collections::HashMap;
 use std::marker::PhantomData;
 
 #[derive(Default)]
@@ -27,6 +24,7 @@ struct TestParams;
 
 #[cfg(test)]
 mod matmul {
+
     use super::*;
 
     const K: usize = 9;
@@ -35,47 +33,23 @@ mod matmul {
     #[derive(Clone)]
     struct MatmulCircuit<F: PrimeField + TensorType + PartialOrd> {
         inputs: [ValTensor<F>; 2],
-        einsum_params: SingleEinsumParams<F>,
         _marker: PhantomData<F>,
     }
 
     impl Circuit<F> for MatmulCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
-        type Params = SingleEinsumParams<F>;
+        type Params = TestParams;
 
         fn without_witnesses(&self) -> Self {
             self.clone()
         }
 
-        fn configure_with_params(
-            cs: &mut ConstraintSystem<F>,
-            params: Self::Params,
-        ) -> Self::Config {
-            let mut config = Self::Config::default();
-            let mut equations = HashMap::new();
-            equations.insert((0, params.equation), params.input_axes_to_dims);
-            let analysis = analyze_einsum_usage(&equations).unwrap();
-            let num_einsum_inner_cols = 1;
-            config
-                .configure_einsums(cs, &analysis, num_einsum_inner_cols, K)
-                .unwrap();
-            config
-        }
-
-        fn params(&self) -> Self::Params {
-            SingleEinsumParams::<F>::new(
-                &self.einsum_params.equation,
-                &[
-                    &self.inputs[0].get_inner().unwrap(),
-                    &self.inputs[1].get_inner().unwrap(),
-                ],
-            )
-            .unwrap()
-        }
-
-        fn configure(_cs: &mut ConstraintSystem<F>) -> Self::Config {
-            unimplemented!("call configure_with_params instead")
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, 1, LEN * LEN);
+            let b = VarTensor::new_advice(cs, K, 1, LEN * LEN);
+            let output = VarTensor::new_advice(cs, K, 1, LEN * LEN);
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
 
         fn synthesize(
@@ -83,34 +57,17 @@ mod matmul {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let challenges = config
-                .einsums
-                .as_ref()
-                .ok_or(Error::Synthesis)?
-                .challenges()
-                .map_err(|_| Error::Synthesis)?
-                .iter()
-                .map(|c| layouter.get_challenge(*c))
-                .collect_vec();
-
             layouter
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new_with_challenges(
-                            region,
-                            0,
-                            1,
-                            128,
-                            2,
-                            challenges.clone(),
-                        );
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(
                                 &mut region,
                                 &self.inputs.iter().collect_vec(),
                                 Box::new(PolyOp::Einsum {
-                                    equation: self.einsum_params.equation.clone(),
+                                    equation: "ij,jk->ik".to_string(),
                                 }),
                             )
                             .map_err(|_| Error::Synthesis)
@@ -132,11 +89,8 @@ mod matmul {
         let mut w = Tensor::from((0..LEN + 1).map(|i| Value::known(F::from((i + 1) as u64))));
         w.reshape(&[LEN + 1, 1]).unwrap();
 
-        let einsum_params = SingleEinsumParams::<F>::new("ij,jk->ik", &[&a, &w]).unwrap();
-
         let circuit = MatmulCircuit::<F> {
             inputs: [ValTensor::from(a), ValTensor::from(w)],
-            einsum_params,
             _marker: PhantomData,
         };
 
@@ -156,47 +110,23 @@ mod matmul_col_overflow_double_col {
     #[derive(Clone)]
     struct MatmulCircuit<F: PrimeField + TensorType + PartialOrd> {
         inputs: [ValTensor<F>; 2],
-        einsum_params: SingleEinsumParams<F>,
         _marker: PhantomData<F>,
     }
 
     impl Circuit<F> for MatmulCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
-        type Params = SingleEinsumParams<F>;
+        type Params = TestParams;
 
         fn without_witnesses(&self) -> Self {
             self.clone()
         }
 
-        fn configure_with_params(
-            cs: &mut ConstraintSystem<F>,
-            params: Self::Params,
-        ) -> Self::Config {
-            let mut config = Self::Config::default();
-            let mut equations = HashMap::new();
-            equations.insert((0, params.equation), params.input_axes_to_dims);
-            let analysis = analyze_einsum_usage(&equations).unwrap();
-            let num_einsum_inner_cols = 1;
-            config
-                .configure_einsums(cs, &analysis, num_einsum_inner_cols, K)
-                .unwrap();
-            config
-        }
-
-        fn params(&self) -> Self::Params {
-            SingleEinsumParams::<F>::new(
-                &self.einsum_params.equation,
-                &[
-                    &self.inputs[0].get_inner().unwrap(),
-                    &self.inputs[1].get_inner().unwrap(),
-                ],
-            )
-            .unwrap()
-        }
-
-        fn configure(_cs: &mut ConstraintSystem<F>) -> Self::Config {
-            unimplemented!("call configure_with_params instead")
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, NUM_INNER_COLS, LEN * LEN * LEN);
+            let b = VarTensor::new_advice(cs, K, NUM_INNER_COLS, LEN * LEN * LEN);
+            let output = VarTensor::new_advice(cs, K, NUM_INNER_COLS, LEN * LEN * LEN);
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
 
         fn synthesize(
@@ -204,34 +134,17 @@ mod matmul_col_overflow_double_col {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let challenges = config
-                .einsums
-                .as_ref()
-                .ok_or(Error::Synthesis)?
-                .challenges()
-                .map_err(|_| Error::Synthesis)?
-                .iter()
-                .map(|c| layouter.get_challenge(*c))
-                .collect_vec();
-
             layouter
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new_with_challenges(
-                            region,
-                            0,
-                            NUM_INNER_COLS,
-                            128,
-                            2,
-                            challenges.clone(),
-                        );
+                        let mut region = RegionCtx::new(region, 0, NUM_INNER_COLS, 128, 2);
                         config
                             .layout(
                                 &mut region,
                                 &self.inputs.iter().collect_vec(),
                                 Box::new(PolyOp::Einsum {
-                                    equation: self.einsum_params.equation.clone(),
+                                    equation: "ij,jk->ik".to_string(),
                                 }),
                             )
                             .map_err(|_| Error::Synthesis)
@@ -251,11 +164,8 @@ mod matmul_col_overflow_double_col {
         let mut w = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
         w.reshape(&[LEN, 1]).unwrap();
 
-        let einsum_params = SingleEinsumParams::<F>::new("ij,jk->ik", &[&a, &w]).unwrap();
-
         let circuit = MatmulCircuit::<F> {
             inputs: [ValTensor::from(a), ValTensor::from(w)],
-            einsum_params,
             _marker: PhantomData,
         };
 
@@ -274,40 +184,23 @@ mod matmul_col_overflow {
     #[derive(Clone)]
     struct MatmulCircuit<F: PrimeField + TensorType + PartialOrd> {
         inputs: [ValTensor<F>; 2],
-        einsum_params: SingleEinsumParams<F>,
         _marker: PhantomData<F>,
     }
 
     impl Circuit<F> for MatmulCircuit<F> {
         type Config = BaseConfig<F>;
-        type FloorPlanner = V1;
-        type Params = SingleEinsumParams<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
 
         fn without_witnesses(&self) -> Self {
             self.clone()
         }
 
-        fn configure(_cs: &mut ConstraintSystem<F>) -> Self::Config {
-            unimplemented!("call configure_with_params instead")
-        }
-
-        fn configure_with_params(
-            cs: &mut ConstraintSystem<F>,
-            params: Self::Params,
-        ) -> Self::Config {
-            let mut config = Self::Config::default();
-            let mut equations = HashMap::new();
-            equations.insert((0, params.equation), params.input_axes_to_dims);
-            let analysis = analyze_einsum_usage(&equations).unwrap();
-            let num_einsum_inner_cols = 1;
-            config
-                .configure_einsums(cs, &analysis, num_einsum_inner_cols, K)
-                .unwrap();
-            config
-        }
-
-        fn params(&self) -> Self::Params {
-            self.einsum_params.clone()
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
+            let b = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
+            let output = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
 
         fn synthesize(
@@ -315,34 +208,17 @@ mod matmul_col_overflow {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let challenges = config
-                .einsums
-                .as_ref()
-                .ok_or(Error::Synthesis)?
-                .challenges()
-                .map_err(|_| Error::Synthesis)?
-                .iter()
-                .map(|c| layouter.get_challenge(*c))
-                .collect_vec();
-
             layouter
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new_with_challenges(
-                            region,
-                            0,
-                            1,
-                            128,
-                            2,
-                            challenges.clone(),
-                        );
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(
                                 &mut region,
                                 &self.inputs.iter().collect_vec(),
                                 Box::new(PolyOp::Einsum {
-                                    equation: self.einsum_params.equation.clone(),
+                                    equation: "ij,jk->ik".to_string(),
                                 }),
                             )
                             .map_err(|_| Error::Synthesis)
@@ -362,11 +238,8 @@ mod matmul_col_overflow {
         let mut w = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
         w.reshape(&[LEN, 1]).unwrap();
 
-        let einsum_params = SingleEinsumParams::<F>::new("ij,jk->ik", &[&a, &w]).unwrap();
-
         let circuit = MatmulCircuit::<F> {
             inputs: [ValTensor::from(a), ValTensor::from(w)],
-            einsum_params,
             _marker: PhantomData,
         };
 
@@ -398,40 +271,23 @@ mod matmul_col_ultra_overflow_double_col {
     #[derive(Clone)]
     struct MatmulCircuit<F: PrimeField + TensorType + PartialOrd> {
         inputs: [ValTensor<F>; 2],
-        einsum_params: SingleEinsumParams<F>,
         _marker: PhantomData<F>,
     }
 
     impl Circuit<F> for MatmulCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
-        type Params = SingleEinsumParams<F>;
+        type Params = TestParams;
 
         fn without_witnesses(&self) -> Self {
             self.clone()
         }
 
-        fn configure_with_params(
-            cs: &mut ConstraintSystem<F>,
-            params: Self::Params,
-        ) -> Self::Config {
-            let mut config = Self::Config::default();
-            let mut equations = HashMap::new();
-            equations.insert((0, params.equation), params.input_axes_to_dims);
-            let analysis = analyze_einsum_usage(&equations).unwrap();
-            config
-                .configure_einsums(cs, &analysis, NUM_INNER_COLS, K)
-                .unwrap();
-            let _constant = VarTensor::constant_cols(cs, K, 2, false);
-            config
-        }
-
-        fn params(&self) -> Self::Params {
-            self.einsum_params.clone()
-        }
-
-        fn configure(_cs: &mut ConstraintSystem<F>) -> Self::Config {
-            unimplemented!("call configure_with_params instead")
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, NUM_INNER_COLS, LEN * LEN * LEN);
+            let b = VarTensor::new_advice(cs, K, NUM_INNER_COLS, LEN * LEN * LEN);
+            let output = VarTensor::new_advice(cs, K, NUM_INNER_COLS, LEN * LEN * LEN);
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
 
         fn synthesize(
@@ -439,34 +295,17 @@ mod matmul_col_ultra_overflow_double_col {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let challenges = config
-                .einsums
-                .as_ref()
-                .ok_or(Error::Synthesis)?
-                .challenges()
-                .map_err(|_| Error::Synthesis)?
-                .iter()
-                .map(|c| layouter.get_challenge(*c))
-                .collect_vec();
-
             layouter
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new_with_challenges(
-                            region,
-                            0,
-                            NUM_INNER_COLS,
-                            128,
-                            2,
-                            challenges.clone(),
-                        );
+                        let mut region = RegionCtx::new(region, 0, NUM_INNER_COLS, 128, 2);
                         config
                             .layout(
                                 &mut region,
                                 &self.inputs.iter().collect_vec(),
                                 Box::new(PolyOp::Einsum {
-                                    equation: self.einsum_params.equation.clone(),
+                                    equation: "ij,jk->ik".to_string(),
                                 }),
                             )
                             .map_err(|_| Error::Synthesis)
@@ -489,11 +328,8 @@ mod matmul_col_ultra_overflow_double_col {
         let mut w = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
         w.reshape(&[LEN, 1]).unwrap();
 
-        let einsum_params = SingleEinsumParams::<F>::new("ij,jk->ik", &[&a, &w]).unwrap();
-
         let circuit = MatmulCircuit::<F> {
             inputs: [ValTensor::from(a), ValTensor::from(w)],
-            einsum_params,
             _marker: PhantomData,
         };
 
@@ -540,13 +376,10 @@ mod matmul_col_ultra_overflow_double_col {
 ))]
 mod matmul_col_ultra_overflow {
 
-    use halo2_proofs::{
-        circuit::floor_planner::V1,
-        poly::kzg::{
-            commitment::KZGCommitmentScheme,
-            multiopen::{ProverSHPLONK, VerifierSHPLONK},
-            strategy::SingleStrategy,
-        },
+    use halo2_proofs::poly::kzg::{
+        commitment::KZGCommitmentScheme,
+        multiopen::{ProverSHPLONK, VerifierSHPLONK},
+        strategy::SingleStrategy,
     };
     use itertools::Itertools;
     use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
@@ -559,40 +392,23 @@ mod matmul_col_ultra_overflow {
     #[derive(Clone)]
     struct MatmulCircuit<F: PrimeField + TensorType + PartialOrd> {
         inputs: [ValTensor<F>; 2],
-        einsum_params: SingleEinsumParams<F>,
         _marker: PhantomData<F>,
     }
 
     impl Circuit<F> for MatmulCircuit<F> {
         type Config = BaseConfig<F>;
-        type FloorPlanner = V1;
-        type Params = SingleEinsumParams<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
 
         fn without_witnesses(&self) -> Self {
             self.clone()
         }
 
-        fn configure_with_params(
-            cs: &mut ConstraintSystem<F>,
-            params: Self::Params,
-        ) -> Self::Config {
-            let mut config = Self::Config::default();
-            let mut equations = HashMap::new();
-            equations.insert((0, params.equation), params.input_axes_to_dims);
-            let analysis = analyze_einsum_usage(&equations).unwrap();
-            let num_einsum_inner_cols = 1;
-            config
-                .configure_einsums(cs, &analysis, num_einsum_inner_cols, K)
-                .unwrap();
-            config
-        }
-
-        fn params(&self) -> Self::Params {
-            self.einsum_params.clone()
-        }
-
-        fn configure(_cs: &mut ConstraintSystem<F>) -> Self::Config {
-            unimplemented!("call configure_with_params instead")
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
+            let b = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
+            let output = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
 
         fn synthesize(
@@ -600,34 +416,17 @@ mod matmul_col_ultra_overflow {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let challenges = config
-                .einsums
-                .as_ref()
-                .ok_or(Error::Synthesis)?
-                .challenges()
-                .map_err(|_| Error::Synthesis)?
-                .iter()
-                .map(|c| layouter.get_challenge(*c))
-                .collect_vec();
-
             layouter
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new_with_challenges(
-                            region,
-                            0,
-                            1,
-                            128,
-                            2,
-                            challenges.clone(),
-                        );
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(
                                 &mut region,
                                 &self.inputs.iter().collect_vec(),
                                 Box::new(PolyOp::Einsum {
-                                    equation: self.einsum_params.equation.clone(),
+                                    equation: "ij,jk->ik".to_string(),
                                 }),
                             )
                             .map_err(|_| Error::Synthesis)
@@ -650,11 +449,8 @@ mod matmul_col_ultra_overflow {
         let mut w = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
         w.reshape(&[LEN, 1]).unwrap();
 
-        let einsum_params = SingleEinsumParams::<F>::new("ij,jk->ik", &[&a, &w]).unwrap();
-
         let circuit = MatmulCircuit::<F> {
             inputs: [ValTensor::from(a), ValTensor::from(w)],
-            einsum_params,
             _marker: PhantomData,
         };
 
@@ -2537,7 +2333,7 @@ mod matmul_relu {
     #[derive(Clone)]
     struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
         inputs: [ValTensor<F>; 2],
-        einsum_params: SingleEinsumParams<F>,
+        _marker: PhantomData<F>,
     }
 
     // A columnar ReLu MLP
@@ -2548,50 +2344,11 @@ mod matmul_relu {
 
     impl Circuit<F> for MyCircuit<F> {
         type Config = MyConfig<F>;
-        type FloorPlanner = V1;
-        type Params = SingleEinsumParams<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
 
         fn without_witnesses(&self) -> Self {
             self.clone()
-        }
-
-        fn params(&self) -> Self::Params {
-            SingleEinsumParams::<F>::new(
-                &self.einsum_params.equation,
-                &[
-                    &self.inputs[0].get_inner().unwrap(),
-                    &self.inputs[1].get_inner().unwrap(),
-                ],
-            )
-            .unwrap()
-        }
-
-        fn configure_with_params(
-            cs: &mut ConstraintSystem<F>,
-            params: Self::Params,
-        ) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, 1, LEN);
-            let b = VarTensor::new_advice(cs, K, 1, LEN);
-            let output = VarTensor::new_advice(cs, K, 1, LEN);
-
-            let mut base_config =
-                BaseConfig::configure(cs, &[a.clone(), b.clone()], &output, CheckMode::SAFE);
-
-            base_config
-                .configure_range_check(cs, &a, &b, (-1, 1), K)
-                .unwrap();
-
-            base_config
-                .configure_range_check(cs, &a, &b, (0, 1023), K)
-                .unwrap();
-
-            let mut equations = HashMap::new();
-            equations.insert((0, params.equation), params.input_axes_to_dims);
-            let analysis = analyze_einsum_usage(&equations).unwrap();
-            base_config.configure_einsums(cs, &analysis, 1, K).unwrap();
-            let _constant = VarTensor::constant_cols(cs, K, 8, false);
-
-            MyConfig { base_config }
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
@@ -2624,23 +2381,12 @@ mod matmul_relu {
                 .base_config
                 .layout_range_checks(&mut layouter)
                 .unwrap();
-            let challenges = config
-                .base_config
-                .einsums
-                .as_ref()
-                .ok_or(Error::Synthesis)?
-                .challenges()
-                .map_err(|_| Error::Synthesis)?
-                .iter()
-                .map(|c| layouter.get_challenge(*c))
-                .collect_vec();
             layouter.assign_region(
                 || "",
                 |region| {
-                    let mut region =
-                        RegionCtx::new_with_challenges(region, 0, 1, 1024, 2, challenges.clone());
+                    let mut region = RegionCtx::new(region, 0, 1, 1024, 2);
                     let op = PolyOp::Einsum {
-                        equation: self.einsum_params.equation.clone(),
+                        equation: "ij,jk->ik".to_string(),
                     };
                     let output = config
                         .base_config
@@ -2675,11 +2421,9 @@ mod matmul_relu {
         let mut b = Tensor::from((0..LEN).map(|_| Value::known(F::from(1))));
         b.reshape(&[LEN, 1]).unwrap();
 
-        let einsum_params = SingleEinsumParams::<F>::new("ij,jk->ik", &[&a, &b]).unwrap();
-
         let circuit = MyCircuit {
             inputs: [ValTensor::from(a), ValTensor::from(b)],
-            einsum_params,
+            _marker: PhantomData,
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();

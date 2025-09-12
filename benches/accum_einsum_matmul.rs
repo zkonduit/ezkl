@@ -49,7 +49,7 @@ impl Circuit<Fr> for MyCircuit<Fr> {
         let mut equations = HashMap::new();
         equations.insert((0, params.equation), params.input_axes_to_dims);
         let analysis = analyze_einsum_usage(&equations).unwrap();
-        let num_einsum_inner_cols = 2;
+        let num_einsum_inner_cols = 1;
         unsafe {
             config
                 .configure_einsums(cs, &analysis, num_einsum_inner_cols, K)
@@ -126,7 +126,7 @@ fn runmatmul(c: &mut Criterion) {
     unsafe {
         LEN = len;
     }
-    for k in 15..16 {
+    for k in 16..17 {
         let params = unsafe {
             K = k;
             gen_srs::<KZGCommitmentScheme<_>>(K as u32)
