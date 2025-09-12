@@ -51,7 +51,6 @@ use halo2curves::ff::{Field, PrimeField};
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use lazy_static::lazy_static;
 use log::{debug, error, trace, warn};
-use maybe_rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 pub use model::*;
 pub use node::*;
 #[cfg(feature = "python-bindings")]
@@ -1475,14 +1474,13 @@ impl GraphCircuit {
             .zip(scales)
             .zip(input_types.iter())
         {
-            let t: Vec<Fp> = d
-                .par_iter()
-                .map(|x| {
-                    let mut x = x.clone();
-                    x.as_type(input_type);
-                    x.to_field(scale)
-                })
-                .collect();
+            // Convert inputs to fields with proper error propagation (no panics)
+            let mut t: Vec<Fp> = Vec::with_capacity(d.len());
+            for x in d.iter() {
+                let mut x = x.clone();
+                x.as_type(input_type);
+                t.push(x.try_to_field(scale)?);
+            }
 
             let mut t: Tensor<Fp> = t.into_iter().into();
             t.reshape(shape)?;
