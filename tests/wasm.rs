@@ -5,8 +5,7 @@ mod wasm32 {
         bufferToVecOfFelt, compiledCircuitValidation, encodeVerifierCalldata, feltToBigEndian,
         feltToFloat, feltToInt, feltToLittleEndian, genPk, genVk, genWitness, inputValidation,
         kzgCommit, pkValidation, poseidonHash, proofValidation, prove, settingsValidation,
-        srsValidation, u8_array_to_u128_le, verify, verifyAggr, verifyEVM, vkValidation,
-        witnessValidation,
+        srsValidation, u8_array_to_u128_le, verify, verifyAggr, vkValidation, witnessValidation,
     };
     use ezkl::circuit::modules::polycommit::PolyCommitChip;
     use ezkl::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
@@ -92,21 +91,6 @@ mod wasm32 {
             &flattened_instances.collect::<Vec<_>>(),
         );
         assert_eq!(calldata, reference_calldata);
-    }
-
-    #[wasm_bindgen_test]
-    async fn can_verify_evm() {
-        // verify with single purpose evm verifier contract
-        let value = verifyEVM(
-            wasm_bindgen::Clamped(PROOF.to_vec()),
-            VERIFIER_BYTECODE.to_vec(),
-            None,
-        )
-        .map_err(|_| "failed")
-        .unwrap();
-
-        // should not fail
-        assert!(value);
     }
 
     #[wasm_bindgen_test]
