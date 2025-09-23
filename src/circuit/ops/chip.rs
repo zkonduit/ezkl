@@ -295,6 +295,21 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
         }
     }
 
+    /// Returns a new [BaseConfig] with no inputs, no selectors, no tables, and no Freivalds' argument.
+    pub fn dummy_without_freivalds(col_size: usize, num_inner_cols: usize) -> Self {
+        Self {
+            custom_gates: CustomGates::dummy(col_size, num_inner_cols),
+            static_lookups: StaticLookups::dummy(col_size, num_inner_cols),
+            dynamic_lookups: DynamicLookups::dummy(col_size, num_inner_cols),
+            einsums: None,
+            shuffles: Shuffles::dummy(col_size, num_inner_cols),
+            range_checks: RangeChecks::dummy(col_size, num_inner_cols),
+            check_mode: CheckMode::SAFE,
+            shared_table_inputs: vec![],
+            _marker: PhantomData,
+        }
+    }
+
     /// Configures [BaseOp]s for a given [ConstraintSystem].
     /// # Arguments
     /// * `meta` - The [ConstraintSystem] to configure the operations in.

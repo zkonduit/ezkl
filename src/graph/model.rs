@@ -1100,8 +1100,8 @@ impl Model {
         }
 
         // Configures the circuit to use Freivalds' argument
-        // In the dummy phase, Freivalds' is configured as a default, but if einsum coordinate is 0,
-        // it means that all the einsum layouts are dispatched to use only base operations.
+        // In the dummy phase, Freivalds' is configured as a default (unless `disable-freivalds` is not enabled),
+        // but if einsum coordinate is 0, it means that all the einsum layouts are dispatched to use only base operations.
         if settings.einsum_params.total_einsum_col_size > 0 {
             debug!("configuring einsums...");
             let used_einsums: HashMap<(usize, String), HashMap<char, usize>> = settings
@@ -1494,8 +1494,16 @@ impl Model {
             results.insert(*input_idx, vec![inputs[i].clone()]);
         }
 
-        let mut dummy_config =
-            PolyConfig::dummy(run_args.logrows as usize, run_args.num_inner_cols);
+        let mut dummy_config = {
+            if run_args.disable_freivalds {
+                PolyConfig::dummy_without_freivalds(
+                    run_args.logrows as usize,
+                    run_args.num_inner_cols,
+                )
+            } else {
+                PolyConfig::dummy(run_args.logrows as usize, run_args.num_inner_cols)
+            }
+        };
         let mut model_config = ModelConfig {
             base: dummy_config.clone(),
             vars: ModelVars::new_dummy(),
