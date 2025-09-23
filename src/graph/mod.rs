@@ -2294,7 +2294,8 @@ pub mod tests {
         "decomp_base": 128,
         "decomp_legs": 2,
         "bounded_log_lookup": false,
-        "ignore_range_check_inputs_outputs": false
+        "ignore_range_check_inputs_outputs": false,
+        "disable_freivalds": false
     },
     "num_rows": 236,
     "total_assignments": 472,
