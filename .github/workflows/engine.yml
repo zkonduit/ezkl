@@ -184,6 +184,8 @@ jobs:
         with:
           node-version: "18.12.1"
           registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+
       - name: Publish to npm with provenance
         run: |
           cd pkg
