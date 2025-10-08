@@ -147,9 +147,6 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
-      - uses: mwilliamson/setup-wasmtime-action@bf814d7d8fc3c3a77dfe114bd9fb8a2c575f6ad6 #v2.0.0
-        with:
-          wasmtime-version: "3.0.1"
       - name: Setup GPU dependencies
         run: sudo ./setup-gpu.sh --yes
       - name: Install build dependencies
@@ -201,13 +198,6 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
-      - uses: mwilliamson/setup-wasmtime-action@bf814d7d8fc3c3a77dfe114bd9fb8a2c575f6ad6 #v2.0.0
-        with:
-          wasmtime-version: "3.0.1"
-      # - name: Matmul overflow (wasi)
-      #   run: cargo wasi test matmul_col_ultra_overflow -- --include-ignored --nocapture
-      # - name: Conv overflow (wasi)
-      #   run: cargo wasi test conv_col_ultra_overflow -- --include-ignored --nocapture
       - name: lookup overflow
         run: cargo nextest run lookup_ultra_overflow --no-capture -- --include-ignored
       - name: Matmul overflow
@@ -248,54 +238,6 @@ jobs:
           locked: true
       - name: Model serialization different binary ID
         run: cargo nextest run native_tests::tests::model_serialization_different_binaries_  --test-threads 1
-
-  wasm32-tests:
-    permissions:
-      contents: read
-    runs-on: ubuntu-22.04
-    env:
-      EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
-      # add `atomics` and `bulk-memory` to RUSTFLAGS to enable wasm-bindgen tests
-      RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory"
-      OPENSSL_NO_VENDOR: 1
-
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
-        with:
-          persist-credentials: false
-
-      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
-        with:
-          toolchain: nightly-2025-05-01
-          override: true
-          components: rustfmt, clippy
-      - name: install libc6
-        run: sudo apt-get install -y libc6
-      - name: Install cmake and build dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake build-essential g++ gcc libclang-dev llvm-dev libstdc++-12-dev libc6-dev libssl-dev pkg-config
-      - name: Force rebuild icicle dependencies
-        run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
-      - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa #v0.4.0
-        with:
-          # Pin to version 0.13.1
-          version: "v0.13.1"
-      - uses: nanasess/setup-chromedriver@affb1ea8848cbb080be372c1e8d7a5c173e9298f #v2.3.0
-        # with:
-        #   chromedriver-version: "115.0.5790.102"
-      - name: Install wasm32-unknown-unknown
-        run: rustup target add wasm32-unknown-unknown
-      - name: Add rust-src
-        run: rustup component add rust-src --toolchain nightly-2025-05-01-x86_64-unknown-linux-gnu
-      - name: Create webdriver.json to disable timeouts
-        run: |
-          echo '{"args": ["--headless", "--disable-gpu", "--disable-dev-shm-usage", "--no-sandbox"]}' > webdriver.json
-      - name: Run wasm verifier tests
-        run: |
-          ulimit -n 65536
-          WASM_BINDGEN_TEST_THREADS=1 \
-          WASM_BINDGEN_TEST_TIMEOUT=1800 \
-          CHROMEDRIVER_ARGS="--log-level=INFO" \
-          wasm-pack test --chrome --headless -- -Z build-std="panic_abort,std" --features web -- --nocapture
 
   mock-proving-tests:
     permissions:
@@ -392,10 +334,6 @@ jobs:
           toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
-      - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa #v0.4.0
-        with:
-          # Pin to version 0.13.1
-          version: "v0.13.1"
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3 #v3.3.0
         with:
           crate: cargo-nextest
@@ -445,13 +383,6 @@ jobs:
           toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
-      - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa #v0.4.0
-        with:
-          # Pin to version 0.13.1
-          version: "v0.13.1"
-      - name: Add wasm32-unknown-unknown target
-        run: rustup target add wasm32-unknown-unknown
-
       - name: Add rust-src
         run: rustup component add rust-src --toolchain nightly-2025-05-01-x86_64-unknown-linux-gnu
       - name: Force rebuild icicle dependencies
