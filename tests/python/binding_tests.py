@@ -289,7 +289,6 @@ def test_prove_and_verify():
         proof_path,
         srs_path=srs_path,
     )
-    assert res["transcript_type"] == "poseidon"
     assert os.path.isfile(proof_path)
 
     settings_path = os.path.join(folder_path, "settings.json")
@@ -310,14 +309,13 @@ def test_prove_evm():
 
     pk_path = os.path.join(folder_path, "test_evm.pk")
     proof_path = os.path.join(folder_path, "test_evm.pf")
-    res = ezkl.prove(
+    ezkl.prove(
         data_path,
         model_path,
         pk_path,
         proof_path,
         srs_path=srs_path,
     )
-    assert res["transcript_type"] == "evm"
     assert os.path.isfile(proof_path)
 
 

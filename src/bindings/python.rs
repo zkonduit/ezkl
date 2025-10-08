@@ -14,7 +14,6 @@ use crate::graph::{
 };
 use crate::pfsys::{
     load_pk, load_vk, save_params, save_vk, srs::gen_srs as ezkl_gen_srs, srs::load_srs_prover,
-    ProofType, TranscriptType,
 };
 use crate::Commitments;
 use crate::RunArgs;

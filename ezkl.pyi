@@ -545,7 +545,6 @@ def prove(
     model: str | os.PathLike | pathlib.Path,
     pk_path: str | os.PathLike | pathlib.Path,
     proof_path: typing.Optional[str | os.PathLike | pathlib.Path],
-    proof_type: str,
     srs_path: typing.Optional[str | os.PathLike | pathlib.Path],
 ) -> typing.Any:
     r"""
@@ -564,9 +563,6 @@ def prove(
 
     proof_path: str
         Path to create the proof file
-
-    proof_type: str
-        Accepts `single`
 
     srs_path: str
         Path to the SRS file
