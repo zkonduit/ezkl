@@ -395,7 +395,7 @@ jobs:
           crate: cargo-nextest
           locked: true
       - name: KZG prove and verify tests (public outputs + column overflow)
-        run: cargo nextest run --verbose tests::kzg_prove_and_verify_with_overflow_::w
+        run: cargo nextest run --verbose tests::kzg_prove_and_verify_with_overflow_::t
       - name: KZG prove and verify tests (public outputs + fixed params + column overflow)
         run: cargo nextest run --verbose tests::kzg_prove_and_verify_with_overflow_fixed_params_
       - name: KZG prove and verify tests (hashed inputs + column overflow)
@@ -457,7 +457,7 @@ jobs:
       - name: KZG prove and verify tests (kzg outputs)
         run: cargo nextest run --verbose tests::kzg_prove_and_verify_kzg_output --features gpu-accelerated --test-threads 1
       - name: KZG prove and verify tests (public outputs + column overflow)
-        run: cargo nextest run --verbose tests::kzg_prove_and_verify_with_overflow_::w --features gpu-accelerated  --test-threads 1
+        run: cargo nextest run --verbose tests::kzg_prove_and_verify_with_overflow_::t --features gpu-accelerated  --test-threads 1
       - name: KZG prove and verify tests (public outputs + fixed params + column overflow)
         run: cargo nextest run --verbose tests::kzg_prove_and_verify_with_overflow_fixed_params_ --features gpu-accelerated  --test-threads 1
       - name: KZG prove and verify tests (public outputs)

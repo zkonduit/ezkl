@@ -329,6 +329,8 @@ mod native_tests {
         "quantize_dequantize",   // 22
     ];
 
+    const EXAMPLES: [&str; 2] = ["mlp_4d_einsum", "conv2d_mnist"];
+
     macro_rules! test_func {
     () => {
         #[cfg(test)]
@@ -978,10 +980,40 @@ mod native_tests {
             });
     }
     };
+
+
 }
+
+    macro_rules! test_func_examples {
+    () => {
+        #[cfg(test)]
+        mod tests_examples {
+            use seq_macro::seq;
+            use crate::native_tests::EXAMPLES;
+            use test_case::test_case;
+            use crate::native_tests::run_example as run;
+            seq!(N in 0..=1 {
+            #(#[test_case(EXAMPLES[N])])*
+            fn example_(test: &str) {
+                run(test.to_string());
+            }
+            });
+    }
+    };
+  }
 
     test_func!();
     test_func_evm!();
+    test_func_examples!();
+
+    // Mock prove (fast, but does not cover some potential issues)
+    fn run_example(example_name: String) {
+        let status = Command::new("cargo")
+            .args(["run", "--release", "--example", example_name.as_str()])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+    }
 
     fn model_serialization_different_binaries(test_dir: &str, example_name: String) {
         let status = Command::new("cargo")
