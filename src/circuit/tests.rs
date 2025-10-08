@@ -360,7 +360,6 @@ mod matmul_col_ultra_overflow_double_col {
             // use safe mode to verify that the proof is correct
             CheckMode::SAFE,
             crate::Commitments::KZG,
-            crate::pfsys::TranscriptType::EVM,
             None,
             None,
         );
@@ -481,7 +480,6 @@ mod matmul_col_ultra_overflow {
             // use safe mode to verify that the proof is correct
             CheckMode::SAFE,
             crate::Commitments::KZG,
-            crate::pfsys::TranscriptType::EVM,
             None,
             None,
         );
@@ -1299,7 +1297,6 @@ mod conv_col_ultra_overflow {
             // use safe mode to verify that the proof is correct
             CheckMode::SAFE,
             crate::Commitments::KZG,
-            crate::pfsys::TranscriptType::EVM,
             None,
             None,
         );
@@ -1468,7 +1465,6 @@ mod conv_relu_col_ultra_overflow {
             &pk,
             CheckMode::SAFE,
             crate::Commitments::KZG,
-            crate::pfsys::TranscriptType::EVM,
             // use safe mode to verify that the proof is correct
             None,
             None,
@@ -2644,7 +2640,6 @@ mod lookup_ultra_overflow {
             // use safe mode to verify that the proof is correct
             CheckMode::SAFE,
             crate::Commitments::KZG,
-            crate::pfsys::TranscriptType::EVM,
             None,
             None,
         );

@@ -1635,10 +1635,15 @@ impl GraphCircuit {
         max_logrows = std::cmp::min(
             max_logrows,
             // max of the model constraint logrows, min_bits, and the constants logrows is the upper limit
-            *[model_constraint_logrows, min_bits, constants_logrows, einsum_logrows]
-                .iter()
-                .max()
-                .unwrap(),
+            *[
+                model_constraint_logrows,
+                min_bits,
+                constants_logrows,
+                einsum_logrows,
+            ]
+            .iter()
+            .max()
+            .unwrap(),
         );
 
         // we now have a min and max logrows

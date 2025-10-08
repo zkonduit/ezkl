@@ -10,28 +10,32 @@ class PyG1:
     r"""
     pyclass containing the struct used for G1, this is mostly a helper class
     """
+
     ...
 
 class PyG1Affine:
     r"""
     pyclass containing the struct used for G1
     """
+
     ...
 
 class PyRunArgs:
     r"""
     Python class containing the struct used for run_args
-    
+
     Returns
     -------
     PyRunArgs
     """
+
     ...
 
 class PyCommitments(Enum):
     r"""
     pyclass representing an enum, denoting the type of commitment
     """
+
     KZG = auto()
     IPA = auto()
 
@@ -47,57 +51,19 @@ class PyTestDataSource(Enum):
     r"""
     pyclass representing an enum
     """
+
     File = auto()
     OnChain = auto()
 
-def aggregate(aggregation_snarks:typing.Sequence[str | os.PathLike | pathlib.Path],proof_path:str | os.PathLike | pathlib.Path,vk_path:str | os.PathLike | pathlib.Path,transcript:str,logrows:int,check_mode:str,split_proofs:bool,srs_path:typing.Optional[str | os.PathLike | pathlib.Path],commitment:PyCommitments) -> bool:
-    r"""
-    Creates an aggregated proof
-    
-    Arguments
-    ---------
-    aggregation_snarks: list[str]
-        List of paths to the various proofs
-    
-    proof_path: str
-        Path to output the aggregated proof
-    
-    vk_path: str
-        Path to the VK file
-    
-    transcript:
-        Proof transcript type to be used. `evm` used by default. `poseidon` is also supported
-    
-    logrows:
-        Logrows used for aggregation circuit
-    
-    check_mode: str
-        Run sanity checks during calculations. Accepts `safe` or `unsafe`
-    
-    split-proofs: bool
-         Whether the accumulated proofs are segments of a larger circuit
-    
-    srs_path: str
-        Path to the SRS used
-    
-    commitment: str
-        Accepts "kzg" or "ipa"
-    
-    Returns
-    -------
-    bool
-    """
-    ...
-
-def buffer_to_felts(buffer:typing.Sequence[int]) -> list[str]:
+def buffer_to_felts(buffer: typing.Sequence[int]) -> list[str]:
     r"""
     Converts a buffer to vector of field elements
-    
+
     Arguments
     -------
     buffer: list[int]
         List of integers representing a buffer
-    
+
     Returns
     -------
     list[str]
@@ -105,173 +71,175 @@ def buffer_to_felts(buffer:typing.Sequence[int]) -> list[str]:
     """
     ...
 
-def calibrate_settings(data:str | os.PathLike | pathlib.Path,model:str | os.PathLike | pathlib.Path,settings:str | os.PathLike | pathlib.Path,target:str,lookup_safety_margin:float,scales:typing.Optional[typing.Sequence[int]],scale_rebase_multiplier:typing.Sequence[int],max_logrows:typing.Optional[int]) -> typing.Any:
+def calibrate_settings(
+    data: str | os.PathLike | pathlib.Path,
+    model: str | os.PathLike | pathlib.Path,
+    settings: str | os.PathLike | pathlib.Path,
+    target: str,
+    lookup_safety_margin: float,
+    scales: typing.Optional[typing.Sequence[int]],
+    scale_rebase_multiplier: typing.Sequence[int],
+    max_logrows: typing.Optional[int],
+) -> typing.Any:
     r"""
     Calibrates the circuit settings
-    
+
     Arguments
     ---------
     data: str
         Path to the calibration data
-    
+
     model: str
         Path to the onnx file
-    
+
     settings: str
         Path to the settings file
-    
+
     lookup_safety_margin: int
          the lookup safety margin to use for calibration. if the max lookup is 2^k, then the max lookup will be 2^k * lookup_safety_margin. larger = safer but slower
-    
+
     scales: list[int]
         Optional scales to specifically try for calibration
-    
+
     scale_rebase_multiplier: list[int]
         Optional scale rebase multipliers to specifically try for calibration. This is the multiplier at which we divide to return to the input scale.
-    
+
     max_logrows: int
         Optional max logrows to use for calibration
-    
-    
+
+
     Returns
     -------
     bool
     """
     ...
 
-def compile_circuit(model:str | os.PathLike | pathlib.Path,compiled_circuit:str | os.PathLike | pathlib.Path,settings_path:str | os.PathLike | pathlib.Path) -> bool:
+def compile_circuit(
+    model: str | os.PathLike | pathlib.Path,
+    compiled_circuit: str | os.PathLike | pathlib.Path,
+    settings_path: str | os.PathLike | pathlib.Path,
+) -> bool:
     r"""
     Compiles the circuit for use in other steps
-    
+
     Arguments
     ---------
     model: str
         Path to the onnx model file
-    
+
     compiled_circuit: str
         Path to output the compiled circuit
-    
+
     settings_path: str
         Path to the settings files
-    
+
     Returns
     -------
     bool
     """
     ...
 
-def create_evm_verifier(vk_path:str | os.PathLike | pathlib.Path,settings_path:str | os.PathLike | pathlib.Path,sol_code_path:str | os.PathLike | pathlib.Path,abi_path:str | os.PathLike | pathlib.Path,srs_path:typing.Optional[str | os.PathLike | pathlib.Path],reusable:bool) -> typing.Any:
+def create_evm_verifier(
+    vk_path: str | os.PathLike | pathlib.Path,
+    settings_path: str | os.PathLike | pathlib.Path,
+    sol_code_path: str | os.PathLike | pathlib.Path,
+    abi_path: str | os.PathLike | pathlib.Path,
+    srs_path: typing.Optional[str | os.PathLike | pathlib.Path],
+    reusable: bool,
+) -> typing.Any:
     r"""
     Creates an EVM compatible verifier, you will need solc installed in your environment to run this
-    
+
     Arguments
     ---------
     vk_path: str
         The path to the verification key file
-    
+
     settings_path: str
         The path to the settings file
-    
+
     sol_code_path: str
         The path to the create the solidity verifier
-    
+
     abi_path: str
         The path to create the ABI for the solidity verifier
-    
+
     srs_path: str
         The path to the SRS file
-    
+
     reusable: bool
         Whether the verifier should be rendered as a reusable contract. If so, then you will need to deploy the VK artifact separately which you can generate using the create_evm_vka command
-    
+
     Returns
     -------
     bool
     """
     ...
 
-def create_evm_verifier_aggr(aggregation_settings:typing.Sequence[str | os.PathLike | pathlib.Path],vk_path:str | os.PathLike | pathlib.Path,sol_code_path:str | os.PathLike | pathlib.Path,abi_path:str | os.PathLike | pathlib.Path,logrows:int,srs_path:typing.Optional[str | os.PathLike | pathlib.Path],reusable:bool) -> typing.Any:
-    r"""
-    Creates an evm compatible aggregate verifier, you will need solc installed in your environment to run this
-    
-    Arguments
-    ---------
-    aggregation_settings: str
-        path to the settings file
-    
-    vk_path: str
-        The path to load the desired verification key file
-    
-    sol_code_path: str
-        The path to the Solidity code
-    
-    abi_path: str
-        The path to output the Solidity verifier ABI
-    
-    logrows: int
-        Number of logrows used during aggregated setup
-    
-    srs_path: str
-        The path to the SRS file
-    
-    reusable: bool
-        Whether the verifier should be rendered as a reusable contract. If so, then you will need to deploy the VK artifact separately which you can generate using the create_evm_vka command
-    
-    Returns
-    -------
-    bool
-    """
-    ...
-
-def create_evm_vka(vk_path:str | os.PathLike | pathlib.Path,settings_path:str | os.PathLike | pathlib.Path,vka_path:str | os.PathLike | pathlib.Path,srs_path:typing.Optional[str | os.PathLike | pathlib.Path]) -> typing.Any:
+def create_evm_vka(
+    vk_path: str | os.PathLike | pathlib.Path,
+    settings_path: str | os.PathLike | pathlib.Path,
+    vka_path: str | os.PathLike | pathlib.Path,
+    srs_path: typing.Optional[str | os.PathLike | pathlib.Path],
+) -> typing.Any:
     r"""
     Creates an Evm VK artifact. This command generated a VK with circuit specific meta data encoding in memory for use by the reusable H2 verifier.
-    This is useful for deploying verifier that were otherwise too big to fit on chain and required aggregation.
-    
+
     Arguments
     ---------
     vk_path: str
         The path to the verification key file
-    
+
     settings_path: str
         The path to the settings file
-    
+
     vka_path: str
         The path to the create the vka calldata.
-    
+
     abi_path: str
         The path to create the ABI for the solidity verifier
-    
+
     srs_path: str
         The path to the SRS file
-    
+
     Returns
     -------
     bool
     """
     ...
 
-def deploy_evm(addr_path:str | os.PathLike | pathlib.Path,sol_code_path:str | os.PathLike | pathlib.Path,rpc_url:typing.Optional[str],contract_type:str,optimizer_runs:int,private_key:typing.Optional[str]) -> typing.Any:
+def deploy_evm(
+    addr_path: str | os.PathLike | pathlib.Path,
+    sol_code_path: str | os.PathLike | pathlib.Path,
+    rpc_url: typing.Optional[str],
+    contract_type: str,
+    optimizer_runs: int,
+    private_key: typing.Optional[str],
+) -> typing.Any:
     r"""
     deploys the solidity verifier
     """
     ...
 
-def encode_evm_calldata(proof:str | os.PathLike | pathlib.Path,calldata:str | os.PathLike | pathlib.Path,addr_vk:typing.Optional[str]) -> list[int]:
+def encode_evm_calldata(
+    proof: str | os.PathLike | pathlib.Path,
+    calldata: str | os.PathLike | pathlib.Path,
+    addr_vk: typing.Optional[str],
+) -> list[int]:
     r"""
     Creates encoded evm calldata from a proof file
-    
+
     Arguments
     ---------
     proof: str
         Path to the proof file
-    
+
     calldata: str
        Path to the calldata file to save
-    
+
     addr_vk: str
        The address of the verification key contract (if the verifier key is to be rendered as a separate contract)
-    
+
     Returns
     -------
     vec[u8]
@@ -279,16 +247,16 @@ def encode_evm_calldata(proof:str | os.PathLike | pathlib.Path,calldata:str | os
     """
     ...
 
-def felt_to_big_endian(felt:str) -> str:
+def felt_to_big_endian(felt: str) -> str:
     r"""
     Converts a field element hex string to big endian
-    
+
     Arguments
     -------
     felt: str
         The field element represented as a string
-    
-    
+
+
     Returns
     -------
     str
@@ -296,54 +264,54 @@ def felt_to_big_endian(felt:str) -> str:
     """
     ...
 
-def felt_to_float(felt:str,scale:int) -> float:
+def felt_to_float(felt: str, scale: int) -> float:
     r"""
     Converts a field element hex string to a floating point number
-    
+
     Arguments
     -------
     felt: str
        The field element represented as a string
-    
+
     scale: float
         The scaling factor used to convert the field element into a floating point representation
-    
+
     Returns
     -------
     float
     """
     ...
 
-def felt_to_int(felt:str) -> int:
+def felt_to_int(felt: str) -> int:
     r"""
     Converts a field element hex string to an integer
-    
+
     Arguments
     -------
     felt: str
         The field element represented as a string
-    
+
     Returns
     -------
     int
     """
     ...
 
-def float_to_felt(input:float,scale:int,input_type:PyInputType) -> str:
+def float_to_felt(input: float, scale: int, input_type: PyInputType) -> str:
     r"""
     Converts a floating point element to a field element hex string
-    
+
     Arguments
     -------
     input: float
        The field element represented as a string
-    
+
     scale: float
         The scaling factor used to quantize the float into a field element
-    
+
     input_type: PyInputType
         The type of the input
-    
+
     Returns
     -------
     str
@@ -351,101 +319,97 @@ def float_to_felt(input:float,scale:int,input_type:PyInputType) -> str:
     """
     ...
 
-def gen_settings(model:str | os.PathLike | pathlib.Path,output:str | os.PathLike | pathlib.Path,py_run_args:typing.Optional[PyRunArgs]) -> bool:
+def gen_settings(
+    model: str | os.PathLike | pathlib.Path,
+    output: str | os.PathLike | pathlib.Path,
+    py_run_args: typing.Optional[PyRunArgs],
+) -> bool:
     r"""
     Generates the circuit settings
-    
+
     Arguments
     ---------
     model: str
         Path to the onnx file
-    
+
     output: str
         Path to create the settings file
-    
+
     py_run_args: PyRunArgs
         PyRunArgs object to initialize the settings
-    
+
     Returns
     -------
     bool
     """
     ...
 
-def gen_srs(srs_path:str | os.PathLike | pathlib.Path,logrows:int) -> None:
+def gen_srs(srs_path: str | os.PathLike | pathlib.Path, logrows: int) -> None:
     r"""
     Generates the Structured Reference String (SRS), use this only for testing purposes
-    
+
     Arguments
     ---------
     srs_path: str
         Path to the create the SRS file
-    
+
     logrows: int
         The number of logrows for the SRS file
     """
     ...
 
-def gen_vk_from_pk_aggr(path_to_pk:str | os.PathLike | pathlib.Path,vk_output_path:str | os.PathLike | pathlib.Path) -> bool:
-    r"""
-    Generates a vk from a pk for an aggregate circuit and saves it to a file
-    
-    Arguments
-    -------
-    path_to_pk: str
-        Path to the proving key
-    
-    vk_output_path: str
-        Path to create the vk file
-    
-    Returns
-    -------
-    bool
-    """
-    ...
-
-def gen_vk_from_pk_single(path_to_pk:str | os.PathLike | pathlib.Path,circuit_settings_path:str | os.PathLike | pathlib.Path,vk_output_path:str | os.PathLike | pathlib.Path) -> bool:
+def gen_vk_from_pk_single(
+    path_to_pk: str | os.PathLike | pathlib.Path,
+    circuit_settings_path: str | os.PathLike | pathlib.Path,
+    vk_output_path: str | os.PathLike | pathlib.Path,
+) -> bool:
     r"""
     Generates a vk from a pk for a model circuit and saves it to a file
-    
+
     Arguments
     -------
     path_to_pk: str
         Path to the proving key
-    
+
     circuit_settings_path: str
         Path to the witness file
-    
+
     vk_output_path: str
         Path to create the vk file
-    
+
     Returns
     -------
     bool
     """
     ...
 
-def gen_witness(data:str | os.PathLike | pathlib.Path,model:str | os.PathLike | pathlib.Path,output:typing.Optional[str | os.PathLike | pathlib.Path],vk_path:typing.Optional[str | os.PathLike | pathlib.Path],srs_path:typing.Optional[str | os.PathLike | pathlib.Path]) -> typing.Any:
+def gen_witness(
+    data: str | os.PathLike | pathlib.Path,
+    model: str | os.PathLike | pathlib.Path,
+    output: typing.Optional[str | os.PathLike | pathlib.Path],
+    vk_path: typing.Optional[str | os.PathLike | pathlib.Path],
+    srs_path: typing.Optional[str | os.PathLike | pathlib.Path],
+) -> typing.Any:
     r"""
     Runs the forward pass operation to generate a witness
-    
+
     Arguments
     ---------
     data: str
         Path to the data file
-    
+
     model: str
         Path to the compiled model file
-    
+
     output: str
         Path to create the witness file
-    
+
     vk_path: str
         Path to the verification key
-    
+
     srs_path: str
         Path to the SRS file
-    
+
     Returns
     -------
     dict
@@ -453,126 +417,122 @@ def gen_witness(data:str | os.PathLike | pathlib.Path,model:str | os.PathLike | 
     """
     ...
 
-def get_srs(settings_path:typing.Optional[str | os.PathLike | pathlib.Path],logrows:typing.Optional[int],srs_path:typing.Optional[str | os.PathLike | pathlib.Path],commitment:typing.Optional[PyCommitments]) -> typing.Any:
+def get_srs(
+    settings_path: typing.Optional[str | os.PathLike | pathlib.Path],
+    logrows: typing.Optional[int],
+    srs_path: typing.Optional[str | os.PathLike | pathlib.Path],
+    commitment: typing.Optional[PyCommitments],
+) -> typing.Any:
     r"""
     Gets a public srs
-    
+
     Arguments
     ---------
     settings_path: str
         Path to the settings file
-    
+
     logrows: int
         The number of logrows for the SRS file
-    
+
     srs_path: str
         Path to the create the SRS file
-    
+
     commitment: str
         Specify the commitment used ("kzg", "ipa")
-    
+
     Returns
     -------
     bool
     """
     ...
 
-def ipa_commit(message:typing.Sequence[str],vk_path:str | os.PathLike | pathlib.Path,settings_path:str | os.PathLike | pathlib.Path,srs_path:typing.Optional[str | os.PathLike | pathlib.Path]) -> list[PyG1Affine]:
+def ipa_commit(
+    message: typing.Sequence[str],
+    vk_path: str | os.PathLike | pathlib.Path,
+    settings_path: str | os.PathLike | pathlib.Path,
+    srs_path: typing.Optional[str | os.PathLike | pathlib.Path],
+) -> list[PyG1Affine]:
     r"""
     Generate an ipa commitment.
-    
+
     Arguments
     -------
     message: list[str]
         List of field elements represnted as strings
-    
+
     vk_path: str
         Path to the verification key
-    
+
     settings_path: str
         Path to the settings file
-    
+
     srs_path: str
         Path to the Structure Reference String (SRS) file
-    
+
     Returns
     -------
     list[PyG1Affine]
     """
     ...
 
-def kzg_commit(message:typing.Sequence[str],vk_path:str | os.PathLike | pathlib.Path,settings_path:str | os.PathLike | pathlib.Path,srs_path:typing.Optional[str | os.PathLike | pathlib.Path]) -> list[PyG1Affine]:
+def kzg_commit(
+    message: typing.Sequence[str],
+    vk_path: str | os.PathLike | pathlib.Path,
+    settings_path: str | os.PathLike | pathlib.Path,
+    srs_path: typing.Optional[str | os.PathLike | pathlib.Path],
+) -> list[PyG1Affine]:
     r"""
     Generate a kzg commitment.
-    
+
     Arguments
     -------
     message: list[str]
         List of field elements represnted as strings
-    
+
     vk_path: str
         Path to the verification key
-    
+
     settings_path: str
         Path to the settings file
-    
+
     srs_path: str
         Path to the Structure Reference String (SRS) file
-    
+
     Returns
     -------
     list[PyG1Affine]
     """
     ...
 
-def mock(witness:str | os.PathLike | pathlib.Path,model:str | os.PathLike | pathlib.Path) -> bool:
+def mock(
+    witness: str | os.PathLike | pathlib.Path, model: str | os.PathLike | pathlib.Path
+) -> bool:
     r"""
     Mocks the prover
-    
+
     Arguments
     ---------
     witness: str
         Path to the witness file
-    
+
     model: str
         Path to the compiled model file
-    
+
     Returns
     -------
     bool
     """
     ...
 
-def mock_aggregate(aggregation_snarks:typing.Sequence[str | os.PathLike | pathlib.Path],logrows:int,split_proofs:bool) -> bool:
-    r"""
-    Mocks the aggregate prover
-    
-    Arguments
-    ---------
-    aggregation_snarks: list[str]
-        List of paths to the relevant proof files
-    
-    logrows: int
-        Number of logrows to use for the aggregation circuit
-    
-    split_proofs: bool
-        Indicates whether the accumulated are segments of a larger proof
-    
-    Returns
-    -------
-    bool
-    """
-    ...
-
-def poseidon_hash(message:typing.Sequence[str]) -> list[str]:
+def poseidon_hash(message: typing.Sequence[str]) -> list[str]:
     r"""
     Generate a poseidon hash.
-    
+
     Arguments
     -------
     message: list[str]
         List of field elements represented as strings
-    
+
     Returns
     -------
     list[str]
@@ -580,126 +540,108 @@ def poseidon_hash(message:typing.Sequence[str]) -> list[str]:
     """
     ...
 
-def prove(witness:str | os.PathLike | pathlib.Path,model:str | os.PathLike | pathlib.Path,pk_path:str | os.PathLike | pathlib.Path,proof_path:typing.Optional[str | os.PathLike | pathlib.Path],proof_type:str,srs_path:typing.Optional[str | os.PathLike | pathlib.Path]) -> typing.Any:
+def prove(
+    witness: str | os.PathLike | pathlib.Path,
+    model: str | os.PathLike | pathlib.Path,
+    pk_path: str | os.PathLike | pathlib.Path,
+    proof_path: typing.Optional[str | os.PathLike | pathlib.Path],
+    proof_type: str,
+    srs_path: typing.Optional[str | os.PathLike | pathlib.Path],
+) -> typing.Any:
     r"""
     Runs the prover on a set of inputs
-    
+
     Arguments
     ---------
     witness: str
         Path to the witness file
-    
+
     model: str
         Path to the compiled model file
-    
+
     pk_path: str
         Path to the proving key file
-    
+
     proof_path: str
         Path to create the proof file
-    
+
     proof_type: str
-        Accepts `single`, `for-aggr`
-    
+        Accepts `single`
+
     srs_path: str
         Path to the SRS file
-    
+
     Returns
     -------
     bool
     """
     ...
 
-def setup(model:str | os.PathLike | pathlib.Path,vk_path:str | os.PathLike | pathlib.Path,pk_path:str | os.PathLike | pathlib.Path,srs_path:typing.Optional[str | os.PathLike | pathlib.Path],witness_path:typing.Optional[str | os.PathLike | pathlib.Path],disable_selector_compression:bool) -> bool:
+def setup(
+    model: str | os.PathLike | pathlib.Path,
+    vk_path: str | os.PathLike | pathlib.Path,
+    pk_path: str | os.PathLike | pathlib.Path,
+    srs_path: typing.Optional[str | os.PathLike | pathlib.Path],
+    witness_path: typing.Optional[str | os.PathLike | pathlib.Path],
+    disable_selector_compression: bool,
+) -> bool:
     r"""
     Runs the setup process
-    
+
     Arguments
     ---------
     model: str
         Path to the compiled model file
-    
+
     vk_path: str
         Path to create the verification key file
-    
+
     pk_path: str
         Path to create the proving key file
-    
+
     srs_path: str
         Path to the SRS file
-    
+
     witness_path: str
         Path to the witness file
-    
+
     disable_selector_compression: bool
         Whether to compress the selectors or not
-    
+
     Returns
     -------
     bool
     """
     ...
 
-def setup_aggregate(sample_snarks:typing.Sequence[str | os.PathLike | pathlib.Path],vk_path:str | os.PathLike | pathlib.Path,pk_path:str | os.PathLike | pathlib.Path,logrows:int,split_proofs:bool,srs_path:typing.Optional[str | os.PathLike | pathlib.Path],disable_selector_compression:bool,commitment:PyCommitments) -> bool:
-    r"""
-     Runs the setup process for an aggregate setup
-    
-    Arguments
-    ---------
-    sample_snarks: list[str]
-        List of paths to the various proofs
-    
-    vk_path: str
-        Path to create the aggregated VK
-    
-    pk_path: str
-        Path to create the aggregated PK
-    
-    logrows: int
-        Number of logrows to use
-    
-    split_proofs: bool
-        Whether the accumulated are segments of a larger proof
-    
-    srs_path: str
-        Path to the SRS file
-    
-    disable_selector_compression: bool
-        Whether to compress selectors
-    
-    commitment: str
-        Accepts `kzg`, `ipa`
-    
-    Returns
-    -------
-    bool
-    """
-    ...
-
-
-def swap_proof_commitments(proof_path:str | os.PathLike | pathlib.Path,witness_path:str | os.PathLike | pathlib.Path) -> None:
+def swap_proof_commitments(
+    proof_path: str | os.PathLike | pathlib.Path,
+    witness_path: str | os.PathLike | pathlib.Path,
+) -> None:
     r"""
     Swap the commitments in a proof
-    
+
     Arguments
     -------
     proof_path: str
         Path to the proof file
-    
+
     witness_path: str
         Path to the witness file
     """
     ...
 
-def table(model:str | os.PathLike | pathlib.Path,py_run_args:typing.Optional[PyRunArgs]) -> str:
+def table(
+    model: str | os.PathLike | pathlib.Path, py_run_args: typing.Optional[PyRunArgs]
+) -> str:
     r"""
     Displays the table as a string in python
-    
+
     Arguments
     ---------
     model: str
         Path to the onnx file
-    
+
     Returns
     ---------
     str
@@ -707,78 +649,59 @@ def table(model:str | os.PathLike | pathlib.Path,py_run_args:typing.Optional[PyR
     """
     ...
 
-def verify(proof_path:str | os.PathLike | pathlib.Path,settings_path:str | os.PathLike | pathlib.Path,vk_path:str | os.PathLike | pathlib.Path,srs_path:typing.Optional[str | os.PathLike | pathlib.Path],reduced_srs:bool) -> bool:
+def verify(
+    proof_path: str | os.PathLike | pathlib.Path,
+    settings_path: str | os.PathLike | pathlib.Path,
+    vk_path: str | os.PathLike | pathlib.Path,
+    srs_path: typing.Optional[str | os.PathLike | pathlib.Path],
+    reduced_srs: bool,
+) -> bool:
     r"""
     Verifies a given proof
-    
+
     Arguments
     ---------
     proof_path: str
         Path to create the proof file
-    
+
     settings_path: str
         Path to the settings file
-    
+
     vk_path: str
         Path to the verification key file
-    
+
     srs_path: str
         Path to the SRS file
-    
+
     non_reduced_srs: bool
         Whether to reduce the number of SRS logrows to the number of instances rather than the number of logrows used for proofs (only works if the srs were generated in the same ceremony)
-    
+
     Returns
     -------
     bool
     """
     ...
 
-def verify_aggr(proof_path:str | os.PathLike | pathlib.Path,vk_path:str | os.PathLike | pathlib.Path,logrows:int,commitment:PyCommitments,reduced_srs:bool,srs_path:typing.Optional[str | os.PathLike | pathlib.Path]) -> bool:
-    r"""
-    Verifies and aggregate proof
-    
-    Arguments
-    ---------
-    proof_path: str
-         The path to the proof file
-    
-    vk_path: str
-        The path to the verification key file
-    
-    logrows: int
-        logrows used for aggregation circuit
-    
-    commitment: str
-        Accepts "kzg" or "ipa"
-    
-    reduced_srs: bool
-        Whether to reduce the number of SRS logrows to the number of instances rather than the number of logrows used for proofs (only works if the srs were generated in the same ceremony)
-    
-    srs_path: str
-        The path to the SRS file
-    
-    Returns
-    -------
-    bool
-    """
-    ...
-
-def verify_evm(addr_verifier:str,proof_path:str | os.PathLike | pathlib.Path,rpc_url:typing.Optional[str],vka_path:typing.Optional[str]) -> typing.Any:
+def verify_evm(
+    addr_verifier: str,
+    proof_path: str | os.PathLike | pathlib.Path,
+    rpc_url: typing.Optional[str],
+    vka_path: typing.Optional[str],
+) -> typing.Any:
     r"""
     verifies an evm compatible proof, you will need solc installed in your environment to run this
-    
+
     Arguments
     ---------
     addr_verifier: str
         The verifier contract's address as a hex string
-    
+
     proof_path: str
         The path to the proof file (generated using the prove command)
-    
+
     rpc_url: str
         RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
-    
+
     vka_path: str
         The path to the VKA calldata bytes file (generated using the create_evm_vka command)
     Returns
@@ -786,4 +709,3 @@ def verify_evm(addr_verifier:str,proof_path:str | os.PathLike | pathlib.Path,rpc
     bool
     """
     ...
-

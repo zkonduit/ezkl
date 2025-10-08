@@ -5,7 +5,7 @@ use ezkl::circuit::*;
 use ezkl::circuit::lookup::LookupOp;
 use ezkl::circuit::poly::PolyOp;
 use ezkl::pfsys::create_proof_circuit;
-use ezkl::pfsys::TranscriptType;
+
 use ezkl::pfsys::{create_keys, srs::gen_srs};
 use ezkl::tensor::*;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
@@ -155,7 +155,6 @@ fn runmatmul(c: &mut Criterion) {
                     &pk,
                     CheckMode::UNSAFE,
                     ezkl::Commitments::KZG,
-                    TranscriptType::EVM,
                     None,
                     None,
                 );
