@@ -245,7 +245,6 @@ where
         dict.set_item("instances", field_elems).unwrap();
         let hex_proof = hex::encode(&self.proof);
         dict.set_item("proof", format!("0x{}", hex_proof)).unwrap();
-            .unwrap();
         Ok(dict.into_any())
     }
 }
