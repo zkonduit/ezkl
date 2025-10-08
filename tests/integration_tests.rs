@@ -1090,15 +1090,6 @@ mod native_tests {
     }
 
     // Mock prove (fast, but does not cover some potential issues)
-    fn run_example(example_name: String) {
-        let status = Command::new("cargo")
-            .args(["run", "--release", "--example", example_name.as_str()])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-    }
-
-    // Mock prove (fast, but does not cover some potential issues)
     #[allow(clippy::too_many_arguments)]
     fn mock(
         test_dir: &str,
