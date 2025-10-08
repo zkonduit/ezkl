@@ -363,6 +363,13 @@ pub struct RunArgs {
     /// Optional override for epsilon value
     #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long))]
     pub epsilon: Option<f64>,
+    /// Forcefully disable using Freivalds' argument in einsum operations
+    /// Freivalds' argument can make verifier bigger, so this option is useful when
+    /// the verifier size is a concern
+    /// Without this option the circuit layouter will always try to use Freivalds' argument
+    /// when it is good to do so
+    #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long))]
+    pub disable_freivalds: bool,
 }
 
 impl RunArgs {
@@ -398,6 +405,7 @@ impl Default for RunArgs {
             decomp_legs: 2,
             ignore_range_check_inputs_outputs: false,
             epsilon: None,
+            disable_freivalds: false,
         }
     }
 }

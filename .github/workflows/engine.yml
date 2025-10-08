@@ -18,6 +18,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write # Required for provenance
     name: publish-wasm-bindings
     env:
       RELEASE_TAG: ${{ github.ref_name }}
@@ -25,19 +26,19 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
         with:
           persist-credentials: false
-      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
           toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
           cache: false
-      - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa  #v0.4.0
+      - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa #v0.4.0
         with:
           # Pin to version 0.12.1
-          version: 'v0.12.1'
+          version: "v0.12.1"
       - name: Add wasm32-unknown-unknown target
         run: rustup target add wasm32-unknown-unknown
 
@@ -51,41 +52,41 @@ jobs:
           wasm-opt --version
       - name: Build wasm files for both web and nodejs compilation targets
         run: |
-            wasm-pack build --release --target nodejs --out-dir ./pkg/nodejs . -- -Z build-std="panic_abort,std"
-            wasm-pack build --release --target web --out-dir ./pkg/web . -- -Z build-std="panic_abort,std" --features web
+          wasm-pack build --release --target nodejs --out-dir ./pkg/nodejs . -- -Z build-std="panic_abort,std"
+          wasm-pack build --release --target web --out-dir ./pkg/web . -- -Z build-std="panic_abort,std" --features web
       - name: Create package.json in pkg folder
         shell: bash
         run: |
-            cat > pkg/package.json << EOF
-            {
-              "name": "@ezkljs/engine",
-              "version": "$RELEASE_TAG",
-              "dependencies": {
-                "@types/json-bigint": "^1.0.1",
-                "json-bigint": "^1.0.0"
-              },
-              "files": [
-                "nodejs/ezkl_bg.wasm",
-                "nodejs/ezkl.js",
-                "nodejs/ezkl.d.ts",
-                "nodejs/package.json",
-                "nodejs/utils.js",
-                "web/ezkl_bg.wasm",
-                "web/ezkl.js",
-                "web/ezkl.d.ts",
-                "web/snippets/**/*",
-                "web/package.json",
-                "web/utils.js",
-                "ezkl.d.ts"
-              ],
-              "main": "nodejs/ezkl.js",
-              "module": "web/ezkl.js",
-              "types": "nodejs/ezkl.d.ts",
-              "sideEffects": [
-                "web/snippets/*"
-              ]
-            }
-            EOF
+          cat > pkg/package.json << EOF
+          {
+            "name": "@ezkljs/engine",
+            "version": "$RELEASE_TAG",
+            "dependencies": {
+              "@types/json-bigint": "^1.0.1",
+              "json-bigint": "^1.0.0"
+            },
+            "files": [
+              "nodejs/ezkl_bg.wasm",
+              "nodejs/ezkl.js",
+              "nodejs/ezkl.d.ts",
+              "nodejs/package.json",
+              "nodejs/utils.js",
+              "web/ezkl_bg.wasm",
+              "web/ezkl.js",
+              "web/ezkl.d.ts",
+              "web/snippets/**/*",
+              "web/package.json",
+              "web/utils.js",
+              "ezkl.d.ts"
+            ],
+            "main": "nodejs/ezkl.js",
+            "module": "web/ezkl.js",
+            "types": "nodejs/ezkl.d.ts",
+            "sideEffects": [
+              "web/snippets/*"
+            ]
+          }
+          EOF
 
       - name: Replace memory definition in nodejs
         run: |
@@ -177,16 +178,17 @@ jobs:
         run: |
           curl -s "https://raw.githubusercontent.com/zkonduit/ezkljs-engine/main/README.md" > ./pkg/README.md
 
+      # zizmor: ignore cache-poisoning
       - name: Set up Node.js
-        uses: actions/setup-node@1a4442cacd436585916779262731d5b162bc6ec7  #v3.8.2
+        uses: actions/setup-node@1a4442cacd436585916779262731d5b162bc6ec7 #v3.8.2
         with:
           node-version: "18.12.1"
           registry-url: "https://registry.npmjs.org"
-      - name: Publish to npm
+          package-manager-cache: false
+
+      - name: Publish to npm with provenance
         run: |
           cd pkg
-          npm install
-          npm ci
-          npm publish
+          npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

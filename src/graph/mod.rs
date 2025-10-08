@@ -64,6 +64,7 @@ use pyo3::types::PyDictMethods;
 use pyo3::IntoPyObject;
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::ops::Deref;
 pub use utilities::*;
 pub use vars::*;
@@ -438,6 +439,15 @@ pub struct ShuffleParams {
     pub total_shuffle_col_size: usize,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+/// Parameters for einsum operations
+pub struct EinsumParams {
+    /// einsum equations
+    pub equations: Vec<(String, HashMap<char, usize>)>,
+    /// total einsum column size
+    pub total_einsum_col_size: usize,
+}
+
 /// model parameters
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct GraphSettings {
@@ -453,6 +463,8 @@ pub struct GraphSettings {
     pub dynamic_lookup_params: DynamicLookupParams,
     /// shuffle parameters, flattened for backwards compatibility
     pub shuffle_params: ShuffleParams,
+    /// einsum parameters
+    pub einsum_params: EinsumParams,
     /// the shape of public inputs to the model (in order of appearance)
     pub model_instance_shapes: Vec<Vec<usize>>,
     /// model output scales
@@ -487,7 +499,7 @@ impl Serialize for GraphSettings {
         if serializer.is_human_readable() {
             // JSON format - use flattened fields for backwards compatibility
             use serde::ser::SerializeStruct;
-            let mut state = serializer.serialize_struct("GraphSettings", 21)?;
+            let mut state = serializer.serialize_struct("GraphSettings", 22)?;
             state.serialize_field("run_args", &self.run_args)?;
             state.serialize_field("num_rows", &self.num_rows)?;
             state.serialize_field("total_assignments", &self.total_assignments)?;
@@ -514,6 +526,9 @@ impl Serialize for GraphSettings {
                 &self.shuffle_params.total_shuffle_col_size,
             )?;
 
+            // Serialize EinsumParams
+            state.serialize_field("einsum_params", &self.einsum_params)?;
+
             state.serialize_field("model_instance_shapes", &self.model_instance_shapes)?;
             state.serialize_field("model_output_scales", &self.model_output_scales)?;
             state.serialize_field("model_input_scales", &self.model_input_scales)?;
@@ -530,13 +545,14 @@ impl Serialize for GraphSettings {
         } else {
             // Binary format (bincode) - use nested struct format
             use serde::ser::SerializeTuple;
-            let mut state = serializer.serialize_tuple(18)?;
+            let mut state = serializer.serialize_tuple(19)?;
             state.serialize_element(&self.run_args)?;
             state.serialize_element(&self.num_rows)?;
             state.serialize_element(&self.total_assignments)?;
             state.serialize_element(&self.total_const_size)?;
             state.serialize_element(&self.dynamic_lookup_params)?;
             state.serialize_element(&self.shuffle_params)?;
+            state.serialize_element(&self.einsum_params)?;
             state.serialize_element(&self.model_instance_shapes)?;
             state.serialize_element(&self.model_output_scales)?;
             state.serialize_element(&self.model_input_scales)?;
@@ -576,6 +592,8 @@ impl<'de> Deserialize<'de> for GraphSettings {
             // Flattened ShuffleParams fields
             NumShuffles,
             TotalShuffleColSize,
+            // EinsumParams field
+            EinsumParams,
             ModelInstanceShapes,
             ModelOutputScales,
             ModelInputScales,
@@ -615,6 +633,7 @@ impl<'de> Deserialize<'de> for GraphSettings {
                 let mut num_dynamic_lookups = None;
                 let mut num_shuffles = None;
                 let mut total_shuffle_col_size = None;
+                let mut einsum_params = None;
                 let mut model_instance_shapes = None;
                 let mut model_output_scales = None;
                 let mut model_input_scales = None;
@@ -683,6 +702,12 @@ impl<'de> Deserialize<'de> for GraphSettings {
                                 return Err(de::Error::duplicate_field("total_shuffle_col_size"));
                             }
                             total_shuffle_col_size = Some(map.next_value()?);
+                        }
+                        Field::EinsumParams => {
+                            if einsum_params.is_some() {
+                                return Err(de::Error::duplicate_field("einsum_params"));
+                            }
+                            einsum_params = Some(map.next_value()?);
                         }
                         Field::ModelInstanceShapes => {
                             if model_instance_shapes.is_some() {
@@ -822,6 +847,7 @@ impl<'de> Deserialize<'de> for GraphSettings {
                     total_const_size,
                     dynamic_lookup_params,
                     shuffle_params,
+                    einsum_params: einsum_params.unwrap_or_default(),
                     model_instance_shapes,
                     model_output_scales,
                     model_input_scales,
@@ -862,42 +888,45 @@ impl<'de> Deserialize<'de> for GraphSettings {
                 let shuffle_params = seq
                     .next_element()?
                     .ok_or_else(|| Error::invalid_length(5, &self))?;
-                let model_instance_shapes = seq
+                let einsum_params = seq
                     .next_element()?
                     .ok_or_else(|| Error::invalid_length(6, &self))?;
-                let model_output_scales = seq
+                let model_instance_shapes = seq
                     .next_element()?
                     .ok_or_else(|| Error::invalid_length(7, &self))?;
-                let model_input_scales = seq
+                let model_output_scales = seq
                     .next_element()?
                     .ok_or_else(|| Error::invalid_length(8, &self))?;
-                let module_sizes = seq
+                let model_input_scales = seq
                     .next_element()?
                     .ok_or_else(|| Error::invalid_length(9, &self))?;
-                let required_lookups = seq
+                let module_sizes = seq
                     .next_element()?
                     .ok_or_else(|| Error::invalid_length(10, &self))?;
-                let required_range_checks = seq
+                let required_lookups = seq
                     .next_element()?
                     .ok_or_else(|| Error::invalid_length(11, &self))?;
-                let check_mode = seq
+                let required_range_checks = seq
                     .next_element()?
                     .ok_or_else(|| Error::invalid_length(12, &self))?;
-                let version = seq
+                let check_mode = seq
                     .next_element()?
                     .ok_or_else(|| Error::invalid_length(13, &self))?;
-                let num_blinding_factors = seq
+                let version = seq
                     .next_element()?
                     .ok_or_else(|| Error::invalid_length(14, &self))?;
-                let timestamp = seq
+                let num_blinding_factors = seq
                     .next_element()?
                     .ok_or_else(|| Error::invalid_length(15, &self))?;
-                let input_types = seq
+                let timestamp = seq
                     .next_element()?
                     .ok_or_else(|| Error::invalid_length(16, &self))?;
-                let output_types = seq
+                let input_types = seq
                     .next_element()?
                     .ok_or_else(|| Error::invalid_length(17, &self))?;
+                let output_types = seq
+                    .next_element()?
+                    .ok_or_else(|| Error::invalid_length(18, &self))?;
 
                 Ok(GraphSettings {
                     run_args,
@@ -906,6 +935,7 @@ impl<'de> Deserialize<'de> for GraphSettings {
                     total_const_size,
                     dynamic_lookup_params,
                     shuffle_params,
+                    einsum_params,
                     model_instance_shapes,
                     model_output_scales,
                     model_input_scales,
@@ -935,6 +965,7 @@ impl<'de> Deserialize<'de> for GraphSettings {
                 "num_dynamic_lookups",
                 "num_shuffles",
                 "total_shuffle_col_size",
+                "einsum_params",
                 "model_instance_shapes",
                 "model_output_scales",
                 "model_input_scales",
@@ -953,7 +984,7 @@ impl<'de> Deserialize<'de> for GraphSettings {
             deserializer.deserialize_struct("GraphSettings", FIELDS, GraphSettingsVisitor)
         } else {
             // Binary format (bincode) - use tuple deserialization
-            deserializer.deserialize_tuple(18, GraphSettingsVisitor)
+            deserializer.deserialize_tuple(19, GraphSettingsVisitor)
         }
     }
 }
@@ -1034,6 +1065,13 @@ impl GraphSettings {
 
     fn constants_logrows(&self) -> u32 {
         (self.total_const_size as f64 / self.run_args.num_inner_cols as f64)
+            .log2()
+            .ceil() as u32
+    }
+
+    /// Calculates the logrows for einsum computation area in which there is no column overflow
+    pub fn einsum_logrows(&self) -> u32 {
+        (self.einsum_params.total_einsum_col_size as f64 / self.run_args.num_inner_cols as f64)
             .log2()
             .ceil() as u32
     }
@@ -1593,10 +1631,11 @@ impl GraphCircuit {
         let model_constraint_logrows = self.settings().model_constraint_logrows_with_blinding();
         let min_bits = self.table_size_logrows(safe_lookup_range, max_range_size)?;
         let constants_logrows = self.settings().constants_logrows();
+        let einsum_logrows = self.settings().einsum_logrows();
         max_logrows = std::cmp::min(
             max_logrows,
             // max of the model constraint logrows, min_bits, and the constants logrows is the upper limit
-            *[model_constraint_logrows, min_bits, constants_logrows]
+            *[model_constraint_logrows, min_bits, constants_logrows, einsum_logrows]
                 .iter()
                 .max()
                 .unwrap(),
@@ -2180,6 +2219,7 @@ pub mod tests {
                 num_shuffles: 3,
                 total_shuffle_col_size: 256,
             },
+            einsum_params: EinsumParams::default(),
             model_instance_shapes: vec![vec![1, 2, 3]],
             model_output_scales: vec![],
             model_input_scales: vec![],
@@ -2254,7 +2294,8 @@ pub mod tests {
         "decomp_base": 128,
         "decomp_legs": 2,
         "bounded_log_lookup": false,
-        "ignore_range_check_inputs_outputs": false
+        "ignore_range_check_inputs_outputs": false,
+        "disable_freivalds": false
     },
     "num_rows": 236,
     "total_assignments": 472,

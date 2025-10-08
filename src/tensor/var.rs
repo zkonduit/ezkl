@@ -1,3 +1,4 @@
+use halo2_proofs::plonk::SecondPhase;
 use log::{debug, error, warn};
 
 use crate::circuit::{region::ConstantsMap, CheckMode};
@@ -152,6 +153,52 @@ impl VarTensor {
         }
     }
 
+    /// Creates a new VarTensor::Advice with standard (blinded) columns, used when
+    /// the values need to be hidden in the proof.
+    ///
+    /// # Arguments
+    /// * `cs` - The constraint system to create columns in
+    /// * `logrows` - Log base 2 of the total number of rows
+    /// * `num_inner_cols` - Number of columns in each inner block
+    /// * `capacity` - Total number of advice cells to allocate
+    ///
+    /// # Returns
+    /// A new VarTensor::Advice in SecondPhase with blinded columns enabled for equality constraints
+    pub fn new_advice_in_second_phase<F: PrimeField>(
+        cs: &mut ConstraintSystem<F>,
+        logrows: usize,
+        num_inner_cols: usize,
+        capacity: usize,
+    ) -> Self {
+        let max_rows = Self::max_rows(cs, logrows);
+        let max_assignments = Self::max_rows(cs, logrows) * num_inner_cols;
+
+        let mut modulo = (capacity / max_assignments) + 1;
+        // we add a buffer for duplicated rows (we get at most 1 duplicated row per column)
+        modulo = ((capacity + modulo) / max_assignments) + 1;
+        let mut advices = vec![];
+
+        if modulo > 1 {
+            debug!("using column duplication for {} advice blocks", modulo - 1);
+        }
+
+        for _ in 0..modulo {
+            let mut inner = vec![];
+            for _ in 0..num_inner_cols {
+                let col = cs.advice_column_in(SecondPhase);
+                cs.enable_equality(col);
+                inner.push(col);
+            }
+            advices.push(inner);
+        }
+
+        VarTensor::Advice {
+            inner: advices,
+            num_inner_cols,
+            col_size: max_rows,
+        }
+    }
+
     /// Initializes fixed columns in the constraint system to support the VarTensor::Advice
     /// Fixed columns are used for constant values that are known at circuit creation time.
     ///
@@ -270,7 +317,7 @@ impl VarTensor {
     /// # Returns
     /// A tuple of (block_index, column_index, row_index)
     pub fn cartesian_coord(&self, linear_coord: usize) -> (usize, usize, usize) {
-        // x indexes over blocks of size num_inner_cols
+        // x (block idx) indexes over blocks of size num_inner_cols
         let x = linear_coord / self.block_size();
         // y indexes over the cols inside a block
         let y = linear_coord % self.num_inner_cols();
@@ -519,7 +566,7 @@ impl VarTensor {
         F: PrimeField + TensorType + PartialOrd + std::hash::Hash,
     >(
         &self,
-        row: usize,
+        _row: usize,
         offset: usize,
         values: &ValTensor<F>,
         single_inner_col: bool,
@@ -545,7 +592,7 @@ impl VarTensor {
                     self.num_inner_cols()
                 };
 
-                let duplication_offset = if single_inner_col { row } else { offset };
+                let (_, _, duplication_offset) = self.cartesian_coord(offset);
 
                 // duplicates every nth element to adjust for column overflow
                 let mut res: ValTensor<F> = v
@@ -651,7 +698,7 @@ impl VarTensor {
     >(
         &self,
         region: &mut Region<F>,
-        row: usize,
+        _row: usize,
         offset: usize,
         values: &ValTensor<F>,
         check_mode: &CheckMode,
@@ -669,7 +716,7 @@ impl VarTensor {
             ValTensor::Value { inner: v, dims, .. } => {
                 let duplication_freq = self.col_size();
                 let num_repeats = 1;
-                let duplication_offset = row;
+                let (_, _, duplication_offset) = self.cartesian_coord(offset);
 
                 // duplicates every nth element to adjust for column overflow
                 let v = v

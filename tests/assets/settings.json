@@ -28,7 +28,8 @@
         "decomp_base": 128,
         "decomp_legs": 2,
         "bounded_log_lookup": false,
-        "ignore_range_check_inputs_outputs": false
+        "ignore_range_check_inputs_outputs": false,
+        "disable_freivalds": false
     },
     "num_rows": 236,
     "total_assignments": 472,
@@ -36,6 +37,10 @@
     "total_dynamic_col_size": 0,
     "max_dynamic_input_len": 0,
     "num_dynamic_lookups": 0,
+    "einsum_params": {
+        "equations": [],
+        "total_einsum_col_size": 0
+    },
     "num_shuffles": 0,
     "total_shuffle_col_size": 0,
     "model_instance_shapes": [

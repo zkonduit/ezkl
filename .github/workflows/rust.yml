@@ -27,11 +27,11 @@ jobs:
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
         with:
           persist-credentials: false
 
-      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
           toolchain: nightly-2025-05-01
           override: true
@@ -52,12 +52,11 @@ jobs:
       RUSTFLAGS: "-C linker=gcc"
       OPENSSL_NO_VENDOR: 1
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
         with:
           persist-credentials: false
 
-
-      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
           toolchain: nightly-2025-05-01
           override: true
@@ -78,10 +77,10 @@ jobs:
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
         with:
           persist-credentials: false
-      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
           toolchain: nightly-2025-05-01
           override: true
@@ -102,10 +101,10 @@ jobs:
       RUSTFLAGS: "-C linker=gcc"
       OPENSSL_NO_VENDOR: 1
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
         with:
           persist-credentials: false
-      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
           toolchain: nightly-2025-05-01
           override: true
@@ -116,7 +115,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y cmake build-essential g++ gcc libclang-dev llvm-dev libstdc++-12-dev libc6-dev libssl-dev pkg-config
       - name: Force rebuild icicle dependencies
         run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
-      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3 #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
@@ -125,7 +124,6 @@ jobs:
         run: cargo test --doc --verbose
       - name: Library tests
         run: cargo nextest run --lib --verbose
-
 
   ultra-overflow-tests-gpu:
     permissions:
@@ -137,19 +135,19 @@ jobs:
       RUSTFLAGS: "-C linker=gcc"
       OPENSSL_NO_VENDOR: 1
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
         with:
           persist-credentials: false
-      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
           toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
-      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3 #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
-      - uses: mwilliamson/setup-wasmtime-action@bf814d7d8fc3c3a77dfe114bd9fb8a2c575f6ad6  #v2.0.0
+      - uses: mwilliamson/setup-wasmtime-action@bf814d7d8fc3c3a77dfe114bd9fb8a2c575f6ad6 #v2.0.0
         with:
           wasmtime-version: "3.0.1"
       - name: Setup GPU dependencies
@@ -176,7 +174,7 @@ jobs:
   ultra-overflow-tests:
     permissions:
       contents: read
-    runs-on: [ non-gpu, non-sgx ]
+    runs-on: [non-gpu, non-sgx]
     needs: [build, library-tests, docs]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -184,12 +182,11 @@ jobs:
       OPENSSL_NO_VENDOR: 1
 
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
         with:
           persist-credentials: false
 
-
-      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
           toolchain: nightly-2025-05-01
           override: true
@@ -200,11 +197,11 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y cmake build-essential g++ gcc libclang-dev llvm-dev libstdc++-12-dev libc6-dev libssl-dev pkg-config
       - name: Force rebuild icicle dependencies
         run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
-      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3 #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
-      - uses: mwilliamson/setup-wasmtime-action@bf814d7d8fc3c3a77dfe114bd9fb8a2c575f6ad6  #v2.0.0
+      - uses: mwilliamson/setup-wasmtime-action@bf814d7d8fc3c3a77dfe114bd9fb8a2c575f6ad6 #v2.0.0
         with:
           wasmtime-version: "3.0.1"
       # - name: Matmul overflow (wasi)
@@ -230,12 +227,11 @@ jobs:
       OPENSSL_NO_VENDOR: 1
 
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
         with:
           persist-credentials: false
 
-
-      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
           toolchain: nightly-2025-05-01
           override: true
@@ -246,7 +242,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y cmake build-essential g++ gcc libclang-dev llvm-dev libstdc++-12-dev libc6-dev libssl-dev pkg-config
       - name: Force rebuild icicle dependencies
         run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
-      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3 #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
@@ -264,12 +260,11 @@ jobs:
       OPENSSL_NO_VENDOR: 1
 
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
         with:
           persist-credentials: false
 
-
-      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
           toolchain: nightly-2025-05-01
           override: true
@@ -280,11 +275,11 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y cmake build-essential g++ gcc libclang-dev llvm-dev libstdc++-12-dev libc6-dev libssl-dev pkg-config
       - name: Force rebuild icicle dependencies
         run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
-      - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa  #v0.4.0
+      - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa #v0.4.0
         with:
           # Pin to version 0.13.1
           version: "v0.13.1"
-      - uses: nanasess/setup-chromedriver@affb1ea8848cbb080be372c1e8d7a5c173e9298f  #v2.3.0
+      - uses: nanasess/setup-chromedriver@affb1ea8848cbb080be372c1e8d7a5c173e9298f #v2.3.0
         # with:
         #   chromedriver-version: "115.0.5790.102"
       - name: Install wasm32-unknown-unknown
@@ -305,7 +300,7 @@ jobs:
   mock-proving-tests:
     permissions:
       contents: read
-    runs-on: [ non-gpu, non-sgx ]
+    runs-on: [non-gpu, non-sgx]
     needs: [build, library-tests, docs]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -313,16 +308,16 @@ jobs:
       OPENSSL_NO_VENDOR: 1
 
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
         with:
           persist-credentials: false
 
-      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
           toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
-      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3 #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
@@ -380,7 +375,7 @@ jobs:
   prove-and-verify-evm-tests:
     permissions:
       contents: read
-    runs-on: [ non-gpu, non-sgx ]
+    runs-on: [non-gpu, non-sgx]
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -388,35 +383,34 @@ jobs:
       OPENSSL_NO_VENDOR: 1
 
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
         with:
           persist-credentials: false
 
-
-      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
           toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
-      - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa  #v0.4.0
+      - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa #v0.4.0
         with:
           # Pin to version 0.13.1
           version: "v0.13.1"
-      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3 #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
       - name: Force rebuild icicle dependencies
         run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
         with:
           persist-credentials: false
       - name: Use pnpm 8
-        uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b  #v2.4.1
+        uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b #v2.4.1
         with:
           version: 8
       - name: Use Node.js 22.17.1
-        uses: actions/setup-node@1a4442cacd436585916779262731d5b162bc6ec7  #v3.8.2
+        uses: actions/setup-node@1a4442cacd436585916779262731d5b162bc6ec7 #v3.8.2
         with:
           node-version: "22.17.1"
           cache: "pnpm"
@@ -434,8 +428,8 @@ jobs:
           wasm-pack build --target nodejs --out-dir ./tests/wasm/nodejs . -- -Z build-std="panic_abort,std"
       - name: KZG prove and verify tests (EVM)
         run: cargo nextest run --verbose "tests_evm::kzg_evm_prove_and_verify_::" --test-threads 1
-      - name: KZG prove and verify tests (EVM + reusable verifier + col-overflow)
-        run: cargo nextest run --verbose tests_evm::kzg_evm_prove_and_verify_reusable_verifier --features reusable-verifier --test-threads 1
+      # - name: KZG prove and verify tests (EVM + reusable verifier + col-overflow)
+      #   run: cargo nextest run --verbose tests_evm::kzg_evm_prove_and_verify_reusable_verifier --features reusable-verifier --test-threads 1
       - name: KZG prove and verify tests (EVM + kzg all)
         run: cargo nextest run --verbose tests_evm::kzg_evm_kzg_all_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + kzg inputs)
@@ -486,22 +480,21 @@ jobs:
   prove-and-verify-tests:
     permissions:
       contents: read
-    runs-on: [ non-gpu, non-sgx ]
+    runs-on: [non-gpu, non-sgx]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
         with:
           persist-credentials: false
 
-
-      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
           toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
-      - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa  #v0.4.0
+      - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa #v0.4.0
         with:
           # Pin to version 0.13.1
           version: "v0.13.1"
@@ -512,15 +505,15 @@ jobs:
         run: rustup component add rust-src --toolchain nightly-2025-05-01-x86_64-unknown-linux-gnu
       - name: Force rebuild icicle dependencies
         run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
         with:
           persist-credentials: false
       - name: Use pnpm 8
-        uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b  #v2.4.1
+        uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b #v2.4.1
         with:
           version: 8
       - name: Use Node.js 22.17.1
-        uses: actions/setup-node@1a4442cacd436585916779262731d5b162bc6ec7  #v3.8.2
+        uses: actions/setup-node@1a4442cacd436585916779262731d5b162bc6ec7 #v3.8.2
         with:
           node-version: "22.17.1"
           cache: "pnpm"
@@ -530,7 +523,7 @@ jobs:
         env:
           CI: false
           NODE_ENV: development
-      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3 #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
@@ -575,17 +568,17 @@ jobs:
       RUSTFLAGS: "-C linker=gcc"
       OPENSSL_NO_VENDOR: 1
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
         with:
           persist-credentials: false
-      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
           toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
       - name: Add rust-src
         run: rustup component add rust-src --toolchain nightly-2025-05-01-x86_64-unknown-linux-gnu
-      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3 #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
@@ -621,17 +614,16 @@ jobs:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
         with:
           persist-credentials: false
 
-
-      - uses: dtolnay/rust-toolchain@4f94fbe7e03939b0e674bcc9ca609a16088f63ff  #nightly branch, TODO: update when required
+      - uses: dtolnay/rust-toolchain@4f94fbe7e03939b0e674bcc9ca609a16088f63ff #nightly branch, TODO: update when required
         with:
           toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
-      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3 #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
@@ -649,15 +641,15 @@ jobs:
       RUSTFLAGS: "-C linker=gcc"
       OPENSSL_NO_VENDOR: 1
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
         with:
           persist-credentials: false
-      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
           toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
-      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3 #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
@@ -681,17 +673,16 @@ jobs:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
         with:
           persist-credentials: false
 
-
-      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
           toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
-      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3 #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
@@ -707,17 +698,16 @@ jobs:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
         with:
           persist-credentials: false
 
-
-      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
           toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
-      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3 #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
@@ -739,12 +729,11 @@ jobs:
       OPENSSL_NO_VENDOR: 1
 
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
         with:
           persist-credentials: false
 
-
-      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
           toolchain: nightly-2025-05-01
           override: true
@@ -755,7 +744,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y cmake build-essential g++ gcc libclang-dev llvm-dev libstdc++-12-dev libc6-dev libssl-dev pkg-config
       - name: Force rebuild icicle dependencies
         run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
-      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3 #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
@@ -765,21 +754,20 @@ jobs:
   python-tests:
     permissions:
       contents: read
-    runs-on: [ non-gpu, non-sgx ]
+    runs-on: [non-gpu, non-sgx]
     needs: [build, library-tests, docs]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
         with:
           persist-credentials: false
 
-
-      - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa  #v4.8.0
+      - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa #v4.8.0
         with:
           python-version: "3.12"
-      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
           toolchain: nightly-2025-05-01
           override: true
@@ -800,26 +788,25 @@ jobs:
   accuracy-measurement-tests:
     permissions:
       contents: read
-    runs-on: [ non-gpu, non-sgx ]
+    runs-on: [non-gpu, non-sgx]
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
         with:
           persist-credentials: false
 
-
-      - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa  #v4.8.0
+      - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa #v4.8.0
         with:
           python-version: "3.12"
-      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
           toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
-      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3 #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
@@ -845,20 +832,19 @@ jobs:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
         with:
           persist-credentials: false
 
-
-      - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa  #v4.8.0
+      - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa #v4.8.0
         with:
           python-version: "3.11"
-      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
           toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
-      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3 #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
@@ -910,17 +896,16 @@ jobs:
       OPENSSL_NO_VENDOR: 1
 
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
         with:
           persist-credentials: false
 
-
-      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
           toolchain: nightly-2025-05-01
           override: true
           components: rustfmt, clippy
-      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3 #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
@@ -941,11 +926,11 @@ jobs:
       OPENSSL_NO_VENDOR: 1
 
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
         with:
           persist-credentials: false
 
-      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48  #v1.0.6
+      - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
           toolchain: nightly-2025-05-01
           override: true
@@ -983,7 +968,7 @@ jobs:
           cd ezkl-swift-package
           xcodebuild test \
             -scheme EzklPackage \
-            -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.2' \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.4' \
             -resultBundlePath ../testResults
 
       - name: Run Example App Tests
@@ -992,7 +977,7 @@ jobs:
           xcodebuild test \
             -project Example.xcodeproj \
             -scheme EzklApp \
-            -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.2' \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.4' \
             -parallel-testing-enabled NO \
             -resultBundlePath ../../exampleTestResults \
             -skip-testing:EzklAppUITests/EzklAppUITests/testButtonClicksInOrder

@@ -1290,6 +1290,7 @@ pub(crate) fn calibrate(
                 total_const_size: new_settings.total_const_size,
                 dynamic_lookup_params: new_settings.dynamic_lookup_params,
                 shuffle_params: new_settings.shuffle_params,
+                einsum_params: new_settings.einsum_params,
                 ..settings.clone()
             };
 

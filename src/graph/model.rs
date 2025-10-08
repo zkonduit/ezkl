@@ -3,6 +3,7 @@ use super::extract_const_quantized_values;
 use super::node::*;
 use super::vars::*;
 use super::GraphSettings;
+use crate::circuit::einsum::analysis::analyze_einsum_usage;
 use crate::circuit::hybrid::HybridOp;
 use crate::circuit::region::ConstantsMap;
 use crate::circuit::region::RegionCtx;
@@ -37,7 +38,6 @@ use log::{debug, info, trace};
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeMap;
-#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
@@ -106,6 +106,8 @@ pub struct DummyPassRes {
     pub dynamic_lookup_params: DynamicLookupParams,
     /// shuffle parameters
     pub shuffle_params: ShuffleParams,
+    /// einsum parameters
+    pub einsum_params: crate::graph::EinsumParams,
     /// num shuffles
     pub num_shuffles: usize,
     /// shuffle
@@ -592,6 +594,7 @@ impl Model {
             output_types: Some(self.get_output_types()),
             dynamic_lookup_params: res.dynamic_lookup_params,
             shuffle_params: res.shuffle_params,
+            einsum_params: res.einsum_params,
             total_const_size: res.total_const_size,
             check_mode,
             version: env!("CARGO_PKG_VERSION").to_string(),
@@ -1047,6 +1050,7 @@ impl Model {
 
         let lookup_range = settings.run_args.lookup_range;
         let logrows = settings.run_args.logrows as usize;
+        let num_inner_cols = settings.run_args.num_inner_cols;
         let required_lookups = settings.required_lookups.clone();
         let required_range_checks = settings.required_range_checks.clone();
 
@@ -1093,6 +1097,24 @@ impl Model {
                 vars.advices[0..3].try_into()?,
                 vars.advices[3..6].try_into()?,
             )?;
+        }
+
+        // Configures the circuit to use Freivalds' argument
+        // In the dummy phase, Freivalds' is configured as a default (unless `disable-freivalds` is not enabled),
+        // but if einsum coordinate is 0, it means that all the einsum layouts are dispatched to use only base operations.
+        if settings.einsum_params.total_einsum_col_size > 0 {
+            debug!("configuring einsums...");
+            let used_einsums: HashMap<(usize, String), HashMap<char, usize>> = settings
+                .einsum_params
+                .equations
+                .iter()
+                .enumerate()
+                .map(|(idx, (equation, indices_to_dims))| {
+                    ((idx, equation.clone()), indices_to_dims.clone())
+                })
+                .collect();
+            let analysis = analyze_einsum_usage(&used_einsums)?;
+            base_gate.configure_einsums(meta, &analysis, num_inner_cols, logrows)?;
         }
 
         Ok(base_gate)
@@ -1147,17 +1169,30 @@ impl Model {
 
         let original_constants = constants.clone();
 
+        let challenges = {
+            if let Some(einsum_config) = &config.base.einsums {
+                einsum_config
+                    .challenges()?
+                    .iter()
+                    .map(|c| layouter.get_challenge(*c))
+                    .collect_vec()
+            } else {
+                vec![]
+            }
+        };
+
         let outputs = layouter.assign_region(
             || "model",
             |region| {
-                let mut thread_safe_region = RegionCtx::new_with_constants(
+                let mut thread_safe_region = RegionCtx::new_with_challenges(
                     region,
                     0,
                     run_args.num_inner_cols,
                     run_args.decomp_base,
                     run_args.decomp_legs,
-                    original_constants.clone(),
+                    challenges.clone(),
                 );
+                thread_safe_region.update_constants(original_constants.clone());
                 // we need to do this as this loop is called multiple times
                 vars.set_instance_idx(instance_idx);
 
@@ -1459,8 +1494,16 @@ impl Model {
             results.insert(*input_idx, vec![inputs[i].clone()]);
         }
 
-        let mut dummy_config =
-            PolyConfig::dummy(run_args.logrows as usize, run_args.num_inner_cols);
+        let mut dummy_config = {
+            if run_args.disable_freivalds {
+                PolyConfig::dummy_without_freivalds(
+                    run_args.logrows as usize,
+                    run_args.num_inner_cols,
+                )
+            } else {
+                PolyConfig::dummy(run_args.logrows as usize, run_args.num_inner_cols)
+            }
+        };
         let mut model_config = ModelConfig {
             base: dummy_config.clone(),
             vars: ModelVars::new_dummy(),
@@ -1528,6 +1571,10 @@ impl Model {
             shuffle_params: ShuffleParams {
                 num_shuffles: region.shuffle_index(),
                 total_shuffle_col_size: region.shuffle_col_coord(),
+            },
+            einsum_params: crate::graph::EinsumParams {
+                equations: region.used_einsum_equations(),
+                total_einsum_col_size: region.einsum_col_coord(),
             },
             total_const_size: region.total_constants(),
             lookup_ops: region.used_lookups(),

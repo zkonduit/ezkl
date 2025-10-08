@@ -22,9 +22,8 @@ use crate::{
     tensor::{
         create_unit_tensor, get_broadcasted_shape,
         ops::{accumulated, add, mult, sub},
-        Tensor, TensorError, ValType,
+        DataFormat, KernelFormat, Tensor, TensorError, ValType,
     },
-    tensor::{DataFormat, KernelFormat},
 };
 
 use super::*;
@@ -823,10 +822,69 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], "mk,n->ma").unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[1773]), &[1, 1]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
-///
 /// ```
-///
 pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    inputs: &[&ValTensor<F>],
+    equation: &str,
+) -> Result<ValTensor<F>, CircuitError> {
+    let mut eq = equation.split("->");
+    let inputs_eq = eq.next().ok_or(CircuitError::InvalidEinsum)?;
+    let inputs_eq = inputs_eq.split(',').collect::<Vec<_>>();
+
+    // Check that the number of inputs matches the number of inputs in the equation
+    if inputs.len() != inputs_eq.len() {
+        return Err(TensorError::DimMismatch("einsum".to_string()).into());
+    }
+
+    let mut indices_to_size = HashMap::new();
+    for (i, input) in inputs.iter().enumerate() {
+        for j in 0..inputs_eq[i].len() {
+            let c = inputs_eq[i]
+                .chars()
+                .nth(j)
+                .ok_or(CircuitError::InvalidEinsum)?;
+            if let std::collections::hash_map::Entry::Vacant(e) = indices_to_size.entry(c) {
+                e.insert(input.dims()[j]);
+            } else if indices_to_size[&c] != input.dims()[j] {
+                return Err(TensorError::DimMismatch("einsum".to_string()).into());
+            }
+        }
+    }
+
+    // Track the einsum equation
+    region.add_used_einsum_equation(equation.to_string(), &indices_to_size)?;
+
+    if config.einsums.is_none() {
+        return einsum_with_base_ops(config, region, inputs, equation);
+    }
+
+    let input_values = inputs
+        .iter()
+        .map(|t| t.get_inner())
+        .collect::<Result<Vec<_>, TensorError>>()?;
+    let (output_tensor, _) =
+        crate::tensor::ops::accumulated::einsum(equation, &input_values.iter().collect_vec())?;
+
+    config.einsums.as_ref().unwrap().assign_einsum(
+        config,
+        region,
+        inputs,
+        &output_tensor.clone().into(),
+        equation,
+        &config.check_mode,
+    )?;
+
+    let output: ValTensor<F> = output_tensor.into();
+
+    region.increment_einsum_index(1);
+
+    Ok(output)
+}
+
+/// einsum with base ops
+pub fn einsum_with_base_ops<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     inputs: &[&ValTensor<F>],
@@ -1035,6 +1093,8 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     region.apply_in_loop(&mut output, inner_loop_function)?;
 
     let output: ValTensor<F> = output.into();
+
+    region.increment_einsum_index(1);
 
     Ok(output)
 }

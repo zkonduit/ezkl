@@ -191,6 +191,9 @@ struct PyRunArgs {
     /// float: epsilon used for arguments that use division
     #[pyo3(get, set)]
     pub epsilon: f64,
+    /// bool: Whether to disable using Freivalds' argument in einsum operations
+    #[pyo3(get, set)]
+    pub disable_freivalds: bool,
 }
 
 /// default instantiation of PyRunArgs
@@ -225,6 +228,7 @@ impl From<PyRunArgs> for RunArgs {
             decomp_legs: py_run_args.decomp_legs,
             ignore_range_check_inputs_outputs: py_run_args.ignore_range_check_inputs_outputs,
             epsilon: Some(py_run_args.epsilon),
+            disable_freivalds: py_run_args.disable_freivalds,
         }
     }
 }
@@ -252,6 +256,7 @@ impl Into<PyRunArgs> for RunArgs {
             decomp_legs: self.decomp_legs,
             ignore_range_check_inputs_outputs: self.ignore_range_check_inputs_outputs,
             epsilon: eps,
+            disable_freivalds: self.disable_freivalds,
         }
     }
 }
