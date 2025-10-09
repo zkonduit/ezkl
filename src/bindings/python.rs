@@ -1647,15 +1647,6 @@ impl pyo3_stub_gen::PyStubType for CalibrationTarget {
     }
 }
 
-impl pyo3_stub_gen::PyStubType for TranscriptType {
-    fn type_output() -> TypeInfo {
-        TypeInfo {
-            name: "str".to_string(),
-            import: HashSet::new(),
-        }
-    }
-}
-
 impl pyo3_stub_gen::PyStubType for CheckMode {
     fn type_output() -> TypeInfo {
         TypeInfo {
