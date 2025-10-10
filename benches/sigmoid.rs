@@ -4,7 +4,7 @@ use ezkl::circuit::table::Range;
 use ezkl::circuit::{ops::lookup::LookupOp, BaseConfig as Config, CheckMode};
 use ezkl::fieldutils::IntegerRep;
 use ezkl::pfsys::create_proof_circuit;
-use ezkl::pfsys::TranscriptType;
+
 use ezkl::pfsys::{create_keys, srs::gen_srs};
 use ezkl::tensor::*;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
@@ -125,7 +125,6 @@ fn runrelu(c: &mut Criterion) {
                     &pk,
                     CheckMode::UNSAFE,
                     ezkl::Commitments::KZG,
-                    TranscriptType::EVM,
                     None,
                     None,
                 );

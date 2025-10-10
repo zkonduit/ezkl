@@ -96,13 +96,6 @@ objc = { version = "0.2.4", optional = true }
 pyo3-stub-gen = { version = "0.6.0", optional = true }
 jemallocator = { version = "0.5", optional = true }
 mimalloc = { version = "0.1", optional = true }
-# universal bindings
-uniffi = { version = "=0.28.0", optional = true }
-getrandom = { version = "0.2.8", optional = true }
-uniffi_bindgen = { version = "=0.28.0", optional = true }
-camino = { version = "^1.1", optional = true }
-uuid = { version = "1.10.0", features = ["v4"], optional = true }
-
 # GPU / device related things (optional - only enabled with gpu-accelerated feature)
 icicle-runtime = { git = "https://github.com/ingonyama-zk/icicle", branch="emir/gate_eval_2", package="icicle-runtime", optional = true }
 
@@ -215,9 +208,7 @@ test = false
 bench = false
 required-features = ["ezkl"]
 
-[[bin]]
-name = "ios_gen_bindings"
-required-features = ["ios-bindings", "uuid", "camino", "uniffi_bindgen"]
+
 
 [[bin]]
 name = "py_stub_gen"
@@ -236,16 +227,7 @@ default = [
 ]
 onnx = ["dep:tract-onnx"]
 python-bindings = ["pyo3", "pyo3-log", "pyo3-async-runtimes", "pyo3-stub-gen"]
-universal-bindings = [
-    "uniffi",
-    "mv-lookup",
-    "precompute-coset",
-    "parallel-poly-read",
-    "dep:halo2_solidity_verifier"
-]
 logging = ["dep:colored", "dep:env_logger", "dep:chrono"]
-ios-bindings = ["universal-bindings"]
-ios-bindings-test = ["ios-bindings", "uniffi/bindgen-tests"]
 ezkl = [
     "onnx",
     "tabled/color",

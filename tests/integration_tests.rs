@@ -17,8 +17,6 @@ mod native_tests {
     use std::process::{Child, Command};
     use std::sync::Once;
     static COMPILE: Once = Once::new();
-    #[allow(dead_code)]
-    static COMPILE_WASM: Once = Once::new();
     static ENV_SETUP: Once = Once::new();
 
     const TEST_BINARY: &str = "test-runs/ezkl";
@@ -72,13 +70,6 @@ mod native_tests {
         COMPILE.call_once(|| {
             println!("using cargo target dir: {}", *CARGO_TARGET_DIR);
             build_ezkl();
-        });
-    }
-
-    #[allow(dead_code)]
-    fn init_wasm() {
-        COMPILE_WASM.call_once(|| {
-            build_wasm_ezkl();
         });
     }
 
@@ -184,8 +175,6 @@ mod native_tests {
     }
 
     const PF_FAILURE: &str = "examples/test_failure_proof.json";
-
-    const PF_FAILURE_AGGR: &str = "examples/test_failure_aggr_proof.json";
 
     const LARGE_TESTS: [&str; 8] = [
         "self_attention",
@@ -314,90 +303,6 @@ mod native_tests {
         "large_mlp",   // 99
     ];
 
-    const WASM_TESTS: [&str; 44] = [
-        "1l_mlp",     // 0
-        "1l_slice",   // 1
-        "1l_concat",  // 2
-        "1l_flatten", // 3
-        // "1l_average",
-        "1l_div",         // 4
-        "1l_pad",         // 5
-        "1l_reshape",     // 6
-        "1l_eltwise_div", // 7
-        "1l_sigmoid",     // 8
-        "1l_sqrt",        // 9
-        "1l_softmax",     // 10
-        // "1l_instance_norm",
-        "1l_batch_norm",  // 11
-        "1l_prelu",       // 12
-        "1l_leakyrelu",   // 13
-        "1l_gelu_noappx", // 14
-        // "1l_gelu_tanh_appx",
-        "1l_relu",               // 15
-        "1l_downsample",         // 16
-        "1l_tanh",               // 17
-        "2l_relu_sigmoid_small", // 18
-        "2l_relu_fc",            // 19
-        "2l_relu_small",         // 20
-        "2l_relu_sigmoid",       // 21
-        "1l_conv",               // 22
-        "2l_sigmoid_small",      // 23
-        "2l_relu_sigmoid_conv",  // 24
-        // "3l_relu_conv_fc",
-        // "4l_relu_conv_fc",
-        "1l_erf",            // 25
-        "1l_var",            // 26
-        "1l_elu",            // 27
-        "min",               // 28
-        "max",               // 29
-        "1l_max_pool",       // 30
-        "1l_conv_transpose", // 31
-        "1l_upsample",       // 32
-        "1l_identity",       // 33
-        // "idolmodel",
-        "trig",                   // 34
-        "prelu_gmm",              // 35
-        "lstm",                   // 36
-        "rnn",                    // 37
-        "quantize_dequantize",    // 38
-        "1l_where",               // 39
-        "boolean",                // 40
-        "boolean_identity",       // 41
-        "gradient_boosted_trees", // 42
-        "1l_topk",                // 43
-                                  // "xgboost",
-                                  // "lightgbm",
-                                  // "hummingbird_decision_tree",
-    ];
-
-    #[cfg(not(feature = "gpu-accelerated"))]
-    const TESTS_AGGR: [&str; 21] = [
-        "1l_mlp",
-        "1l_flatten",
-        "1l_average",
-        "1l_reshape",
-        "1l_div",
-        "1l_pad",
-        "1l_sigmoid",
-        "1l_gelu_noappx",
-        "1l_sqrt",
-        "1l_prelu",
-        "1l_var",
-        "1l_leakyrelu",
-        "1l_relu",
-        "1l_tanh",
-        "2l_relu_fc",
-        "2l_relu_sigmoid_small",
-        "2l_relu_small",
-        "1l_conv",
-        "min",
-        "max",
-        "1l_max_pool",
-    ];
-
-    #[cfg(feature = "gpu-accelerated")]
-    const TESTS_AGGR: [&str; 3] = ["1l_mlp", "1l_flatten", "1l_average"];
-
     const TESTS_EVM: [&str; 23] = [
         "1l_mlp",                // 0
         "1l_flatten",            // 1
@@ -424,90 +329,7 @@ mod native_tests {
         "quantize_dequantize",   // 22
     ];
 
-    const TESTS_EVM_AGGR: [&str; 18] = [
-        "1l_mlp",
-        "1l_reshape",
-        "1l_sigmoid",
-        "1l_div",
-        "1l_sqrt",
-        "1l_prelu",
-        "1l_var",
-        "1l_leakyrelu",
-        "1l_gelu_noappx",
-        "1l_relu",
-        "1l_tanh",
-        "2l_relu_sigmoid_small",
-        "2l_relu_small",
-        "2l_relu_fc",
-        "min",
-        "max",
-        "idolmodel",
-        "1l_identity",
-    ];
-
     const EXAMPLES: [&str; 2] = ["mlp_4d_einsum", "conv2d_mnist"];
-
-    macro_rules! test_func_aggr {
-    () => {
-        #[cfg(test)]
-        mod tests_aggr {
-            use seq_macro::seq;
-            use crate::native_tests::TESTS_AGGR;
-            use test_case::test_case;
-            use crate::native_tests::aggr_prove_and_verify;
-            #[cfg(not(feature = "gpu-accelerated"))]
-            use crate::native_tests::kzg_aggr_mock_prove_and_verify;
-            use tempdir::TempDir;
-            use ezkl::Commitments;
-
-            #[cfg(not(feature="gpu-accelerated"))]
-            seq!(N in 0..=20 {
-
-            #(#[test_case(TESTS_AGGR[N])])*
-            fn kzg_aggr_mock_prove_and_verify_(test: &str) {
-                crate::native_tests::init_binary();
-                let test_dir = TempDir::new(test).unwrap();
-                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                kzg_aggr_mock_prove_and_verify(path, test.to_string());
-                test_dir.close().unwrap();
-            }
-
-
-
-            #(#[test_case(TESTS_AGGR[N])])*
-            fn kzg_aggr_prove_and_verify_(test: &str) {
-                crate::native_tests::init_binary();
-                let test_dir = TempDir::new(test).unwrap();
-                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                aggr_prove_and_verify(path, test.to_string(), "private", "private", "public", Commitments::KZG);
-                test_dir.close().unwrap();
-            }
-
-            #(#[test_case(TESTS_AGGR[N])])*
-            fn ipa_aggr_prove_and_verify_(test: &str) {
-                crate::native_tests::init_binary();
-                let test_dir = TempDir::new(test).unwrap();
-                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                aggr_prove_and_verify(path, test.to_string(), "private", "private", "public", Commitments::IPA);
-                test_dir.close().unwrap();
-            }
-
-            });
-
-            #[cfg(feature="gpu-accelerated")]
-            seq!(N in 0..=2 {
-            #(#[test_case(TESTS_AGGR[N])])*
-            fn kzg_aggr_prove_and_verify_(test: &str) {
-                crate::native_tests::init_binary();
-                let test_dir = TempDir::new(test).unwrap();
-                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-                aggr_prove_and_verify(path, test.to_string(), "private", "private", "public", Commitments::KZG);
-                test_dir.close().unwrap();
-            }
-            });
-    }
-    };
-}
 
     macro_rules! test_func {
     () => {
@@ -515,15 +337,12 @@ mod native_tests {
         mod tests {
             use seq_macro::seq;
             use crate::native_tests::TESTS;
-            use crate::native_tests::WASM_TESTS;
             use crate::native_tests::ACCURACY_CAL_TESTS;
             use crate::native_tests::LARGE_TESTS;
             use test_case::test_case;
             use crate::native_tests::mock;
             use crate::native_tests::accuracy_measurement;
             use crate::native_tests::prove_and_verify;
-            // use crate::native_tests::run_js_tests;
-            // use crate::native_tests::render_circuit;
             use crate::native_tests::model_serialization_different_binaries;
 
             use tempdir::TempDir;
@@ -806,7 +625,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-               prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 1, None, false, "single", Commitments::KZG, 2);
+               prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 1, None, false, Commitments::KZG, 2);
                test_dir.close().unwrap();
             }
 
@@ -815,7 +634,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-               prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 3, None, false, "single", Commitments::KZG, 2);
+               prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 3, None, false, Commitments::KZG, 2);
                test_dir.close().unwrap();
             }
 
@@ -824,7 +643,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-               prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 4, None, false, "single", Commitments::KZG, 2);
+               prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 4, None, false, Commitments::KZG, 2);
                test_dir.close().unwrap();
             }
 
@@ -833,7 +652,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-               prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 8, None, false, "single", Commitments::KZG, 2);
+               prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 8, None, false, Commitments::KZG, 2);
                test_dir.close().unwrap();
             }
 
@@ -842,7 +661,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-               prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 1, None, false, "single", Commitments::KZG, 2);
+               prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 1, None, false, Commitments::KZG, 2);
                test_dir.close().unwrap();
             }
 
@@ -853,7 +672,7 @@ mod native_tests {
                 let path = test_dir.into_path();
                 let path = path.to_str().unwrap();
                 crate::native_tests::mv_test_(path, test);
-               prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 1, None, false, "single", Commitments::KZG, 1);
+               prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 1, None, false, Commitments::KZG, 1);
             //    test_dir.close().unwrap();
             }
 
@@ -862,7 +681,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-               prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 1, None, false, "single", Commitments::IPA, 2);
+               prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 1, None, false, Commitments::IPA, 2);
                test_dir.close().unwrap();
             }
 
@@ -871,7 +690,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-               prove_and_verify(path, test.to_string(), "safe", "public", "private", "public", 1, None, false, "single", Commitments::KZG, 2);
+               prove_and_verify(path, test.to_string(), "safe", "public", "private", "public", 1, None, false, Commitments::KZG, 2);
                test_dir.close().unwrap();
             }
 
@@ -880,7 +699,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-               prove_and_verify(path, test.to_string(), "safe", "private", "fixed", "public", 1, None, false, "single", Commitments::KZG, 2);
+               prove_and_verify(path, test.to_string(), "safe", "private", "fixed", "public", 1, None, false, Commitments::KZG, 2);
                test_dir.close().unwrap();
             }
 
@@ -889,7 +708,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-               prove_and_verify(path, test.to_string(), "safe", "private", "private", "hashed", 1, None, false, "single", Commitments::KZG, 2);
+               prove_and_verify(path, test.to_string(), "safe", "private", "private", "hashed", 1, None, false, Commitments::KZG, 2);
                test_dir.close().unwrap();
             }
 
@@ -898,7 +717,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-               prove_and_verify(path, test.to_string(), "safe", "private", "private", "polycommit", 1, None, false, "single", Commitments::KZG, 2);
+               prove_and_verify(path, test.to_string(), "safe", "private", "private", "polycommit", 1, None, false, Commitments::KZG, 2);
                test_dir.close().unwrap();
             }
 
@@ -907,7 +726,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-               prove_and_verify(path, test.to_string(), "safe", "private", "private", "polycommit", 1, None, false, "single", Commitments::IPA, 2);
+               prove_and_verify(path, test.to_string(), "safe", "private", "private", "polycommit", 1, None, false, Commitments::IPA, 2);
                test_dir.close().unwrap();
             }
 
@@ -915,42 +734,33 @@ mod native_tests {
 
             seq!(N in 0..=43 {
 
-                #(#[test_case(WASM_TESTS[N])])*
+                #(#[test_case(TESTS[N])])*
                 fn kzg_prove_and_verify_with_overflow_(test: &str) {
                     crate::native_tests::init_binary();
-                    // crate::native_tests::init_wasm();
                     let test_dir = TempDir::new(test).unwrap();
                     env_logger::init();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                    prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 1, None, true, "single", Commitments::KZG, 2);
-                    // #[cfg(not(feature = "gpu-accelerated"))]
-                    // run_js_tests(path, test.to_string(), "testWasm", false);
+                    prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 1, None, true, Commitments::KZG, 2);
                     test_dir.close().unwrap();
                 }
 
-                #(#[test_case(WASM_TESTS[N])])*
+                #(#[test_case(TESTS[N])])*
                 fn kzg_prove_and_verify_with_overflow_hashed_inputs_(test: &str) {
                     crate::native_tests::init_binary();
-                    // crate::native_tests::init_wasm();
                     let test_dir = TempDir::new(test).unwrap();
                     env_logger::init();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                    prove_and_verify(path, test.to_string(), "safe", "hashed", "private", "public", 1, None, true, "single", Commitments::KZG, 2);
-                    // #[cfg(not(feature = "gpu-accelerated"))]
-                    // run_js_tests(path, test.to_string(), "testWasm", false);
+                    prove_and_verify(path, test.to_string(), "safe", "hashed", "private", "public", 1, None, true, Commitments::KZG, 2);
                     test_dir.close().unwrap();
                 }
 
-                #(#[test_case(WASM_TESTS[N])])*
+                #(#[test_case(TESTS[N])])*
                 fn kzg_prove_and_verify_with_overflow_fixed_params_(test: &str) {
                     crate::native_tests::init_binary();
-                    // crate::native_tests::init_wasm();
                     let test_dir = TempDir::new(test).unwrap();
                     env_logger::init();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                    prove_and_verify(path, test.to_string(), "safe", "private", "fixed", "public", 1, None, true, "single", Commitments::KZG, 2);
-                    // #[cfg(not(feature = "gpu-accelerated"))]
-                    // run_js_tests(path, test.to_string(), "testWasm", false);
+                    prove_and_verify(path, test.to_string(), "safe", "private", "fixed", "public", 1, None, true, Commitments::KZG, 2);
                     test_dir.close().unwrap();
                 }
 
@@ -964,7 +774,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                prove_and_verify(path, test.to_string(), "unsafe", "private", "fixed", "public", 1, None, false, "single", Commitments::KZG, 2);
+                prove_and_verify(path, test.to_string(), "unsafe", "private", "fixed", "public", 1, None, false, Commitments::KZG, 2);
                 test_dir.close().unwrap();
             }
 
@@ -989,16 +799,11 @@ mod native_tests {
             use seq_macro::seq;
             use crate::native_tests::TESTS_EVM;
             use crate::native_tests::TESTS;
-            use crate::native_tests::TESTS_EVM_AGGR;
             use test_case::test_case;
             use crate::native_tests::kzg_evm_prove_and_verify;
             use crate::native_tests::kzg_evm_prove_and_verify_reusable_verifier;
-
-            use crate::native_tests::kzg_evm_aggr_prove_and_verify;
             use tempdir::TempDir;
             use crate::native_tests::Hardfork;
-            #[cfg(not(feature = "gpu-accelerated"))]
-            use crate::native_tests::run_js_tests;
             use ezkl::logger::init_logger;
             use crate::native_tests::lazy_static;
 
@@ -1009,20 +814,7 @@ mod native_tests {
             }
 
 
-            seq!(N in 0..=17 {
-                // these take a particularly long time to run
-                #(#[test_case(TESTS_EVM_AGGR[N])])*
-                #[ignore]
-                fn kzg_evm_aggr_prove_and_verify_(test: &str) {
-                    crate::native_tests::init_binary();
-                    let test_dir = TempDir::new(test).unwrap();
-                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                    let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
-                    kzg_evm_aggr_prove_and_verify(path, test.to_string(), "private", "private", "public");
-                    test_dir.close().unwrap();
-                }
 
-            });
 
             seq!(N in 0..=99 {
                 #(#[test_case(TESTS[N])])*
@@ -1098,8 +890,6 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "private", "private", "public");
-                    #[cfg(not(feature = "gpu-accelerated"))]
-                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
 
                 }
@@ -1112,8 +902,6 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let mut _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "hashed", "private", "private");
-                    #[cfg(not(feature = "gpu-accelerated"))]
-                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
                 }
 
@@ -1129,8 +917,6 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let mut _anvil_child = crate::native_tests::start_anvil(false, hardfork);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "polycommit", "private", "public");
-                    #[cfg(not(feature = "gpu-accelerated"))]
-                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
                 }
 
@@ -1142,8 +928,6 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "private", "hashed", "public");
-                    #[cfg(not(feature = "gpu-accelerated"))]
-                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
 
                 }
@@ -1155,8 +939,6 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "private", "private", "hashed");
-                    #[cfg(not(feature = "gpu-accelerated"))]
-                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
                 }
 
@@ -1168,8 +950,6 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "private", "polycommit", "public");
-                    #[cfg(not(feature = "gpu-accelerated"))]
-                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
                 }
 
@@ -1181,8 +961,6 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "private", "private", "polycommit");
-                    #[cfg(not(feature = "gpu-accelerated"))]
-                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
                 }
 
@@ -1193,8 +971,6 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "polycommit", "polycommit", "polycommit");
-                    #[cfg(not(feature = "gpu-accelerated"))]
-                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
                 }
 
@@ -1204,6 +980,8 @@ mod native_tests {
             });
     }
     };
+
+
 }
 
     macro_rules! test_func_examples {
@@ -1222,12 +1000,20 @@ mod native_tests {
             });
     }
     };
-}
+  }
 
     test_func!();
-    test_func_aggr!();
     test_func_evm!();
     test_func_examples!();
+
+    // Mock prove (fast, but does not cover some potential issues)
+    fn run_example(example_name: String) {
+        let status = Command::new("cargo")
+            .args(["run", "--release", "--example", example_name.as_str()])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+    }
 
     fn model_serialization_different_binaries(test_dir: &str, example_name: String) {
         let status = Command::new("cargo")
@@ -1330,15 +1116,6 @@ mod native_tests {
 
         let status = Command::new("mv")
             .args(["Cargo.toml.bak", "Cargo.toml"])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-    }
-
-    // Mock prove (fast, but does not cover some potential issues)
-    fn run_example(example_name: String) {
-        let status = Command::new("cargo")
-            .args(["run", "--release", "--example", example_name.as_str()])
             .status()
             .expect("failed to execute process");
         assert!(status.success());
@@ -1560,233 +1337,6 @@ mod native_tests {
         assert!(status.success());
     }
 
-    // // Mock prove (fast, but does not cover some potential issues)
-    // fn render_circuit(test_dir: &str, example_name: String) {
-    //     let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
-    //         .args([
-    //             "render-circuit",
-    //             "-M",
-    //             format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-    //             "-O",
-    //             format!("{}/{}/render.png", test_dir, example_name).as_str(),
-    //             "--lookup-range=-32768->32768",
-    //             "-K=17",
-    //         ])
-    //         .status()
-    //         .expect("failed to execute process");
-    //     assert!(status.success());
-    // }
-
-    // prove-serialize-verify, the usual full path
-    #[cfg(not(feature = "gpu-accelerated"))]
-    fn kzg_aggr_mock_prove_and_verify(test_dir: &str, example_name: String) {
-        prove_and_verify(
-            test_dir,
-            example_name.clone(),
-            "safe",
-            "private",
-            "private",
-            "public",
-            2,
-            None,
-            false,
-            "for-aggr",
-            Commitments::KZG,
-            2,
-        );
-        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
-            .args([
-                "mock-aggregate",
-                "--logrows=23",
-                "--aggregation-snarks",
-                &format!("{}/{}/proof.pf", test_dir, example_name),
-            ])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-    }
-
-    // prove-serialize-verify, the usual full path
-    fn aggr_prove_and_verify(
-        test_dir: &str,
-        example_name: String,
-        input_visibility: &str,
-        param_visibility: &str,
-        output_visibility: &str,
-        commitment: Commitments,
-    ) {
-        prove_and_verify(
-            test_dir,
-            example_name.clone(),
-            "safe",
-            input_visibility,
-            param_visibility,
-            output_visibility,
-            2,
-            None,
-            false,
-            "for-aggr",
-            Commitments::KZG,
-            2,
-        );
-
-        download_srs(23, commitment);
-        // now setup-aggregate
-        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
-            .args([
-                "setup-aggregate",
-                "--sample-snarks",
-                &format!("{}/{}/proof.pf", test_dir, example_name),
-                "--logrows=23",
-                "--vk-path",
-                &format!("{}/{}/aggr.vk", test_dir, example_name),
-                "--pk-path",
-                &format!("{}/{}/aggr.pk", test_dir, example_name),
-                &format!("--commitment={}", commitment),
-            ])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-
-        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
-            .args([
-                "aggregate",
-                "--logrows=23",
-                "--aggregation-snarks",
-                &format!("{}/{}/proof.pf", test_dir, example_name),
-                "--proof-path",
-                &format!("{}/{}/aggr.pf", test_dir, example_name),
-                "--pk-path",
-                &format!("{}/{}/aggr.pk", test_dir, example_name),
-                &format!("--commitment={}", commitment),
-            ])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
-            .args([
-                "verify-aggr",
-                "--logrows=23",
-                "--proof-path",
-                &format!("{}/{}/aggr.pf", test_dir, example_name),
-                "--vk-path",
-                &format!("{}/{}/aggr.vk", test_dir, example_name),
-            ])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-    }
-
-    // prove-serialize-verify, the usual full path
-    fn kzg_evm_aggr_prove_and_verify(
-        test_dir: &str,
-        example_name: String,
-        input_visibility: &str,
-        param_visibility: &str,
-        output_visibility: &str,
-    ) {
-        aggr_prove_and_verify(
-            test_dir,
-            example_name.clone(),
-            input_visibility,
-            param_visibility,
-            output_visibility,
-            Commitments::KZG,
-        );
-
-        download_srs(23, Commitments::KZG);
-
-        let vk_arg = &format!("{}/{}/aggr.vk", test_dir, example_name);
-
-        fn build_args<'a>(base_args: Vec<&'a str>, sol_arg: &'a str) -> Vec<&'a str> {
-            let mut args = base_args;
-
-            args.push("--sol-code-path");
-            args.push(sol_arg);
-            args
-        }
-
-        let sol_arg = format!("{}/{}/kzg_aggr.sol", test_dir, example_name);
-        let addr_path_arg = format!("--addr-path={}/{}/addr.txt", test_dir, example_name);
-        let rpc_arg = format!("--rpc-url={}", *ANVIL_URL);
-        let settings_arg = format!("{}/{}/settings.json", test_dir, example_name);
-        let private_key = format!("--private-key={}", *ANVIL_DEFAULT_PRIVATE_KEY);
-
-        // create encoded calldata
-        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
-            .args([
-                "encode-evm-calldata",
-                "--proof-path",
-                &format!("{}/{}/aggr.pf", test_dir, example_name),
-            ])
-            .status()
-            .expect("failed to execute process");
-
-        assert!(status.success());
-
-        let base_args = vec![
-            "create-evm-verifier-aggr",
-            "--vk-path",
-            vk_arg.as_str(),
-            "--aggregation-settings",
-            settings_arg.as_str(),
-            "--logrows=23",
-        ];
-
-        let args = build_args(base_args, &sol_arg);
-
-        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
-            .args(args)
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-
-        // deploy the verifier
-        let args = vec![
-            "deploy-evm",
-            rpc_arg.as_str(),
-            addr_path_arg.as_str(),
-            "--sol-code-path",
-            sol_arg.as_str(),
-            private_key.as_str(),
-        ];
-
-        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
-            .args(&args)
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-
-        // read in the address
-        let addr = std::fs::read_to_string(format!("{}/{}/addr.txt", test_dir, example_name))
-            .expect("failed to read address file");
-
-        let deployed_addr_arg = format!("--addr-verifier={}", addr);
-
-        let pf_arg = format!("{}/{}/aggr.pf", test_dir, example_name);
-
-        let mut base_args = vec![
-            "verify-evm",
-            "--proof-path",
-            pf_arg.as_str(),
-            deployed_addr_arg.as_str(),
-            rpc_arg.as_str(),
-        ];
-
-        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
-            .args(&base_args)
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-        // As sanity check, add example that should fail.
-        base_args[2] = PF_FAILURE_AGGR;
-        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
-            .args(base_args)
-            .status()
-            .expect("failed to execute process");
-        assert!(!status.success());
-    }
-
     // prove-serialize-verify, the usual full path
     #[allow(clippy::too_many_arguments)]
     fn prove_and_verify(
@@ -1799,7 +1349,6 @@ mod native_tests {
         num_inner_columns: usize,
         scales_to_use: Option<Vec<u32>>,
         overflow: bool,
-        proof_type: &str,
         commitment: Commitments,
         lookup_safety_margin: usize,
     ) {
@@ -1857,7 +1406,6 @@ mod native_tests {
                 "--pk-path",
                 &format!("{}/{}/key.pk", test_dir, example_name),
                 &format!("--check-mode={}", checkmode),
-                &format!("--proof-type={}", proof_type),
             ])
             .status()
             .expect("failed to execute process");
@@ -1934,7 +1482,6 @@ mod native_tests {
             num_inner_columns,
             None,
             false,
-            "single",
             Commitments::KZG,
             2,
         );
@@ -2061,7 +1608,6 @@ mod native_tests {
             num_inner_columns,
             None,
             overflow,
-            "single",
             Commitments::KZG,
             2,
         );
@@ -2234,24 +1780,6 @@ mod native_tests {
         deployed_addr_arg
     }
 
-    // run js browser evm verify tests for a given example
-    #[cfg(not(feature = "gpu-accelerated"))]
-    fn run_js_tests(test_dir: &str, example_name: String, js_test: &str, vk: bool) {
-        let example = format!("--example={}", example_name);
-        let dir = format!("--dir={}", test_dir);
-        let mut args = vec!["run", "test", js_test, &example, &dir];
-        let vk_string: String;
-        if vk {
-            vk_string = format!("--vk={}", vk);
-            args.push(&vk_string);
-        };
-        let status = Command::new("pnpm")
-            .args(&args)
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-    }
-
     #[allow(unused_variables)]
     fn build_ezkl() {
         #[cfg(feature = "gpu-accelerated")]
@@ -2287,40 +1815,6 @@ mod native_tests {
 
         let status = Command::new("cargo")
             .args(args)
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-    }
-
-    #[allow(dead_code)]
-    fn build_wasm_ezkl() {
-        // wasm-pack build --target nodejs --out-dir ./tests/wasm/nodejs . -- -Z build-std="panic_abort,std"
-        let status = Command::new("wasm-pack")
-            .args([
-                "build",
-                "--profile=test-runs",
-                "--target",
-                "nodejs",
-                "--out-dir",
-                "./tests/wasm/nodejs",
-                ".",
-                "--",
-                "-Z",
-                "build-std=panic_abort,std",
-            ])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-        // fix the memory size
-        //   sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" tests/wasm/nodejs/ezkl.js
-        let status = Command::new("sed")
-            .args([
-                "-i",
-                // is required on macos
-                // "\".js\"",
-                "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|",
-                "./tests/wasm/nodejs/ezkl.js",
-            ])
             .status()
             .expect("failed to execute process");
         assert!(status.success());

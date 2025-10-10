@@ -9,10 +9,9 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use tosubcommand::{ToFlags, ToSubcommand};
 
-use crate::{pfsys::ProofType, Commitments, RunArgs};
+use crate::{Commitments, RunArgs};
 
 use crate::circuit::CheckMode;
-use crate::pfsys::TranscriptType;
 
 /// The default path to the .json data file
 pub const DEFAULT_DATA: &str = "input.json";
@@ -28,26 +27,16 @@ pub const DEFAULT_SETTINGS: &str = "settings.json";
 pub const DEFAULT_PK: &str = "pk.key";
 /// The default path to the verification key file
 pub const DEFAULT_VK: &str = "vk.key";
-/// The default path to the proving key file for aggregated proofs
-pub const DEFAULT_PK_AGGREGATED: &str = "pk_aggr.key";
-/// The default path to the verification key file for aggregated proofs
-pub const DEFAULT_VK_AGGREGATED: &str = "vk_aggr.key";
 /// The default path to the proof file
 pub const DEFAULT_PROOF: &str = "proof.json";
-/// The default path to the proof file for aggregated proofs
-pub const DEFAULT_PROOF_AGGREGATED: &str = "proof_aggr.json";
 /// Default for whether to split proofs
 pub const DEFAULT_SPLIT: &str = "false";
 /// Default verifier abi
 pub const DEFAULT_VERIFIER_ABI: &str = "verifier_abi.json";
-/// Default verifier abi for aggregated proofs
-pub const DEFAULT_VERIFIER_AGGREGATED_ABI: &str = "verifier_aggr_abi.json";
 /// Default solidity code
 pub const DEFAULT_SOL_CODE: &str = "evm_deploy.sol";
 /// Default calldata path
 pub const DEFAULT_CALLDATA: &str = "calldata.bytes";
-/// Default solidity code for aggregated proofs
-pub const DEFAULT_SOL_CODE_AGGREGATED: &str = "evm_deploy_aggr.sol";
 /// Default contract address
 pub const DEFAULT_CONTRACT_ADDRESS: &str = "contract.address";
 /// Default contract address for vk
@@ -56,8 +45,6 @@ pub const DEFAULT_CONTRACT_ADDRESS_VK: &str = "contract_vk.address";
 pub const DEFAULT_CHECKMODE: &str = "safe";
 /// Default calibration target
 pub const DEFAULT_CALIBRATION_TARGET: &str = "resources";
-/// Default logrows for aggregated proofs
-pub const DEFAULT_AGGREGATED_LOGROWS: &str = "23";
 /// Default optimizer runs
 pub const DEFAULT_OPTIMIZER_RUNS: &str = "1";
 /// Default fuzz runs
@@ -90,35 +77,6 @@ pub const DEFAULT_SEED: &str = "21242";
 pub const DEFAULT_DECIMALS: &str = "18";
 /// Default path for the vka digest file
 pub const DEFAULT_VKA_DIGEST: &str = "vka.digest";
-
-#[cfg(feature = "python-bindings")]
-/// Converts TranscriptType into a PyObject (Required for TranscriptType to be compatible with Python)
-impl<'py> IntoPyObject<'py> for TranscriptType {
-    type Target = pyo3::PyAny;
-    type Output = pyo3::Bound<'py, Self::Target>;
-    type Error = pyo3::PyErr;
-
-    fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
-        let result = match self {
-            TranscriptType::Poseidon => "poseidon",
-            TranscriptType::EVM => "evm",
-        };
-        Ok(result.into_pyobject(py)?.into_any())
-    }
-}
-#[cfg(feature = "python-bindings")]
-/// Obtains TranscriptType from PyObject (Required for TranscriptType to be compatible with Python)
-impl<'source> FromPyObject<'source> for TranscriptType {
-    fn extract_bound(ob: &pyo3::Bound<'source, pyo3::PyAny>) -> PyResult<Self> {
-        let trystr = String::extract_bound(ob)?;
-        let strval = trystr.to_string();
-        match strval.to_lowercase().as_str() {
-            "poseidon" => Ok(TranscriptType::Poseidon),
-            "evm" => Ok(TranscriptType::EVM),
-            _ => Err(PyValueError::new_err("Invalid value for TranscriptType")),
-        }
-    }
-}
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, PartialOrd)]
 /// Determines what the calibration pass should optimize for
@@ -187,7 +145,6 @@ pub enum ContractType {
     /// Deploys a verifier contrat tailored to the circuit and not reusable
     Verifier {
         /// Whether to deploy a reusable verifier. This can reduce state bloat on-chain since you need only deploy a verifying key artifact (vka) for a given circuit which is significantly smaller than the verifier contract (up to 4 times smaller for large circuits)
-        /// Can also be used as an alternative to aggregation for verifiers that are otherwise too large to fit on-chain.
         reusable: bool,
     },
 }
@@ -566,82 +523,6 @@ pub enum Commands {
         model: Option<PathBuf>,
     },
 
-    /// Mock aggregate proofs
-    MockAggregate {
-        /// The path to the snarks to aggregate over (generated using the prove command with the --proof-type=for-aggr flag)
-        #[arg(long, default_value = DEFAULT_PROOF, value_delimiter = ',', allow_hyphen_values = true, value_hint = clap::ValueHint::FilePath)]
-        aggregation_snarks: Vec<PathBuf>,
-        /// logrows used for aggregation circuit
-        #[arg(long, default_value = DEFAULT_AGGREGATED_LOGROWS, value_hint = clap::ValueHint::Other)]
-        logrows: Option<u32>,
-        /// whether the accumulated are segments of a larger proof
-        #[arg(long, default_value = DEFAULT_SPLIT, action = clap::ArgAction::SetTrue)]
-        split_proofs: Option<bool>,
-    },
-
-    /// Setup aggregation circuit and generate pk and vk
-    SetupAggregate {
-        /// The path to samples of snarks that will be aggregated over (generated using the prove command with the --proof-type=for-aggr flag)
-        #[arg(long, default_value = DEFAULT_PROOF, value_delimiter = ',', allow_hyphen_values = true, value_hint = clap::ValueHint::FilePath)]
-        sample_snarks: Vec<PathBuf>,
-        /// The path to save the desired verification key file to
-        #[arg(long, default_value = DEFAULT_VK_AGGREGATED, value_hint = clap::ValueHint::FilePath)]
-        vk_path: Option<PathBuf>,
-        /// The path to save the proving key to
-        #[arg(long, default_value = DEFAULT_PK_AGGREGATED, value_hint = clap::ValueHint::FilePath)]
-        pk_path: Option<PathBuf>,
-        /// The path to SRS, if None will use ~/.ezkl/srs/kzg{logrows}.srs
-        #[arg(long, value_hint = clap::ValueHint::FilePath)]
-        srs_path: Option<PathBuf>,
-        /// logrows used for aggregation circuit
-        #[arg(long, default_value = DEFAULT_AGGREGATED_LOGROWS, value_hint = clap::ValueHint::Other)]
-        logrows: Option<u32>,
-        /// whether the accumulated are segments of a larger proof
-        #[arg(long, default_value = DEFAULT_SPLIT, action = clap::ArgAction::SetTrue)]
-        split_proofs: Option<bool>,
-        /// compress selectors
-        #[arg(long, default_value = DEFAULT_DISABLE_SELECTOR_COMPRESSION, action = clap::ArgAction::SetTrue)]
-        disable_selector_compression: Option<bool>,
-        /// commitment used
-        #[arg(long, default_value = DEFAULT_COMMITMENT, value_hint = clap::ValueHint::Other)]
-        commitment: Option<Commitments>,
-    },
-    /// Aggregates proofs
-    Aggregate {
-        /// The path to the snarks to aggregate over (generated using the prove command with the --proof-type=for-aggr flag)
-        #[arg(long, default_value = DEFAULT_PROOF, value_delimiter = ',', allow_hyphen_values = true, value_hint = clap::ValueHint::FilePath)]
-        aggregation_snarks: Vec<PathBuf>,
-        /// The path to load the desired proving key file (generated using the setup-aggregate command)
-        #[arg(long, default_value = DEFAULT_PK_AGGREGATED, value_hint = clap::ValueHint::FilePath)]
-        pk_path: Option<PathBuf>,
-        /// The path to output the proof file to
-        #[arg(long, default_value = DEFAULT_PROOF_AGGREGATED, value_hint = clap::ValueHint::FilePath)]
-        proof_path: Option<PathBuf>,
-        /// The path to SRS, if None will use ~/.ezkl/srs/kzg{logrows}.srs
-        #[arg(long)]
-        srs_path: Option<PathBuf>,
-        #[arg(
-            long,
-            require_equals = true,
-            num_args = 0..=1,
-            default_value_t = TranscriptType::default(),
-            value_enum,
-            value_hint = clap::ValueHint::Other
-        )]
-        transcript: TranscriptType,
-        /// logrows used for aggregation circuit
-        #[arg(long, default_value = DEFAULT_AGGREGATED_LOGROWS, value_hint = clap::ValueHint::Other)]
-        logrows: Option<u32>,
-        /// run sanity checks during calculations (safe or unsafe)
-        #[arg(long, default_value = DEFAULT_CHECKMODE, value_hint = clap::ValueHint::Other)]
-        check_mode: Option<CheckMode>,
-        /// whether the accumulated proofs are segments of a larger circuit
-        #[arg(long, default_value = DEFAULT_SPLIT, action = clap::ArgAction::SetTrue)]
-        split_proofs: Option<bool>,
-        /// commitment used
-        #[arg(long, default_value = DEFAULT_COMMITMENT, value_hint = clap::ValueHint::Other)]
-        commitment: Option<Commitments>,
-    },
     /// Compiles a circuit from onnx to a simplified graph (einsum + other ops) and parameters as sets of field elements
     CompileCircuit {
         /// The path to the .onnx model file
@@ -702,15 +583,6 @@ pub enum Commands {
         /// The path to SRS, if None will use ~/.ezkl/srs/kzg{logrows}.srs
         #[arg(long, value_hint = clap::ValueHint::FilePath)]
         srs_path: Option<PathBuf>,
-        #[arg(
-            long,
-            require_equals = true,
-            num_args = 0..=1,
-            default_value_t = ProofType::Single,
-            value_enum,
-            value_hint = clap::ValueHint::Other
-        )]
-        proof_type: ProofType,
         /// run sanity checks during calculations (safe or unsafe)
         #[arg(long, default_value = DEFAULT_CHECKMODE, value_hint = clap::ValueHint::Other)]
         check_mode: Option<CheckMode>,
@@ -778,32 +650,6 @@ pub enum Commands {
         decimals: Option<usize>,
     },
 
-    /// Creates an Evm verifier for an aggregate proof
-    #[command(name = "create-evm-verifier-aggr")]
-    #[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
-    CreateEvmVerifierAggr {
-        /// The path to SRS, if None will use ~/.ezkl/srs/kzg{logrows}.srs
-        #[arg(long, value_hint = clap::ValueHint::FilePath)]
-        srs_path: Option<PathBuf>,
-        /// The path to load the desired verification key file
-        #[arg(long, default_value = DEFAULT_VK_AGGREGATED, value_hint = clap::ValueHint::FilePath)]
-        vk_path: Option<PathBuf>,
-        /// The path to the Solidity code
-        #[arg(long, default_value = DEFAULT_SOL_CODE_AGGREGATED, value_hint = clap::ValueHint::FilePath)]
-        sol_code_path: Option<PathBuf>,
-        /// The path to output the Solidity verifier ABI
-        #[arg(long, default_value = DEFAULT_VERIFIER_AGGREGATED_ABI, value_hint = clap::ValueHint::FilePath)]
-        abi_path: Option<PathBuf>,
-        // aggregated circuit settings paths, used to calculate the number of instances in the aggregate proof
-        #[arg(long, default_value = DEFAULT_SETTINGS, value_delimiter = ',', allow_hyphen_values = true, value_hint = clap::ValueHint::FilePath)]
-        aggregation_settings: Vec<PathBuf>,
-        // logrows used for aggregation circuit
-        #[arg(long, default_value = DEFAULT_AGGREGATED_LOGROWS, value_hint = clap::ValueHint::Other)]
-        logrows: Option<u32>,
-        /// Whether to render the verifier as reusable or not. If true, you will need to deploy a VK artifact, passing it as part of the calldata to the verifier.
-        #[cfg_attr(all(feature = "reusable-verifier", not(target_arch = "wasm32")), arg(short = 'R', long, action = clap::ArgAction::SetTrue))]
-        reusable: Option<bool>,
-    },
     /// Verifies a proof, returning accept or reject
     Verify {
         /// The path to load circuit settings .json file from (generated using the gen-settings command)
@@ -822,27 +668,7 @@ pub enum Commands {
         #[arg(long, default_value = DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION, action = clap::ArgAction::SetTrue)]
         reduced_srs: Option<bool>,
     },
-    /// Verifies an aggregate proof, returning accept or reject
-    VerifyAggr {
-        /// The path to the proof file (generated using the prove command)
-        #[arg(long, default_value = DEFAULT_PROOF_AGGREGATED, value_hint = clap::ValueHint::FilePath)]
-        proof_path: Option<PathBuf>,
-        /// The path to the verification key file (generated using the setup-aggregate command)
-        #[arg(long, default_value = DEFAULT_VK_AGGREGATED, value_hint = clap::ValueHint::FilePath)]
-        vk_path: Option<PathBuf>,
-        /// reduced srs
-        #[arg(long, default_value = DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION, action = clap::ArgAction::SetTrue)]
-        reduced_srs: Option<bool>,
-        /// The path to SRS, if None will use ~/.ezkl/srs/kzg{logrows}.srs
-        #[arg(long, value_hint = clap::ValueHint::FilePath)]
-        srs_path: Option<PathBuf>,
-        /// logrows used for aggregation circuit
-        #[arg(long, default_value = DEFAULT_AGGREGATED_LOGROWS, value_hint = clap::ValueHint::Other)]
-        logrows: Option<u32>,
-        /// commitment
-        #[arg(long, default_value = DEFAULT_COMMITMENT, value_hint = clap::ValueHint::Other)]
-        commitment: Option<Commitments>,
-    },
+
     /// Deploys an evm contract (verifier, reusable verifier, or vk artifact) that is generated by ezkl
     #[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
     DeployEvm {

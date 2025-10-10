@@ -1,6 +1,3 @@
-/// EVM related proving and verification
-pub mod evm;
-
 /// SRS generation, processing, verification and downloading
 pub mod srs;
 
@@ -13,11 +10,7 @@ use std::borrow::Borrow;
 
 use crate::circuit::CheckMode;
 use crate::graph::GraphWitness;
-use crate::pfsys::evm::aggregation_kzg::PoseidonTranscript;
 use crate::{Commitments, EZKL_BUF_CAPACITY, EZKL_KEY_FORMAT};
-#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-use clap::ValueEnum;
-use halo2_proofs::circuit::Value;
 use halo2_proofs::plonk::{
     create_proof, keygen_pk, keygen_vk_custom, verify_proof, Circuit, ProvingKey, VerifyingKey,
 };
@@ -37,7 +30,6 @@ use rand::rngs::OsRng;
 use rand::rngs::StdRng;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use snark_verifier::verifier::plonk::PlonkProtocol;
 use std::fs::File;
@@ -45,8 +37,6 @@ use std::io::{self, BufReader, BufWriter, Cursor, Write};
 use std::ops::Deref;
 use std::path::PathBuf;
 use thiserror::Error as thisError;
-#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-use tosubcommand::ToFlags;
 
 #[cfg(feature = "python-bindings")]
 use pyo3::types::PyDictMethods;
@@ -140,178 +130,12 @@ where
     bytes
 }
 
-#[allow(missing_docs)]
-#[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Deserialize, Serialize, PartialOrd)]
-#[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), derive(ValueEnum))]
-pub enum ProofType {
-    #[default]
-    Single,
-    ForAggr,
-}
-
-impl std::fmt::Display for ProofType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                ProofType::Single => "single",
-                ProofType::ForAggr => "for-aggr",
-            }
-        )
-    }
-}
-#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-impl ToFlags for ProofType {
-    fn to_flags(&self) -> Vec<String> {
-        vec![format!("{}", self)]
-    }
-}
-
-impl From<ProofType> for TranscriptType {
-    fn from(val: ProofType) -> Self {
-        match val {
-            ProofType::Single => TranscriptType::EVM,
-            ProofType::ForAggr => TranscriptType::Poseidon,
-        }
-    }
-}
-
-impl From<ProofType> for StrategyType {
-    fn from(val: ProofType) -> Self {
-        match val {
-            ProofType::Single => StrategyType::Single,
-            ProofType::ForAggr => StrategyType::Accum,
-        }
-    }
-}
-
-#[cfg(feature = "python-bindings")]
-impl<'py> pyo3::IntoPyObject<'py> for ProofType {
-    type Target = pyo3::PyAny;
-    type Output = pyo3::Bound<'py, Self::Target>;
-    type Error = pyo3::PyErr;
-
-    fn into_pyobject(self, py: pyo3::Python<'py>) -> Result<Self::Output, Self::Error> {
-        let result = match self {
-            ProofType::Single => "Single",
-            ProofType::ForAggr => "ForAggr",
-        };
-        Ok(result.into_pyobject(py)?.into_any())
-    }
-}
-
-#[cfg(feature = "python-bindings")]
-/// Obtains StrategyType from PyObject (Required for StrategyType to be compatible with Python)
-impl<'source> pyo3::FromPyObject<'source> for ProofType {
-    fn extract_bound(ob: &pyo3::Bound<'source, pyo3::PyAny>) -> pyo3::PyResult<Self> {
-        let strval = String::extract_bound(ob)?;
-        match strval.to_lowercase().as_str() {
-            "single" => Ok(ProofType::Single),
-            "for-aggr" => Ok(ProofType::ForAggr),
-            _ => Err(pyo3::exceptions::PyValueError::new_err(
-                "Invalid value for ProofType",
-            )),
-        }
-    }
-}
-
-#[allow(missing_docs)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
-#[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), derive(ValueEnum))]
-pub enum StrategyType {
-    Single,
-    Accum,
-}
-impl std::fmt::Display for StrategyType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // When the `ezkl` feature is disabled or we're targeting `wasm32`, use basic string representation.
-        #[cfg(any(not(feature = "ezkl"), target_arch = "wasm32"))]
-        {
-            write!(
-                f,
-                "{}",
-                match self {
-                    StrategyType::Single => "single",
-                    StrategyType::Accum => "accum",
-                }
-            )
-        }
-
-        // When the `ezkl` feature is enabled and we're not targeting `wasm32`, use `to_possible_value`.
-        #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-        {
-            self.to_possible_value()
-                .expect("no values are skipped")
-                .get_name()
-                .fmt(f)
-        }
-    }
-}
-#[cfg(feature = "python-bindings")]
-/// Converts StrategyType into a PyObject (Required for StrategyType to be compatible with Python)
-impl<'py> pyo3::IntoPyObject<'py> for StrategyType {
-    type Target = pyo3::PyAny;
-    type Output = pyo3::Bound<'py, Self::Target>;
-    type Error = pyo3::PyErr;
-
-    fn into_pyobject(self, py: pyo3::Python<'py>) -> Result<Self::Output, Self::Error> {
-        let result = match self {
-            StrategyType::Single => "single",
-            StrategyType::Accum => "accum",
-        };
-        Ok(result.into_pyobject(py)?.into_any())
-    }
-}
-#[cfg(feature = "python-bindings")]
-/// Obtains StrategyType from PyObject (Required for StrategyType to be compatible with Python)
-impl<'source> pyo3::FromPyObject<'source> for StrategyType {
-    fn extract_bound(ob: &pyo3::Bound<'source, pyo3::PyAny>) -> pyo3::PyResult<Self> {
-        let strval = String::extract_bound(ob)?;
-        match strval.to_lowercase().as_str() {
-            "single" => Ok(StrategyType::Single),
-            "accum" => Ok(StrategyType::Accum),
-            _ => Err(pyo3::exceptions::PyValueError::new_err(
-                "Invalid value for StrategyType",
-            )),
-        }
-    }
-}
-
 #[derive(thisError, Debug)]
 /// Errors related to pfsys
 pub enum PfSysError {
     /// Packing exponent is too large
     #[error("largest packing exponent exceeds max. try reducing the scale")]
     PackingExponent,
-}
-
-#[allow(missing_docs)]
-#[derive(Default, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize, PartialOrd)]
-#[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), derive(ValueEnum))]
-pub enum TranscriptType {
-    Poseidon,
-    #[default]
-    EVM,
-}
-
-impl std::fmt::Display for TranscriptType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                TranscriptType::Poseidon => "poseidon",
-                TranscriptType::EVM => "evm",
-            }
-        )
-    }
-}
-#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-impl ToFlags for TranscriptType {
-    fn to_flags(&self) -> Vec<String> {
-        vec![format!("{}", self)]
-    }
 }
 
 #[cfg(feature = "python-bindings")]
@@ -371,7 +195,7 @@ pub struct PrettyElements {
     pub outputs: Vec<Vec<String>>,
 }
 
-/// An application snark with proof and instance variables ready for aggregation (raw field element)
+/// An application snark with proof and instance variables
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Snark<F: PrimeField + SerdeObject, C: CurveAffine>
 where
@@ -386,8 +210,6 @@ where
     pub proof: Vec<u8>,
     /// hex encoded proof
     pub hex_proof: Option<String>,
-    /// transcript type
-    pub transcript_type: TranscriptType,
     /// the split proof
     pub split: Option<ProofSplitCommit>,
     /// the proof instances as rescaled floats
@@ -423,8 +245,6 @@ where
         dict.set_item("instances", field_elems).unwrap();
         let hex_proof = hex::encode(&self.proof);
         dict.set_item("proof", format!("0x{}", hex_proof)).unwrap();
-        dict.set_item("transcript_type", self.transcript_type.into_pyobject(py)?)
-            .unwrap();
         Ok(dict.into_any())
     }
 }
@@ -437,14 +257,13 @@ where
     C::Scalar: Serialize + DeserializeOwned,
     C::ScalarExt: Serialize + DeserializeOwned,
 {
-    /// Create a new application snark from proof and instance variables ready for aggregation
+    /// Create a new application snark from proof and instance variables
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         protocol: Option<PlonkProtocol<C>>,
         instances: Vec<Vec<F>>,
         proof: Vec<u8>,
         hex_proof: Option<String>,
-        transcript_type: TranscriptType,
         split: Option<ProofSplitCommit>,
         pretty_public_inputs: Option<PrettyElements>,
         commitment: Option<Commitments>,
@@ -454,7 +273,6 @@ where
             instances,
             proof,
             hex_proof,
-            transcript_type,
             split,
             pretty_public_inputs,
             // unix timestamp
@@ -560,53 +378,6 @@ impl From<GraphWitness> for Option<ProofSplitCommit> {
     }
 }
 
-/// An application snark with proof and instance variables ready for aggregation (wrapped field element)
-#[derive(Clone, Debug)]
-pub struct SnarkWitness<F: PrimeField, C: CurveAffine> {
-    protocol: Option<PlonkProtocol<C>>,
-    instances: Vec<Vec<Value<F>>>,
-    proof: Value<Vec<u8>>,
-    split: Option<ProofSplitCommit>,
-}
-
-impl<F: PrimeField, C: CurveAffine> SnarkWitness<F, C> {
-    fn without_witnesses(&self) -> Self {
-        SnarkWitness {
-            protocol: self.protocol.clone(),
-            instances: self
-                .instances
-                .iter()
-                .map(|instances| vec![Value::unknown(); instances.len()])
-                .collect(),
-            proof: Value::unknown(),
-            split: self.split.clone(),
-        }
-    }
-
-    fn proof(&self) -> Value<&[u8]> {
-        self.proof.as_ref().map(Vec::as_slice)
-    }
-}
-
-impl<F: PrimeField + SerdeObject, C: CurveAffine> From<Snark<F, C>> for SnarkWitness<F, C>
-where
-    C::Scalar: Serialize + DeserializeOwned,
-    C::ScalarExt: Serialize + DeserializeOwned,
-{
-    fn from(snark: Snark<F, C>) -> Self {
-        Self {
-            protocol: snark.protocol,
-            instances: snark
-                .instances
-                .into_iter()
-                .map(|instances| instances.into_iter().map(Value::known).collect())
-                .collect(),
-            proof: Value::known(snark.proof),
-            split: snark.split,
-        }
-    }
-}
-
 /// Creates a [VerifyingKey] and [ProvingKey] for a [crate::graph::GraphCircuit] (`circuit`) with specific [CommitmentScheme] parameters (`params`).
 pub fn create_keys<Scheme: CommitmentScheme, C: Circuit<Scheme::Scalar>>(
     circuit: &C,
@@ -653,7 +424,6 @@ pub fn create_proof_circuit<
     pk: &ProvingKey<Scheme::Curve>,
     check_mode: CheckMode,
     commitment: Commitments,
-    transcript_type: TranscriptType,
     split: Option<ProofSplitCommit>,
     protocol: Option<PlonkProtocol<Scheme::Curve>>,
 ) -> Result<Snark<Scheme::Scalar, Scheme::Curve>, PfsysError>
@@ -706,7 +476,6 @@ where
         instances,
         proof,
         Some(hex_proof),
-        transcript_type,
         split,
         None,
         Some(commitment),
@@ -805,30 +574,16 @@ pub fn swap_proof_commitments_polycommit(
     commitments: &[G1Affine],
 ) -> Result<Snark<Fr, G1Affine>, PfsysError> {
     let proof = match snark.commitment {
-        Some(Commitments::KZG) => match snark.transcript_type {
-            TranscriptType::EVM => swap_proof_commitments::<
-                KZGCommitmentScheme<Bn256>,
-                _,
-                EvmTranscript<G1Affine, _, _, _>,
-            >(snark, commitments)?,
-            TranscriptType::Poseidon => swap_proof_commitments::<
-                KZGCommitmentScheme<Bn256>,
-                _,
-                PoseidonTranscript<NativeLoader, _>,
-            >(snark, commitments)?,
-        },
-        Some(Commitments::IPA) => match snark.transcript_type {
-            TranscriptType::EVM => swap_proof_commitments::<
-                IPACommitmentScheme<G1Affine>,
-                _,
-                EvmTranscript<G1Affine, _, _, _>,
-            >(snark, commitments)?,
-            TranscriptType::Poseidon => swap_proof_commitments::<
-                IPACommitmentScheme<G1Affine>,
-                _,
-                PoseidonTranscript<NativeLoader, _>,
-            >(snark, commitments)?,
-        },
+        Some(Commitments::KZG) => swap_proof_commitments::<
+            KZGCommitmentScheme<Bn256>,
+            _,
+            EvmTranscript<G1Affine, _, _, _>,
+        >(snark, commitments)?,
+        Some(Commitments::IPA) => swap_proof_commitments::<
+            IPACommitmentScheme<G1Affine>,
+            _,
+            EvmTranscript<G1Affine, _, _, _>,
+        >(snark, commitments)?,
         None => {
             return Err(PfsysError::InvalidCommitmentScheme);
         }
@@ -993,7 +748,6 @@ mod tests {
         let snark = Snark::<Fr, G1Affine> {
             proof: vec![1, 2, 3, 4, 5, 6, 7, 8],
             instances: vec![vec![Fr::from(1)], vec![Fr::from(2)]],
-            transcript_type: TranscriptType::EVM,
             protocol: None,
             hex_proof: None,
             split: None,
@@ -1012,6 +766,5 @@ mod tests {
         .unwrap();
         assert_eq!(snark.instances, snark2.instances);
         assert_eq!(snark.proof, snark2.proof);
-        assert_eq!(snark.transcript_type, snark2.transcript_type);
     }
 }

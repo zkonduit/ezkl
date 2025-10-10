@@ -12,10 +12,8 @@ use crate::graph::TestDataSource;
 use crate::graph::{
     quantize_float, scale_to_multiplier, GraphCircuit, GraphSettings, Model, Visibility,
 };
-use crate::pfsys::evm::aggregation_kzg::AggregationCircuit;
 use crate::pfsys::{
     load_pk, load_vk, save_params, save_vk, srs::gen_srs as ezkl_gen_srs, srs::load_srs_prover,
-    ProofType, TranscriptType,
 };
 use crate::Commitments;
 use crate::RunArgs;
@@ -765,37 +763,6 @@ fn gen_vk_from_pk_single(
     Ok(true)
 }
 
-/// Generates a vk from a pk for an aggregate circuit and saves it to a file
-///
-/// Arguments
-/// -------
-/// path_to_pk: str
-///     Path to the proving key
-///
-/// vk_output_path: str
-///     Path to create the vk file
-///
-/// Returns
-/// -------
-/// bool
-#[pyfunction(signature = (
-    path_to_pk=PathBuf::from(DEFAULT_PK_AGGREGATED),
-    vk_output_path=PathBuf::from(DEFAULT_VK_AGGREGATED),
-))]
-#[gen_stub_pyfunction]
-fn gen_vk_from_pk_aggr(path_to_pk: PathBuf, vk_output_path: PathBuf) -> PyResult<bool> {
-    let pk = load_pk::<KZGCommitmentScheme<Bn256>, AggregationCircuit>(path_to_pk, ())
-        .map_err(|_| PyIOError::new_err("Failed to load pk"))?;
-
-    let vk = pk.get_vk();
-
-    // now save
-    save_vk::<G1Affine>(&vk_output_path, vk)
-        .map_err(|_| PyIOError::new_err("Failed to save vk"))?;
-
-    Ok(true)
-}
-
 /// Displays the table as a string in python
 ///
 /// Arguments
@@ -1120,42 +1087,6 @@ fn mock(witness: PathBuf, model: PathBuf) -> PyResult<bool> {
     Ok(true)
 }
 
-/// Mocks the aggregate prover
-///
-/// Arguments
-/// ---------
-/// aggregation_snarks: list[str]
-///     List of paths to the relevant proof files
-///
-/// logrows: int
-///     Number of logrows to use for the aggregation circuit
-///
-/// split_proofs: bool
-///     Indicates whether the accumulated are segments of a larger proof
-///
-/// Returns
-/// -------
-/// bool
-///
-#[pyfunction(signature = (
-    aggregation_snarks=vec![PathBuf::from(DEFAULT_PROOF)],
-    logrows=DEFAULT_AGGREGATED_LOGROWS.parse().unwrap(),
-    split_proofs = false,
-))]
-#[gen_stub_pyfunction]
-fn mock_aggregate(
-    aggregation_snarks: Vec<PathBuf>,
-    logrows: u32,
-    split_proofs: bool,
-) -> PyResult<bool> {
-    crate::execute::mock_aggregate(aggregation_snarks, logrows, split_proofs).map_err(|e| {
-        let err_str = format!("Failed to run mock: {}", e);
-        PyRuntimeError::new_err(err_str)
-    })?;
-
-    Ok(true)
-}
-
 /// Runs the setup process
 ///
 /// Arguments
@@ -1231,8 +1162,6 @@ fn setup(
 /// proof_path: str
 ///     Path to create the proof file
 ///
-/// proof_type: str
-///     Accepts `single`, `for-aggr`
 ///
 /// srs_path: str
 ///     Path to the SRS file
@@ -1246,7 +1175,6 @@ fn setup(
     model=PathBuf::from(DEFAULT_COMPILED_CIRCUIT),
     pk_path=PathBuf::from(DEFAULT_PK),
     proof_path=None,
-    proof_type=ProofType::default(),
     srs_path=None,
 ))]
 #[gen_stub_pyfunction]
@@ -1255,7 +1183,6 @@ fn prove(
     model: PathBuf,
     pk_path: PathBuf,
     proof_path: Option<PathBuf>,
-    proof_type: ProofType,
     srs_path: Option<PathBuf>,
 ) -> PyResult<PyObject> {
     let snark = crate::execute::prove(
@@ -1264,7 +1191,6 @@ fn prove(
         pk_path,
         proof_path,
         srs_path,
-        proof_type,
         CheckMode::UNSAFE,
     )
     .map_err(|e| {
@@ -1323,77 +1249,6 @@ fn verify(
     Ok(true)
 }
 
-///  Runs the setup process for an aggregate setup
-///
-/// Arguments
-/// ---------
-/// sample_snarks: list[str]
-///     List of paths to the various proofs
-///
-/// vk_path: str
-///     Path to create the aggregated VK
-///
-/// pk_path: str
-///     Path to create the aggregated PK
-///
-/// logrows: int
-///     Number of logrows to use
-///
-/// split_proofs: bool
-///     Whether the accumulated are segments of a larger proof
-///
-/// srs_path: str
-///     Path to the SRS file
-///
-/// disable_selector_compression: bool
-///     Whether to compress selectors
-///
-/// commitment: str
-///     Accepts `kzg`, `ipa`
-///
-/// Returns
-/// -------
-/// bool
-///
-#[pyfunction(signature = (
-    sample_snarks=vec![PathBuf::from(DEFAULT_PROOF)],
-    vk_path=PathBuf::from(DEFAULT_VK_AGGREGATED),
-    pk_path=PathBuf::from(DEFAULT_PK_AGGREGATED),
-    logrows=DEFAULT_AGGREGATED_LOGROWS.parse().unwrap(),
-    split_proofs = false,
-    srs_path = None,
-    disable_selector_compression=DEFAULT_DISABLE_SELECTOR_COMPRESSION.parse().unwrap(),
-    commitment=DEFAULT_COMMITMENT.parse().unwrap(),
-))]
-#[gen_stub_pyfunction]
-fn setup_aggregate(
-    sample_snarks: Vec<PathBuf>,
-    vk_path: PathBuf,
-    pk_path: PathBuf,
-    logrows: u32,
-    split_proofs: bool,
-    srs_path: Option<PathBuf>,
-    disable_selector_compression: bool,
-    commitment: PyCommitments,
-) -> Result<bool, PyErr> {
-    crate::execute::setup_aggregate(
-        sample_snarks,
-        vk_path,
-        pk_path,
-        srs_path,
-        logrows,
-        split_proofs,
-        disable_selector_compression,
-        commitment.into(),
-    )
-    .map_err(|e| {
-        let err_str = format!("Failed to setup aggregate: {}", e);
-        PyRuntimeError::new_err(err_str)
-    })?;
-
-    Ok(true)
-}
-
 /// Compiles the circuit for use in other steps
 ///
 /// Arguments
@@ -1423,144 +1278,7 @@ fn compile_circuit(
     settings_path: PathBuf,
 ) -> Result<bool, PyErr> {
     crate::execute::compile_circuit(model, compiled_circuit, settings_path).map_err(|e| {
-        let err_str = format!("Failed to setup aggregate: {}", e);
-        PyRuntimeError::new_err(err_str)
-    })?;
-
-    Ok(true)
-}
-
-/// Creates an aggregated proof
-///
-/// Arguments
-/// ---------
-/// aggregation_snarks: list[str]
-///     List of paths to the various proofs
-///
-/// proof_path: str
-///     Path to output the aggregated proof
-///
-/// vk_path: str
-///     Path to the VK file
-///
-/// transcript:
-///     Proof transcript type to be used. `evm` used by default. `poseidon` is also supported
-///
-/// logrows:
-///     Logrows used for aggregation circuit
-///
-/// check_mode: str
-///     Run sanity checks during calculations. Accepts `safe` or `unsafe`
-///
-/// split-proofs: bool
-///      Whether the accumulated proofs are segments of a larger circuit
-///
-/// srs_path: str
-///     Path to the SRS used
-///
-/// commitment: str
-///     Accepts "kzg" or "ipa"
-///
-/// Returns
-/// -------
-/// bool
-///
-#[pyfunction(signature = (
-    aggregation_snarks=vec![PathBuf::from(DEFAULT_PROOF)],
-    proof_path=PathBuf::from(DEFAULT_PROOF_AGGREGATED),
-    vk_path=PathBuf::from(DEFAULT_VK_AGGREGATED),
-    transcript=TranscriptType::default(),
-    logrows=DEFAULT_AGGREGATED_LOGROWS.parse().unwrap(),
-    check_mode=CheckMode::UNSAFE,
-    split_proofs = false,
-    srs_path=None,
-    commitment=DEFAULT_COMMITMENT.parse().unwrap(),
-))]
-#[gen_stub_pyfunction]
-fn aggregate(
-    aggregation_snarks: Vec<PathBuf>,
-    proof_path: PathBuf,
-    vk_path: PathBuf,
-    transcript: TranscriptType,
-    logrows: u32,
-    check_mode: CheckMode,
-    split_proofs: bool,
-    srs_path: Option<PathBuf>,
-    commitment: PyCommitments,
-) -> Result<bool, PyErr> {
-    // the K used for the aggregation circuit
-    crate::execute::aggregate(
-        proof_path,
-        aggregation_snarks,
-        vk_path,
-        srs_path,
-        transcript,
-        logrows,
-        check_mode,
-        split_proofs,
-        commitment.into(),
-    )
-    .map_err(|e| {
-        let err_str = format!("Failed to run aggregate: {}", e);
-        PyRuntimeError::new_err(err_str)
-    })?;
-
-    Ok(true)
-}
-
-/// Verifies and aggregate proof
-///
-/// Arguments
-/// ---------
-/// proof_path: str
-///      The path to the proof file
-///
-/// vk_path: str
-///     The path to the verification key file
-///
-/// logrows: int
-///     logrows used for aggregation circuit
-///
-/// commitment: str
-///     Accepts "kzg" or "ipa"
-///
-/// reduced_srs: bool
-///     Whether to reduce the number of SRS logrows to the number of instances rather than the number of logrows used for proofs (only works if the srs were generated in the same ceremony)
-///
-/// srs_path: str
-///     The path to the SRS file
-///
-/// Returns
-/// -------
-/// bool
-///
-#[pyfunction(signature = (
-    proof_path=PathBuf::from(DEFAULT_PROOF_AGGREGATED),
-    vk_path=PathBuf::from(DEFAULT_VK),
-    logrows=DEFAULT_AGGREGATED_LOGROWS.parse().unwrap(),
-    commitment=DEFAULT_COMMITMENT.parse().unwrap(),
-    reduced_srs=DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION.parse().unwrap(),
-    srs_path=None,
-))]
-#[gen_stub_pyfunction]
-fn verify_aggr(
-    proof_path: PathBuf,
-    vk_path: PathBuf,
-    logrows: u32,
-    commitment: PyCommitments,
-    reduced_srs: bool,
-    srs_path: Option<PathBuf>,
-) -> Result<bool, PyErr> {
-    crate::execute::verify_aggr(
-        proof_path,
-        vk_path,
-        srs_path,
-        logrows,
-        reduced_srs,
-        commitment.into(),
-    )
-    .map_err(|e| {
-        let err_str = format!("Failed to run verify_aggr: {}", e);
+        let err_str = format!("Failed to compile circuit: {}", e);
         PyRuntimeError::new_err(err_str)
     })?;
 
@@ -1667,7 +1385,7 @@ fn create_evm_verifier(
 
 #[cfg(feature = "reusable-verifier")]
 /// Creates an Evm VK artifact. This command generated a VK with circuit specific meta data encoding in memory for use by the reusable H2 verifier.
-/// This is useful for deploying verifier that were otherwise too big to fit on chain and required aggregation.
+/// This is useful for deploying verifier that were otherwise too big to fit on chain .
 ///
 /// Arguments
 /// ---------
@@ -1873,75 +1591,6 @@ fn verify_evm<'a>(
     })
 }
 
-/// Creates an evm compatible aggregate verifier, you will need solc installed in your environment to run this
-///
-/// Arguments
-/// ---------
-/// aggregation_settings: str
-///     path to the settings file
-///
-/// vk_path: str
-///     The path to load the desired verification key file
-///
-/// sol_code_path: str
-///     The path to the Solidity code
-///
-/// abi_path: str
-///     The path to output the Solidity verifier ABI
-///
-/// logrows: int
-///     Number of logrows used during aggregated setup
-///
-/// srs_path: str
-///     The path to the SRS file
-///
-/// reusable: bool
-///     Whether the verifier should be rendered as a reusable contract. If so, then you will need to deploy the VK artifact separately which you can generate using the create_evm_vka command
-///
-/// Returns
-/// -------
-/// bool
-///
-#[pyfunction(signature = (
-    aggregation_settings=vec![PathBuf::from(DEFAULT_PROOF)],
-    vk_path=PathBuf::from(DEFAULT_VK_AGGREGATED),
-    sol_code_path=PathBuf::from(DEFAULT_SOL_CODE),
-    abi_path=PathBuf::from(DEFAULT_VERIFIER_ABI),
-    logrows=DEFAULT_AGGREGATED_LOGROWS.parse().unwrap(),
-    srs_path=None,
-    reusable = DEFAULT_RENDER_REUSABLE.parse().unwrap(),
-))]
-#[gen_stub_pyfunction]
-fn create_evm_verifier_aggr(
-    py: Python<'_>,
-    aggregation_settings: Vec<PathBuf>,
-    vk_path: PathBuf,
-    sol_code_path: PathBuf,
-    abi_path: PathBuf,
-    logrows: u32,
-    srs_path: Option<PathBuf>,
-    reusable: bool,
-) -> PyResult<Bound<'_, PyAny>> {
-    pyo3_async_runtimes::tokio::future_into_py(py, async move {
-        crate::execute::create_evm_aggregate_verifier(
-            vk_path,
-            srs_path,
-            sol_code_path,
-            abi_path,
-            aggregation_settings,
-            logrows,
-            reusable,
-        )
-        .await
-        .map_err(|e| {
-            let err_str = format!("Failed to run create_evm_verifier_aggr: {}", e);
-            PyRuntimeError::new_err(err_str)
-        })?;
-
-        Ok(true)
-    })
-}
-
 // Define a function to gather stub information.
 define_stub_info_gatherer!(stub_info);
 
@@ -1965,7 +1614,6 @@ fn ezkl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(poseidon_hash, m)?)?;
     m.add_function(wrap_pyfunction!(float_to_felt, m)?)?;
     m.add_function(wrap_pyfunction!(buffer_to_felts, m)?)?;
-    m.add_function(wrap_pyfunction!(gen_vk_from_pk_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(gen_vk_from_pk_single, m)?)?;
     m.add_function(wrap_pyfunction!(table, m)?)?;
     m.add_function(wrap_pyfunction!(mock, m)?)?;
@@ -1978,17 +1626,12 @@ fn ezkl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(gen_settings, m)?)?;
     m.add_function(wrap_pyfunction!(gen_random_data, m)?)?;
     m.add_function(wrap_pyfunction!(calibrate_settings, m)?)?;
-    m.add_function(wrap_pyfunction!(aggregate, m)?)?;
-    m.add_function(wrap_pyfunction!(mock_aggregate, m)?)?;
-    m.add_function(wrap_pyfunction!(setup_aggregate, m)?)?;
     m.add_function(wrap_pyfunction!(compile_circuit, m)?)?;
-    m.add_function(wrap_pyfunction!(verify_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_verifier, m)?)?;
     #[cfg(feature = "reusable-verifier")]
     m.add_function(wrap_pyfunction!(create_evm_vka, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_evm, m)?)?;
     m.add_function(wrap_pyfunction!(verify_evm, m)?)?;
-    m.add_function(wrap_pyfunction!(create_evm_verifier_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(encode_evm_calldata, m)?)?;
     #[cfg(feature = "reusable-verifier")]
     m.add_function(wrap_pyfunction!(register_vka, m)?)?;
@@ -1996,24 +1639,6 @@ fn ezkl(m: &Bound<'_, PyModule>) -> PyResult<()> {
 }
 
 impl pyo3_stub_gen::PyStubType for CalibrationTarget {
-    fn type_output() -> TypeInfo {
-        TypeInfo {
-            name: "str".to_string(),
-            import: HashSet::new(),
-        }
-    }
-}
-
-impl pyo3_stub_gen::PyStubType for ProofType {
-    fn type_output() -> TypeInfo {
-        TypeInfo {
-            name: "str".to_string(),
-            import: HashSet::new(),
-        }
-    }
-}
-
-impl pyo3_stub_gen::PyStubType for TranscriptType {
     fn type_output() -> TypeInfo {
         TypeInfo {
             name: "str".to_string(),

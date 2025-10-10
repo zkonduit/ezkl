@@ -7,7 +7,7 @@ use ezkl::circuit::einsum::circuit_params::SingleEinsumParams;
 use ezkl::circuit::poly::PolyOp;
 use ezkl::circuit::*;
 use ezkl::pfsys::srs::gen_srs;
-use ezkl::pfsys::{create_keys, create_proof_circuit, TranscriptType};
+use ezkl::pfsys::{create_keys, create_proof_circuit};
 use ezkl::tensor::*;
 use halo2_proofs::circuit::floor_planner::V1;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
@@ -175,7 +175,6 @@ fn runmatmul(c: &mut Criterion) {
                     &pk,
                     CheckMode::UNSAFE,
                     ezkl::Commitments::KZG,
-                    TranscriptType::EVM,
                     None,
                     None,
                 );

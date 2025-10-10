@@ -1,4 +1,3 @@
-use crate::pfsys::evm::EvmVerificationError;
 use crate::pfsys::{encode_calldata, Snark};
 use alloy::contract::CallBuilder;
 use alloy::core::primitives::Address as H160;
@@ -57,8 +56,6 @@ pub enum EthError {
     Wallet(#[from] WalletError),
     #[error("failed to parse url {0}")]
     UrlParse(String),
-    #[error("evm verification error: {0}")]
-    EvmVerification(#[from] EvmVerificationError),
     #[error("Private key must be in hex format, 64 chars, without 0x prefix")]
     PrivateKeyFormat,
     #[error("failed to parse hex: {0}")]
@@ -100,6 +97,8 @@ pub enum EthError {
     VkaData(String),
     #[error("rescaled‑instance mismatch: {0}")]
     RescaleCheckError(#[from] RescaleCheckError),
+    #[error("evm verification error: {0}")]
+    EvmVerificationError(String),
 }
 
 pub type EthersClient = Arc<
@@ -198,7 +197,7 @@ pub async fn register_vka_via_rv(
     let result = client.call(&tx).await;
 
     if let Err(e) = result {
-        return Err(EvmVerificationError::SolidityExecution(e.to_string()).into());
+        return Err(EthError::EvmVerificationError(e.to_string()).into());
     }
     let result = result?;
     debug!("result: {:#?}", result.to_vec());
@@ -270,7 +269,7 @@ pub async fn verify_proof_via_solidity(
     let result = client.call(&tx).await;
 
     if let Err(e) = result {
-        return Err(EvmVerificationError::SolidityExecution(e.to_string()).into());
+        return Err(EthError::EvmVerificationError(e.to_string()).into());
     }
     let result = result?;
     debug!("result: {:#?}", result.to_vec());
@@ -306,7 +305,7 @@ pub async fn verify_proof_via_solidity(
         .ok_or(EthError::NoContractOutput)?
         == &1u8;
     if !result {
-        return Err(EvmVerificationError::InvalidProof.into());
+        return Err(EthError::EvmVerificationError("Invalid proof".into()));
     }
 
     let gas = client.estimate_gas(&tx).await?;

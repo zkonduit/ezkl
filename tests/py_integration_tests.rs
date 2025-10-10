@@ -146,7 +146,7 @@ mod py_tests {
         }
     }
 
-    const TESTS: [&str; 31] = [
+    const TESTS: [&str; 30] = [
         "mnist_gan.ipynb",                         // 0
         "ezkl_demo_batch.ipynb",                   // 1
         "proof_splitting.ipynb",                   // 2
@@ -156,28 +156,27 @@ mod py_tests {
         "hashed_vis.ipynb",                        // 6
         "simple_demo_all_public.ipynb",            // 7
         "little_transformer.ipynb",                // 8
-        "simple_demo_aggregated_proofs.ipynb",     // 9
-        "ezkl_demo.ipynb",                         // 10
-        "lstm.ipynb",                              // 11
-        "set_membership.ipynb",                    // 12
-        "decision_tree.ipynb",                     // 13
-        "random_forest.ipynb",                     // 14
-        "gradient_boosted_trees.ipynb",            // 15
-        "xgboost.ipynb",                           // 16
-        "lightgbm.ipynb",                          // 17
-        "svm.ipynb",                               // 18
-        "simple_demo_public_input_output.ipynb",   // 19
-        "simple_demo_public_network_output.ipynb", // 20
-        "gcn.ipynb",                               // 21
-        "linear_regression.ipynb",                 // 22
-        "stacked_regression.ipynb",                // 23
-        "kzg_vis.ipynb",                           // 24
-        "kmeans.ipynb",                            // 25
-        "solvency.ipynb",                          // 26
-        "sklearn_mlp.ipynb",                       // 27
-        "generalized_inverse.ipynb",               // 28
-        "mnist_classifier.ipynb",                  // 29
-        "logistic_regression.ipynb",               // 30
+        "ezkl_demo.ipynb",                         // 9
+        "lstm.ipynb",                              // 10
+        "set_membership.ipynb",                    // 11
+        "decision_tree.ipynb",                     // 12
+        "random_forest.ipynb",                     // 13
+        "gradient_boosted_trees.ipynb",            // 14
+        "xgboost.ipynb",                           // 15
+        "lightgbm.ipynb",                          // 16
+        "svm.ipynb",                               // 17
+        "simple_demo_public_input_output.ipynb",   // 18
+        "simple_demo_public_network_output.ipynb", // 19
+        "gcn.ipynb",                               // 20
+        "linear_regression.ipynb",                 // 21
+        "stacked_regression.ipynb",                // 22
+        "kzg_vis.ipynb",                           // 23
+        "kmeans.ipynb",                            // 24
+        "solvency.ipynb",                          // 25
+        "sklearn_mlp.ipynb",                       // 26
+        "generalized_inverse.ipynb",               // 27
+        "mnist_classifier.ipynb",                  // 28
+        "logistic_regression.ipynb",               // 29
     ];
 
     macro_rules! test_func {
@@ -190,7 +189,7 @@ mod py_tests {
             use super::*;
 
 
-            seq!(N in 0..=30 {
+            seq!(N in 0..=29 {
 
             #(#[test_case(TESTS[N])])*
             fn run_notebook_(test: &str) {

@@ -42,8 +42,6 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 #[derive(thiserror::Error, Debug)]
 #[allow(missing_docs)]
 pub enum EZKLError {
-    #[error("[aggregation] {0}")]
-    AggregationError(#[from] pfsys::evm::aggregation_kzg::AggregationError),
     #[cfg(all(
         feature = "ezkl",
         not(all(target_arch = "wasm32", target_os = "unknown"))
@@ -130,7 +128,6 @@ pub fn version() -> &'static str {
 
 /// Bindings management
 #[cfg(any(
-    feature = "universal-bindings",
     all(target_arch = "wasm32", target_os = "unknown"),
     feature = "python-bindings"
 ))]
@@ -171,8 +168,6 @@ pub mod pfsys;
 pub mod srs_sha;
 /// An implementation of multi-dimensional tensors.
 pub mod tensor;
-#[cfg(feature = "ios-bindings")]
-uniffi::setup_scaffolding!();
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use lazy_static::lazy_static;
 

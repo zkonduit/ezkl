@@ -4,7 +4,7 @@ use ezkl::circuit::*;
 use ezkl::pfsys::create_keys;
 use ezkl::pfsys::create_proof_circuit;
 use ezkl::pfsys::srs::gen_srs;
-use ezkl::pfsys::TranscriptType;
+
 use ezkl::tensor::*;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
 use halo2_proofs::poly::kzg::multiopen::ProverSHPLONK;
@@ -132,7 +132,6 @@ fn runsumpool(c: &mut Criterion) {
                         &pk,
                         CheckMode::UNSAFE,
                         ezkl::Commitments::KZG,
-                        TranscriptType::EVM,
                         None,
                         None,
                     );
