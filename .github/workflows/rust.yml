@@ -20,7 +20,7 @@ env:
 
 jobs:
   fr-age-test:
-    needs: [build, library-tests, docs, python-tests, python-integration-tests]
+    needs: [build, library-tests, docs]
     permissions:
       contents: read
     runs-on: large-self-hosted
@@ -318,7 +318,7 @@ jobs:
     permissions:
       contents: read
     runs-on: [non-gpu, non-sgx]
-    needs: [build, library-tests, docs, python-tests, python-integration-tests]
+    needs: [build, library-tests, docs]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
       RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory"
@@ -540,7 +540,7 @@ jobs:
     permissions:
       contents: read
     runs-on: [non-gpu, non-sgx]
-    needs: [build, library-tests, docs, python-tests, python-integration-tests]
+    needs: [build, library-tests, docs]
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
