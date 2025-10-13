@@ -98,18 +98,11 @@ impl From<String> for EZKLError {
         EZKLError::UncategorizedError(s)
     }
 }
-
-use std::str::FromStr;
-
 use circuit::{table::Range, CheckMode};
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use clap::Args;
 use fieldutils::IntegerRep;
 use graph::{Visibility, MAX_PUBLIC_SRS};
-use halo2_proofs::poly::{
-    ipa::commitment::IPACommitmentScheme, kzg::commitment::KZGCommitmentScheme,
-};
-use halo2curves::bn256::{Bn256, G1Affine};
 use serde::{Deserialize, Serialize};
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use tosubcommand::ToFlags;
@@ -193,78 +186,6 @@ const EZKL_KEY_FORMAT: &str = "raw-bytes";
 #[cfg(any(not(feature = "ezkl"), target_arch = "wasm32"))]
 const EZKL_BUF_CAPACITY: &usize = &8000;
 
-#[derive(
-    Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, Default, Copy,
-)]
-/// Commitment scheme
-pub enum Commitments {
-    #[default]
-    /// KZG
-    KZG,
-    /// IPA
-    IPA,
-}
-
-impl From<Option<Commitments>> for Commitments {
-    fn from(value: Option<Commitments>) -> Self {
-        value.unwrap_or(Commitments::KZG)
-    }
-}
-
-impl FromStr for Commitments {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "kzg" => Ok(Commitments::KZG),
-            "ipa" => Ok(Commitments::IPA),
-            _ => Err("Invalid value for Commitments".to_string()),
-        }
-    }
-}
-
-impl From<KZGCommitmentScheme<Bn256>> for Commitments {
-    fn from(_value: KZGCommitmentScheme<Bn256>) -> Self {
-        Commitments::KZG
-    }
-}
-
-impl From<IPACommitmentScheme<G1Affine>> for Commitments {
-    fn from(_value: IPACommitmentScheme<G1Affine>) -> Self {
-        Commitments::IPA
-    }
-}
-
-impl std::fmt::Display for Commitments {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Commitments::KZG => write!(f, "kzg"),
-            Commitments::IPA => write!(f, "ipa"),
-        }
-    }
-}
-
-#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-impl ToFlags for Commitments {
-    /// Convert the struct to a subcommand string
-    fn to_flags(&self) -> Vec<String> {
-        vec![format!("{}", self)]
-    }
-}
-
-impl From<String> for Commitments {
-    fn from(value: String) -> Self {
-        match value.to_lowercase().as_str() {
-            "kzg" => Commitments::KZG,
-            "ipa" => Commitments::IPA,
-            _ => {
-                log::error!("Invalid value for Commitments");
-                log::warn!("defaulting to KZG");
-                Commitments::KZG
-            }
-        }
-    }
-}
-
 /// Parameters specific to a proving run
 ///
 /// RunArgs contains all configuration parameters needed to control the proving process,
@@ -331,10 +252,6 @@ pub struct RunArgs {
     /// Controls level of constraint verification
     #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "unsafe", value_hint = clap::ValueHint::Other))]
     pub check_mode: CheckMode,
-    /// Commitment scheme for circuit proving
-    /// Affects proof size and verification time
-    #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "kzg", value_hint = clap::ValueHint::Other))]
-    pub commitment: Option<Commitments>,
     /// Base for number decomposition
     /// Must be a power of 2
     #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "16384", value_hint = clap::ValueHint::Other))]
@@ -395,7 +312,6 @@ impl Default for RunArgs {
             param_visibility: Visibility::Fixed,
             rebase_frac_zero_constants: false,
             check_mode: CheckMode::UNSAFE,
-            commitment: None,
             decomp_base: 16384,
             decomp_legs: 2,
             ignore_range_check_inputs_outputs: false,

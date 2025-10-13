@@ -6,7 +6,6 @@ mod native_tests {
     use ezkl::graph::input::GraphData;
     use ezkl::graph::GraphSettings;
     use ezkl::pfsys::Snark;
-    use ezkl::Commitments;
     use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
     use halo2curves::bn256::Bn256;
     use lazy_static::lazy_static;
@@ -92,16 +91,10 @@ mod native_tests {
         });
     }
 
-    fn download_srs(logrows: u32, commitment: Commitments) {
+    fn download_srs(logrows: u32) {
         // if does not exist, download it
         let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
-            .args([
-                "get-srs",
-                "--logrows",
-                &format!("{}", logrows),
-                "--commitment",
-                &commitment.to_string(),
-            ])
+            .args(["get-srs", "--logrows", &format!("{}", logrows)])
             .status()
             .expect("failed to execute process");
         assert!(status.success());
@@ -116,7 +109,7 @@ mod native_tests {
         let settings: GraphSettings = serde_json::from_str(&settings).unwrap();
         let logrows = settings.run_args.logrows;
 
-        download_srs(logrows, settings.run_args.commitment.into());
+        download_srs(logrows);
     }
 
     fn mv_test_(test_dir: &str, test: &str) {
@@ -346,7 +339,6 @@ mod native_tests {
             use crate::native_tests::model_serialization_different_binaries;
 
             use tempdir::TempDir;
-            use ezkl::Commitments;
 
             #[test]
             fn model_serialization_different_binaries_() {
@@ -625,7 +617,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-               prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 1, None, false, Commitments::KZG, 2);
+               prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 1, None, false,  2);
                test_dir.close().unwrap();
             }
 
@@ -634,7 +626,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-               prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 3, None, false, Commitments::KZG, 2);
+               prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 3, None, false,  2);
                test_dir.close().unwrap();
             }
 
@@ -643,7 +635,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-               prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 4, None, false, Commitments::KZG, 2);
+               prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 4, None, false,  2);
                test_dir.close().unwrap();
             }
 
@@ -652,7 +644,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-               prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 8, None, false, Commitments::KZG, 2);
+               prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 8, None, false,  2);
                test_dir.close().unwrap();
             }
 
@@ -661,7 +653,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-               prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 1, None, false, Commitments::KZG, 2);
+               prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 1, None, false,  2);
                test_dir.close().unwrap();
             }
 
@@ -672,25 +664,17 @@ mod native_tests {
                 let path = test_dir.into_path();
                 let path = path.to_str().unwrap();
                 crate::native_tests::mv_test_(path, test);
-               prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 1, None, false, Commitments::KZG, 1);
+               prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 1, None, false,  1);
             //    test_dir.close().unwrap();
             }
 
-            #(#[test_case(TESTS[N])])*
-            fn ipa_prove_and_verify_(test: &str) {
-                crate::native_tests::init_binary();
-                let test_dir = TempDir::new(test).unwrap();
-                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-               prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 1, None, false, Commitments::IPA, 2);
-               test_dir.close().unwrap();
-            }
 
             #(#[test_case(TESTS[N])])*
             fn kzg_prove_and_verify_public_input_(test: &str) {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-               prove_and_verify(path, test.to_string(), "safe", "public", "private", "public", 1, None, false, Commitments::KZG, 2);
+               prove_and_verify(path, test.to_string(), "safe", "public", "private", "public", 1, None, false,  2);
                test_dir.close().unwrap();
             }
 
@@ -699,7 +683,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-               prove_and_verify(path, test.to_string(), "safe", "private", "fixed", "public", 1, None, false, Commitments::KZG, 2);
+               prove_and_verify(path, test.to_string(), "safe", "private", "fixed", "public", 1, None, false,  2);
                test_dir.close().unwrap();
             }
 
@@ -708,7 +692,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-               prove_and_verify(path, test.to_string(), "safe", "private", "private", "hashed", 1, None, false, Commitments::KZG, 2);
+               prove_and_verify(path, test.to_string(), "safe", "private", "private", "hashed", 1, None, false,  2);
                test_dir.close().unwrap();
             }
 
@@ -717,16 +701,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-               prove_and_verify(path, test.to_string(), "safe", "private", "private", "polycommit", 1, None, false, Commitments::KZG, 2);
-               test_dir.close().unwrap();
-            }
-
-            #(#[test_case(TESTS[N])])*
-            fn ipa_prove_and_verify_ipa_output(test: &str) {
-                crate::native_tests::init_binary();
-                let test_dir = TempDir::new(test).unwrap();
-                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-               prove_and_verify(path, test.to_string(), "safe", "private", "private", "polycommit", 1, None, false, Commitments::IPA, 2);
+               prove_and_verify(path, test.to_string(), "safe", "private", "private", "polycommit", 1, None, false,  2);
                test_dir.close().unwrap();
             }
 
@@ -740,7 +715,7 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     env_logger::init();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                    prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 1, None, true, Commitments::KZG, 2);
+                    prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 1, None, true,  2);
                     test_dir.close().unwrap();
                 }
 
@@ -750,7 +725,7 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     env_logger::init();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                    prove_and_verify(path, test.to_string(), "safe", "hashed", "private", "public", 1, None, true, Commitments::KZG, 2);
+                    prove_and_verify(path, test.to_string(), "safe", "hashed", "private", "public", 1, None, true,  2);
                     test_dir.close().unwrap();
                 }
 
@@ -760,7 +735,7 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     env_logger::init();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                    prove_and_verify(path, test.to_string(), "safe", "private", "fixed", "public", 1, None, true, Commitments::KZG, 2);
+                    prove_and_verify(path, test.to_string(), "safe", "private", "fixed", "public", 1, None, true,  2);
                     test_dir.close().unwrap();
                 }
 
@@ -774,7 +749,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                prove_and_verify(path, test.to_string(), "unsafe", "private", "fixed", "public", 1, None, false, Commitments::KZG, 2);
+                prove_and_verify(path, test.to_string(), "unsafe", "private", "fixed", "public", 1, None, false,  2);
                 test_dir.close().unwrap();
             }
 
@@ -1146,7 +1121,6 @@ mod native_tests {
             cal_target,
             scales_to_use,
             2,
-            Commitments::KZG,
             2,
             bounded_lookup_log,
             decomp_base,
@@ -1177,7 +1151,6 @@ mod native_tests {
         cal_target: &str,
         scales_to_use: Option<Vec<u32>>,
         num_inner_columns: usize,
-        commitment: Commitments,
         lookup_safety_margin: usize,
         bounded_lookup_log: bool,
         decomp_base: Option<usize>,
@@ -1199,7 +1172,6 @@ mod native_tests {
             format!("--param-visibility={}", param_visibility),
             format!("--output-visibility={}", output_visibility),
             format!("--num-inner-cols={}", num_inner_columns),
-            format!("--commitment={}", commitment),
             format!("--logrows={}", 22),
         ];
 
@@ -1310,7 +1282,6 @@ mod native_tests {
             cal_target,
             None,
             2,
-            Commitments::KZG,
             2,
             false,
             None,
@@ -1349,7 +1320,7 @@ mod native_tests {
         num_inner_columns: usize,
         scales_to_use: Option<Vec<u32>>,
         overflow: bool,
-        commitment: Commitments,
+
         lookup_safety_margin: usize,
     ) {
         let target_str = if overflow {
@@ -1368,7 +1339,6 @@ mod native_tests {
             target_str,
             scales_to_use,
             num_inner_columns,
-            commitment,
             lookup_safety_margin,
             false,
             None,
@@ -1444,7 +1414,7 @@ mod native_tests {
             .expect("failed to parse settings file");
 
         // get_srs for the graph_settings_num_instances
-        download_srs(1, graph_settings.run_args.commitment.into());
+        download_srs(1);
 
         let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
             .args([
@@ -1482,7 +1452,6 @@ mod native_tests {
             num_inner_columns,
             None,
             false,
-            Commitments::KZG,
             2,
         );
 
@@ -1608,7 +1577,6 @@ mod native_tests {
             num_inner_columns,
             None,
             overflow,
-            Commitments::KZG,
             2,
         );
 

@@ -199,7 +199,8 @@ async def test_get_srs():
     another_srs_path = os.path.join(folder_path, "kzg_test_k8.params")
 
     res = await ezkl.get_srs(
-        logrows=8, srs_path=another_srs_path, commitment=ezkl.PyCommitments.KZG
+        logrows=8,
+        srs_path=another_srs_path,
     )
 
     assert os.path.isfile(another_srs_path)

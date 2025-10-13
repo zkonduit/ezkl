@@ -31,14 +31,6 @@ class PyRunArgs:
 
     ...
 
-class PyCommitments(Enum):
-    r"""
-    pyclass representing an enum, denoting the type of commitment
-    """
-
-    KZG = auto()
-    IPA = auto()
-
 class PyInputType(Enum):
     Bool = auto()
     F16 = auto()
@@ -421,7 +413,6 @@ def get_srs(
     settings_path: typing.Optional[str | os.PathLike | pathlib.Path],
     logrows: typing.Optional[int],
     srs_path: typing.Optional[str | os.PathLike | pathlib.Path],
-    commitment: typing.Optional[PyCommitments],
 ) -> typing.Any:
     r"""
     Gets a public srs
@@ -437,41 +428,9 @@ def get_srs(
     srs_path: str
         Path to the create the SRS file
 
-    commitment: str
-        Specify the commitment used ("kzg", "ipa")
-
     Returns
     -------
     bool
-    """
-    ...
-
-def ipa_commit(
-    message: typing.Sequence[str],
-    vk_path: str | os.PathLike | pathlib.Path,
-    settings_path: str | os.PathLike | pathlib.Path,
-    srs_path: typing.Optional[str | os.PathLike | pathlib.Path],
-) -> list[PyG1Affine]:
-    r"""
-    Generate an ipa commitment.
-
-    Arguments
-    -------
-    message: list[str]
-        List of field elements represnted as strings
-
-    vk_path: str
-        Path to the verification key
-
-    settings_path: str
-        Path to the settings file
-
-    srs_path: str
-        Path to the Structure Reference String (SRS) file
-
-    Returns
-    -------
-    list[PyG1Affine]
     """
     ...
 

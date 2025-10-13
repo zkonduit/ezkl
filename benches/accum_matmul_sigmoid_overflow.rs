@@ -157,7 +157,6 @@ fn runmatmul(c: &mut Criterion) {
                     &params,
                     &pk,
                     CheckMode::UNSAFE,
-                    ezkl::Commitments::KZG,
                     None,
                     None,
                 );
