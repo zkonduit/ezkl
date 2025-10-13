@@ -1410,9 +1410,6 @@ mod native_tests {
         let settings =
             std::fs::read_to_string(settings_path.clone()).expect("failed to read settings file");
 
-        let graph_settings = serde_json::from_str::<GraphSettings>(&settings)
-            .expect("failed to parse settings file");
-
         // get_srs for the graph_settings_num_instances
         download_srs(1);
 
