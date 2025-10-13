@@ -1406,10 +1406,6 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        // load settings file
-        let settings =
-            std::fs::read_to_string(settings_path.clone()).expect("failed to read settings file");
-
         // get_srs for the graph_settings_num_instances
         download_srs(1);
 
