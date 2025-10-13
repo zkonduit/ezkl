@@ -54,14 +54,14 @@ fn prefix_token(level: &Level) -> String {
 }
 
 /// formats the log
-pub fn format(buf: &mut Formatter, record: &Record<'_>) -> Result<(), std::fmt::Error> {
+pub fn format(buf: &mut Formatter<'_>, record: &Record<'_>) -> Result<(), std::fmt::Error> {
     let sep = format!("\n{} ", " | ".white().bold());
     let level = record.level();
     writeln!(
         buf,
         "{} {}",
         prefix_token(&level),
-        level_color(&level, record.args().as_str().unwrap()).replace('\n', &sep),
+        level_color(&level, &format!("{}", record.args())).replace('\n', &sep),
     )
 }
 
@@ -86,8 +86,8 @@ pub fn init_logger() {
     });
     builder.target(env_logger::Target::Stdout);
     builder.filter(None, LevelFilter::Info);
-    if env::var("RUST_LOG").is_ok() {
-        builder.parse_filters(&env::var("RUST_LOG").unwrap());
+    if let Ok(val) = env::var("RUST_LOG") {
+        builder.parse_filters(&val);
     }
     builder.init();
 }
