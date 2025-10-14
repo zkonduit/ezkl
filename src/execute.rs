@@ -10,15 +10,15 @@ use crate::eth::register_vka_via_rv;
 use crate::eth::{get_contract_artifacts, verify_proof_via_solidity};
 use crate::graph::input::GraphData;
 use crate::graph::{GraphCircuit, GraphSettings, GraphWitness, Model};
-use crate::pfsys::{create_keys, load_pk, load_vk, save_params, save_pk, Snark};
 use crate::pfsys::{
-    create_proof_circuit, swap_proof_commitments_polycommit, verify_proof_circuit, ProofSplitCommit,
+    create_keys, load_pk, load_vk, save_params, save_pk, swap_proof_commitments, Snark,
 };
+use crate::pfsys::{create_proof_circuit, verify_proof_circuit, ProofSplitCommit};
 use crate::pfsys::{encode_calldata, save_vk, srs::*};
 use crate::tensor::TensorError;
+use crate::RunArgs;
 use crate::EZKL_BUF_CAPACITY;
 use crate::{commands::*, EZKLError};
-use crate::{Commitments, RunArgs};
 use colored::Colorize;
 #[cfg(unix)]
 use gag::Gag;
@@ -28,9 +28,7 @@ use halo2_proofs::icicle::try_load_and_set_backend_device;
 use halo2_proofs::plonk::{self, Circuit};
 use halo2_proofs::poly::commitment::Verifier;
 use halo2_proofs::poly::commitment::{CommitmentScheme, Params};
-use halo2_proofs::poly::ipa::commitment::{IPACommitmentScheme, ParamsIPA};
-use halo2_proofs::poly::ipa::multiopen::{ProverIPA, VerifierIPA};
-use halo2_proofs::poly::ipa::strategy::SingleStrategy as IPASingleStrategy;
+
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
 use halo2_proofs::poly::kzg::multiopen::{ProverSHPLONK, VerifierSHPLONK};
 use halo2_proofs::poly::kzg::{
@@ -62,7 +60,6 @@ use std::io::Cursor;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
-use std::str::FromStr;
 use std::time::Duration;
 use tabled::Tabled;
 use thiserror::Error;
@@ -128,21 +125,12 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
     match command {
         #[cfg(feature = "empty-cmd")]
         Commands::Empty => Ok(String::new()),
-        Commands::GenSrs {
-            srs_path,
-            logrows,
-            commitment,
-        } => gen_srs_cmd(
-            srs_path,
-            logrows as u32,
-            commitment.unwrap_or_else(|| Commitments::from_str(DEFAULT_COMMITMENT).unwrap()),
-        ),
+        Commands::GenSrs { srs_path, logrows } => gen_srs_cmd(srs_path, logrows as u32),
         Commands::GetSrs {
             srs_path,
             settings_path,
             logrows,
-            commitment,
-        } => get_srs_cmd(srs_path, settings_path, logrows, commitment).await,
+        } => get_srs_cmd(srs_path, settings_path, logrows).await,
         Commands::Table { model, args } => table(model.unwrap_or(DEFAULT_MODEL.into()), args),
         Commands::GenSettings {
             model,
@@ -448,39 +436,24 @@ fn update_ezkl_binary(version: &Option<String>) -> Result<String, EZKLError> {
 }
 
 /// Get the srs path
-pub fn get_srs_path(logrows: u32, srs_path: Option<PathBuf>, commitment: Commitments) -> PathBuf {
+pub fn get_srs_path(logrows: u32, srs_path: Option<PathBuf>) -> PathBuf {
     if let Some(srs_path) = srs_path {
         srs_path
     } else {
         if !Path::new(&*EZKL_SRS_REPO_PATH).exists() {
             std::fs::create_dir_all(&*EZKL_SRS_REPO_PATH).unwrap();
         }
-        match commitment {
-            Commitments::KZG => Path::new(&*EZKL_SRS_REPO_PATH).join(format!("kzg{}.srs", logrows)),
-            Commitments::IPA => Path::new(&*EZKL_SRS_REPO_PATH).join(format!("ipa{}.srs", logrows)),
-        }
+        Path::new(&*EZKL_SRS_REPO_PATH).join(format!("kzg{}.srs", logrows))
     }
 }
 
-fn srs_exists_check(logrows: u32, srs_path: Option<PathBuf>, commitment: Commitments) -> bool {
-    Path::new(&get_srs_path(logrows, srs_path, commitment)).exists()
+fn srs_exists_check(logrows: u32, srs_path: Option<PathBuf>) -> bool {
+    Path::new(&get_srs_path(logrows, srs_path)).exists()
 }
 
-pub(crate) fn gen_srs_cmd(
-    srs_path: PathBuf,
-    logrows: u32,
-    commitment: Commitments,
-) -> Result<String, EZKLError> {
-    match commitment {
-        Commitments::KZG => {
-            let params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
-            save_params::<KZGCommitmentScheme<Bn256>>(&srs_path, &params)?;
-        }
-        Commitments::IPA => {
-            let params = gen_srs::<IPACommitmentScheme<G1Affine>>(logrows);
-            save_params::<IPACommitmentScheme<G1Affine>>(&srs_path, &params)?;
-        }
-    }
+pub(crate) fn gen_srs_cmd(srs_path: PathBuf, logrows: u32) -> Result<String, EZKLError> {
+    let params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
+    save_params::<KZGCommitmentScheme<Bn256>>(&srs_path, &params)?;
     Ok(String::new())
 }
 
@@ -521,12 +494,8 @@ pub(crate) fn get_file_hash(path: &PathBuf) -> Result<String, EZKLError> {
     Ok(hash)
 }
 
-fn check_srs_hash(
-    logrows: u32,
-    srs_path: Option<PathBuf>,
-    commitment: Commitments,
-) -> Result<String, EZKLError> {
-    let path = get_srs_path(logrows, srs_path, commitment);
+fn check_srs_hash(logrows: u32, srs_path: Option<PathBuf>) -> Result<String, EZKLError> {
+    let path = get_srs_path(logrows, srs_path);
     let hash = get_file_hash(&path)?;
 
     let predefined_hash = match crate::srs_sha::PUBLIC_SRS_SHA256_HASHES.get(&logrows) {
@@ -550,7 +519,6 @@ pub(crate) async fn get_srs_cmd(
     srs_path: Option<PathBuf>,
     settings_path: Option<PathBuf>,
     logrows: Option<u32>,
-    commitment: Option<Commitments>,
 ) -> Result<String, EZKLError> {
     // logrows overrides settings
 
@@ -569,53 +537,33 @@ pub(crate) async fn get_srs_cmd(
         return Err(err_string.into());
     };
 
-    let commitment = if let Some(c) = commitment {
-        c
-    } else if let Some(settings_p) = settings_path {
-        if settings_p.exists() {
-            let settings = GraphSettings::load(&settings_p)?;
-            settings.run_args.commitment.into()
-        } else {
-            return Err(err_string.into());
-        }
-    } else {
-        return Err(err_string.into());
-    };
+    if !srs_exists_check(k, srs_path.clone()) {
+        info!("SRS does not exist, downloading...");
+        let srs_uri = format!("{}{}", PUBLIC_SRS_URL, k);
+        let mut reader = Cursor::new(fetch_srs(&srs_uri).await?);
+        // check the SRS
+        let pb = init_spinner();
+        pb.set_message("Validating SRS (this may take a while) ...");
+        let params = ParamsKZG::<Bn256>::read(&mut reader)?;
+        pb.finish_with_message("SRS validated.");
 
-    if !srs_exists_check(k, srs_path.clone(), commitment) {
-        if matches!(commitment, Commitments::KZG) {
-            info!("SRS does not exist, downloading...");
-            let srs_uri = format!("{}{}", PUBLIC_SRS_URL, k);
-            let mut reader = Cursor::new(fetch_srs(&srs_uri).await?);
-            // check the SRS
-            let pb = init_spinner();
-            pb.set_message("Validating SRS (this may take a while) ...");
-            let params = ParamsKZG::<Bn256>::read(&mut reader)?;
-            pb.finish_with_message("SRS validated.");
+        info!("Saving SRS to disk...");
+        let computed_srs_path = get_srs_path(k, srs_path.clone());
+        let mut file = std::fs::File::create(&computed_srs_path)?;
+        let mut buffer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, &mut file);
+        params.write(&mut buffer)?;
 
-            info!("Saving SRS to disk...");
-            let computed_srs_path = get_srs_path(k, srs_path.clone(), commitment);
-            let mut file = std::fs::File::create(&computed_srs_path)?;
-            let mut buffer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, &mut file);
-            params.write(&mut buffer)?;
+        info!(
+            "Saved SRS to {}.",
+            computed_srs_path.as_os_str().to_str().unwrap_or("disk")
+        );
 
-            info!(
-                "Saved SRS to {}.",
-                computed_srs_path.as_os_str().to_str().unwrap_or("disk")
-            );
-
-            info!("SRS downloaded");
-        } else {
-            let path = get_srs_path(k, srs_path.clone(), commitment);
-            gen_srs_cmd(path, k, commitment)?;
-        }
+        info!("SRS downloaded");
     } else {
         info!("SRS already exists at that path");
     };
     // check the hash
-    if matches!(commitment, Commitments::KZG) {
-        check_srs_hash(k, srs_path.clone(), commitment)?;
-    }
+    check_srs_hash(k, srs_path.clone())?;
 
     Ok(String::new())
 }
@@ -654,43 +602,22 @@ pub(crate) fn gen_witness(
 
     // if any of the settings have kzg visibility then we need to load the srs
 
-    let commitment: Commitments = settings.run_args.commitment.into();
-
     let region_settings =
         RegionSettings::all_true(settings.run_args.decomp_base, settings.run_args.decomp_legs);
 
     let start_time = Instant::now();
     let witness = if settings.module_requires_polycommit() {
-        if get_srs_path(settings.run_args.logrows, srs_path.clone(), commitment).exists() {
-            match Commitments::from(settings.run_args.commitment) {
-                Commitments::KZG => {
-                    let srs: ParamsKZG<Bn256> = load_params_prover::<KZGCommitmentScheme<Bn256>>(
-                        srs_path.clone(),
-                        settings.run_args.logrows,
-                        commitment,
-                    )?;
-                    circuit.forward::<KZGCommitmentScheme<_>>(
-                        &mut input,
-                        vk.as_ref(),
-                        Some(&srs),
-                        region_settings,
-                    )?
-                }
-                Commitments::IPA => {
-                    let srs: ParamsIPA<G1Affine> =
-                        load_params_prover::<IPACommitmentScheme<G1Affine>>(
-                            srs_path.clone(),
-                            settings.run_args.logrows,
-                            commitment,
-                        )?;
-                    circuit.forward::<IPACommitmentScheme<_>>(
-                        &mut input,
-                        vk.as_ref(),
-                        Some(&srs),
-                        region_settings,
-                    )?
-                }
-            }
+        if get_srs_path(settings.run_args.logrows, srs_path.clone()).exists() {
+            let srs: ParamsKZG<Bn256> = load_params_prover::<KZGCommitmentScheme<Bn256>>(
+                srs_path.clone(),
+                settings.run_args.logrows,
+            )?;
+            circuit.forward::<KZGCommitmentScheme<_>>(
+                &mut input,
+                vk.as_ref(),
+                Some(&srs),
+                region_settings,
+            )?
         } else {
             warn!("SRS for poly commit does not exist (will be ignored)");
             circuit.forward::<KZGCommitmentScheme<Bn256>>(
@@ -1386,12 +1313,8 @@ pub(crate) async fn create_evm_verifier(
     reusable: bool,
 ) -> Result<String, EZKLError> {
     let settings = GraphSettings::load(&settings_path)?;
-    let commitment: Commitments = settings.run_args.commitment.into();
-    let params = load_params_verifier::<KZGCommitmentScheme<Bn256>>(
-        srs_path,
-        settings.run_args.logrows,
-        commitment,
-    )?;
+    let params =
+        load_params_verifier::<KZGCommitmentScheme<Bn256>>(srs_path, settings.run_args.logrows)?;
 
     let num_instance = settings.total_instances();
     // create a scales array that is the same length as the number of instances, all populated with 0
@@ -1436,12 +1359,8 @@ pub(crate) async fn create_evm_vka(
 ) -> Result<String, EZKLError> {
     log::warn!("Reusable verifier support is experimental and may change in the future. Use at your own risk.");
     let settings = GraphSettings::load(&settings_path)?;
-    let commitment: Commitments = settings.run_args.commitment.into();
-    let params = load_params_verifier::<KZGCommitmentScheme<Bn256>>(
-        srs_path,
-        settings.run_args.logrows,
-        commitment,
-    )?;
+    let params =
+        load_params_verifier::<KZGCommitmentScheme<Bn256>>(srs_path, settings.run_args.logrows)?;
 
     let num_poseidon_instance = settings.module_sizes.num_instances().iter().sum::<usize>();
     let num_fixed_point_instance = settings
@@ -1554,7 +1473,7 @@ pub(crate) fn encode_evm_calldata(
     calldata_path: PathBuf,
     vka_path: Option<PathBuf>,
 ) -> Result<Vec<u8>, EZKLError> {
-    let snark = Snark::load::<IPACommitmentScheme<G1Affine>>(&proof_path)?;
+    let snark = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
 
     let flattened_instances = snark.instances.into_iter().flatten();
 
@@ -1639,34 +1558,14 @@ pub(crate) fn setup(
     }
 
     let logrows = circuit.settings().run_args.logrows;
-    let commitment: Commitments = circuit.settings().run_args.commitment.into();
 
-    let pk = match commitment {
-        Commitments::KZG => {
-            let params = load_params_prover::<KZGCommitmentScheme<Bn256>>(
-                srs_path,
-                logrows,
-                Commitments::KZG,
-            )?;
-            create_keys::<KZGCommitmentScheme<Bn256>, GraphCircuit>(
-                &circuit,
-                &params,
-                disable_selector_compression,
-            )?
-        }
-        Commitments::IPA => {
-            let params = load_params_prover::<IPACommitmentScheme<G1Affine>>(
-                srs_path,
-                logrows,
-                Commitments::IPA,
-            )?;
-            create_keys::<IPACommitmentScheme<G1Affine>, GraphCircuit>(
-                &circuit,
-                &params,
-                disable_selector_compression,
-            )?
-        }
-    };
+    let params = load_params_prover::<KZGCommitmentScheme<Bn256>>(srs_path, logrows)?;
+    let pk = create_keys::<KZGCommitmentScheme<Bn256>, GraphCircuit>(
+        &circuit,
+        &params,
+        disable_selector_compression,
+    )?;
+
     save_vk::<G1Affine>(&vk_path, pk.get_vk())?;
     save_pk::<G1Affine>(&pk_path, &pk)?;
     Ok(String::new())
@@ -1693,69 +1592,30 @@ pub(crate) fn prove(
 
     let proof_split_commits: Option<ProofSplitCommit> = data.into();
 
-    let commitment = circuit_settings.run_args.commitment.into();
     let logrows = circuit_settings.run_args.logrows;
     // creates and verifies the proof
-    let mut snark = match commitment {
-        Commitments::KZG => {
-            let pk =
-                load_pk::<KZGCommitmentScheme<Bn256>, GraphCircuit>(pk_path, circuit.params())?;
 
-            let params = load_params_prover::<KZGCommitmentScheme<Bn256>>(
-                srs_path,
-                logrows,
-                Commitments::KZG,
-            )?;
-            create_proof_circuit::<
-                KZGCommitmentScheme<Bn256>,
-                _,
-                ProverSHPLONK<_>,
-                VerifierSHPLONK<_>,
-                KZGSingleStrategy<_>,
-                _,
-                EvmTranscript<_, _, _, _>,
-                EvmTranscript<_, _, _, _>,
-            >(
-                circuit,
-                vec![public_inputs],
-                &params,
-                &pk,
-                check_mode,
-                commitment,
-                proof_split_commits,
-                None,
-            )
-        }
-        Commitments::IPA => {
-            let pk =
-                load_pk::<IPACommitmentScheme<G1Affine>, GraphCircuit>(pk_path, circuit.params())?;
+    let pk = load_pk::<KZGCommitmentScheme<Bn256>, GraphCircuit>(pk_path, circuit.params())?;
 
-            let params = load_params_prover::<IPACommitmentScheme<G1Affine>>(
-                srs_path,
-                circuit_settings.run_args.logrows,
-                Commitments::IPA,
-            )?;
-            create_proof_circuit::<
-                IPACommitmentScheme<G1Affine>,
-                _,
-                ProverIPA<_>,
-                VerifierIPA<_>,
-                IPASingleStrategy<_>,
-                _,
-                EvmTranscript<_, _, _, _>,
-                EvmTranscript<_, _, _, _>,
-            >(
-                circuit,
-                vec![public_inputs],
-                &params,
-                &pk,
-                check_mode,
-                commitment,
-                proof_split_commits,
-                None,
-            )
-        }
-    }?;
+    let params = load_params_prover::<KZGCommitmentScheme<Bn256>>(srs_path, logrows)?;
+    let mut snark = create_proof_circuit::<
+        KZGCommitmentScheme<Bn256>,
+        _,
+        ProverSHPLONK<_>,
+        VerifierSHPLONK<_>,
+        KZGSingleStrategy<_>,
+        _,
+        EvmTranscript<_, _, _, _>,
+        EvmTranscript<_, _, _, _>,
+    >(
+        circuit,
+        vec![public_inputs],
+        &params,
+        &pk,
+        check_mode,
+        proof_split_commits,
+        None,
+    )?;
 
     snark.pretty_public_inputs = pretty_public_inputs;
 
@@ -1774,7 +1634,11 @@ pub(crate) fn swap_proof_commitments_cmd(
     let witness = GraphWitness::from_path(witness)?;
     let commitments = witness.get_polycommitments();
 
-    let snark_new = swap_proof_commitments_polycommit(&snark, &commitments)?;
+    let snark_new = swap_proof_commitments::<
+        KZGCommitmentScheme<Bn256>,
+        _,
+        EvmTranscript<G1Affine, _, _, _>,
+    >(&snark, &commitments)?;
 
     if snark_new.proof != *snark.proof {
         log::warn!("swap proof has created a different proof");
@@ -1794,51 +1658,23 @@ pub(crate) fn verify(
     let circuit_settings = GraphSettings::load(&settings_path)?;
 
     let logrows = circuit_settings.run_args.logrows;
-    let commitment = circuit_settings.run_args.commitment.into();
 
-    match commitment {
-        Commitments::KZG => {
-            let params: ParamsKZG<Bn256> = if reduced_srs {
-                // only need G_0 for the verification with shplonk
-                load_params_verifier::<KZGCommitmentScheme<Bn256>>(srs_path, 1, Commitments::KZG)?
-            } else {
-                load_params_verifier::<KZGCommitmentScheme<Bn256>>(
-                    srs_path,
-                    logrows,
-                    Commitments::KZG,
-                )?
-            };
-            {
-                verify_commitment::<
-                    KZGCommitmentScheme<Bn256>,
-                    VerifierSHPLONK<'_, Bn256>,
-                    _,
-                    KZGSingleStrategy<_>,
-                    EvmTranscript<G1Affine, _, _, _>,
-                    GraphCircuit,
-                    _,
-                >(proof_path, circuit_settings, vk_path, &params, logrows)
-            }
-        }
-        Commitments::IPA => {
-            let params: ParamsIPA<_> = load_params_verifier::<IPACommitmentScheme<G1Affine>>(
-                srs_path,
-                logrows,
-                Commitments::IPA,
-            )?;
-            {
-                verify_commitment::<
-                    IPACommitmentScheme<G1Affine>,
-                    VerifierIPA<_>,
-                    _,
-                    IPASingleStrategy<_>,
-                    EvmTranscript<G1Affine, _, _, _>,
-                    GraphCircuit,
-                    _,
-                >(proof_path, circuit_settings, vk_path, &params, logrows)
-            }
-        }
-    }
+    let params: ParamsKZG<Bn256> = if reduced_srs {
+        // only need G_0 for the verification with shplonk
+        load_params_verifier::<KZGCommitmentScheme<Bn256>>(srs_path, 1)?
+    } else {
+        load_params_verifier::<KZGCommitmentScheme<Bn256>>(srs_path, logrows)?
+    };
+
+    verify_commitment::<
+        KZGCommitmentScheme<Bn256>,
+        VerifierSHPLONK<'_, Bn256>,
+        _,
+        KZGSingleStrategy<_>,
+        EvmTranscript<G1Affine, _, _, _>,
+        GraphCircuit,
+        _,
+    >(proof_path, circuit_settings, vk_path, &params, logrows)
 }
 
 fn verify_commitment<
@@ -1889,9 +1725,8 @@ where
 pub(crate) fn load_params_verifier<Scheme: CommitmentScheme>(
     srs_path: Option<PathBuf>,
     logrows: u32,
-    commitment: Commitments,
 ) -> Result<Scheme::ParamsVerifier, EZKLError> {
-    let srs_path = get_srs_path(logrows, srs_path, commitment);
+    let srs_path = get_srs_path(logrows, srs_path);
     let mut params = load_srs_verifier::<Scheme>(srs_path)?;
     if logrows < params.k() {
         info!("downsizing params to {} logrows", logrows);
@@ -1904,9 +1739,8 @@ pub(crate) fn load_params_verifier<Scheme: CommitmentScheme>(
 pub(crate) fn load_params_prover<Scheme: CommitmentScheme>(
     srs_path: Option<PathBuf>,
     logrows: u32,
-    commitment: Commitments,
 ) -> Result<Scheme::ParamsProver, EZKLError> {
-    let srs_path = get_srs_path(logrows, srs_path, commitment);
+    let srs_path = get_srs_path(logrows, srs_path);
     let mut params = load_srs_prover::<Scheme>(srs_path)?;
     if logrows < params.k() {
         info!("downsizing params to {} logrows", logrows);

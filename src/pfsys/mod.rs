@@ -10,13 +10,11 @@ use std::borrow::Borrow;
 
 use crate::circuit::CheckMode;
 use crate::graph::GraphWitness;
-use crate::{Commitments, EZKL_BUF_CAPACITY, EZKL_KEY_FORMAT};
+use crate::{EZKL_BUF_CAPACITY, EZKL_KEY_FORMAT};
 use halo2_proofs::plonk::{
     create_proof, keygen_pk, keygen_vk_custom, verify_proof, Circuit, ProvingKey, VerifyingKey,
 };
 use halo2_proofs::poly::commitment::{CommitmentScheme, Params, ParamsProver, Prover, Verifier};
-use halo2_proofs::poly::ipa::commitment::IPACommitmentScheme;
-use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
 use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{EncodedChallenge, TranscriptReadBuffer, TranscriptWriterBuffer};
 use halo2curves::ff::{FromUniformBytes, PrimeField, WithSmallOrderMulGroup};
@@ -30,7 +28,6 @@ use rand::rngs::OsRng;
 use rand::rngs::StdRng;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use snark_verifier::verifier::plonk::PlonkProtocol;
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Cursor, Write};
@@ -40,8 +37,6 @@ use thiserror::Error as thisError;
 
 #[cfg(feature = "python-bindings")]
 use pyo3::types::PyDictMethods;
-
-use halo2curves::bn256::{Bn256, Fr, G1Affine};
 
 /// Converts a string to a `SerdeFormat`.
 /// # Panics
@@ -139,6 +134,9 @@ pub enum PfSysError {
 }
 
 #[cfg(feature = "python-bindings")]
+use halo2curves::bn256::G1Affine;
+
+#[cfg(feature = "python-bindings")]
 ///
 pub fn g1affine_to_pydict(g1affine_dict: &pyo3::Bound<'_, PyDict>, g1affine: &G1Affine) {
     let g1affine_x = field_to_string(&g1affine.x);
@@ -216,8 +214,6 @@ where
     pub pretty_public_inputs: Option<PrettyElements>,
     /// timestamp
     pub timestamp: Option<u128>,
-    /// commitment
-    pub commitment: Option<Commitments>,
     /// (optional) version of ezkl used to generate the proof
     version: Option<String>,
 }
@@ -266,7 +262,6 @@ where
         hex_proof: Option<String>,
         split: Option<ProofSplitCommit>,
         pretty_public_inputs: Option<PrettyElements>,
-        commitment: Option<Commitments>,
     ) -> Self {
         Self {
             protocol,
@@ -282,7 +277,6 @@ where
                     .unwrap()
                     .as_millis(),
             ),
-            commitment,
             version: Some(crate::version().to_string()),
         }
     }
@@ -423,7 +417,6 @@ pub fn create_proof_circuit<
     params: &'params Scheme::ParamsProver,
     pk: &ProvingKey<Scheme::Curve>,
     check_mode: CheckMode,
-    commitment: Commitments,
     split: Option<ProofSplitCommit>,
     protocol: Option<PlonkProtocol<Scheme::Curve>>,
 ) -> Result<Snark<Scheme::Scalar, Scheme::Curve>, PfsysError>
@@ -471,15 +464,7 @@ where
     let proof = transcript.finalize();
     let hex_proof = format!("0x{}", hex::encode(&proof));
 
-    let checkable_pf = Snark::new(
-        protocol,
-        instances,
-        proof,
-        Some(hex_proof),
-        split,
-        None,
-        Some(commitment),
-    );
+    let checkable_pf = Snark::new(protocol, instances, proof, Some(hex_proof), split, None);
 
     // sanity check that the generated proof is valid
     if check_mode == CheckMode::SAFE {
@@ -566,30 +551,6 @@ where
     }
 
     Ok(proof_first_bytes)
-}
-
-/// Swap the proof commitments to a new set in the proof for KZG
-pub fn swap_proof_commitments_polycommit(
-    snark: &Snark<Fr, G1Affine>,
-    commitments: &[G1Affine],
-) -> Result<Snark<Fr, G1Affine>, PfsysError> {
-    let proof = match snark.commitment {
-        Some(Commitments::KZG) => swap_proof_commitments::<
-            KZGCommitmentScheme<Bn256>,
-            _,
-            EvmTranscript<G1Affine, _, _, _>,
-        >(snark, commitments)?,
-        Some(Commitments::IPA) => swap_proof_commitments::<
-            IPACommitmentScheme<G1Affine>,
-            _,
-            EvmTranscript<G1Affine, _, _, _>,
-        >(snark, commitments)?,
-        None => {
-            return Err(PfsysError::InvalidCommitmentScheme);
-        }
-    };
-
-    Ok(proof)
 }
 
 /// A wrapper around halo2's verify_proof
@@ -753,7 +714,6 @@ mod tests {
             split: None,
             pretty_public_inputs: None,
             timestamp: None,
-            commitment: None,
             version: None,
         };
 

@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use tosubcommand::{ToFlags, ToSubcommand};
 
-use crate::{Commitments, RunArgs};
+use crate::RunArgs;
 
 use crate::circuit::CheckMode;
 
@@ -492,9 +492,6 @@ pub enum Commands {
         /// number of logrows to use for srs
         #[arg(long, value_hint = clap::ValueHint::Other)]
         logrows: usize,
-        /// commitment used
-        #[arg(long, default_value = DEFAULT_COMMITMENT, value_hint = clap::ValueHint::Other)]
-        commitment: Option<Commitments>,
     },
 
     /// Gets an SRS from a circuit settings file.
@@ -509,9 +506,6 @@ pub enum Commands {
         /// Number of logrows to use for srs. Overrides settings_path if specified.
         #[arg(long, default_value = None, value_hint = clap::ValueHint::Other)]
         logrows: Option<u32>,
-        /// Commitment used
-        #[arg(long, default_value = None, value_hint = clap::ValueHint::Other)]
-        commitment: Option<Commitments>,
     },
     /// Loads model and input and runs mock prover (for testing)
     Mock {

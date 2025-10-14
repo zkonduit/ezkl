@@ -15,9 +15,7 @@ use crate::graph::{
 use crate::pfsys::{
     load_pk, load_vk, save_params, save_vk, srs::gen_srs as ezkl_gen_srs, srs::load_srs_prover,
 };
-use crate::Commitments;
 use crate::RunArgs;
-use halo2_proofs::poly::ipa::commitment::IPACommitmentScheme;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
 use halo2curves::bn256::{Bn256, Fq, Fr, G1Affine, G1};
 use pyo3::exceptions::{PyIOError, PyRuntimeError};
@@ -171,9 +169,6 @@ struct PyRunArgs {
     #[pyo3(get, set)]
     /// str: check mode, accepts `safe`, `unsafe`
     pub check_mode: CheckMode,
-    #[pyo3(get, set)]
-    /// str: commitment type, accepts `kzg`, `ipa`
-    pub commitment: PyCommitments,
     /// int: The base used for decomposition
     #[pyo3(get, set)]
     pub decomp_base: usize,
@@ -221,7 +216,6 @@ impl From<PyRunArgs> for RunArgs {
             variables: py_run_args.variables,
             rebase_frac_zero_constants: py_run_args.rebase_frac_zero_constants,
             check_mode: py_run_args.check_mode,
-            commitment: Some(py_run_args.commitment.into()),
             decomp_base: py_run_args.decomp_base,
             decomp_legs: py_run_args.decomp_legs,
             ignore_range_check_inputs_outputs: py_run_args.ignore_range_check_inputs_outputs,
@@ -249,62 +243,11 @@ impl Into<PyRunArgs> for RunArgs {
             variables: self.variables,
             rebase_frac_zero_constants: self.rebase_frac_zero_constants,
             check_mode: self.check_mode,
-            commitment: self.commitment.into(),
             decomp_base: self.decomp_base,
             decomp_legs: self.decomp_legs,
             ignore_range_check_inputs_outputs: self.ignore_range_check_inputs_outputs,
             epsilon: eps,
             disable_freivalds: self.disable_freivalds,
-        }
-    }
-}
-
-#[pyclass]
-#[derive(Debug, Clone)]
-#[gen_stub_pyclass_enum]
-/// pyclass representing an enum, denoting the type of commitment
-pub enum PyCommitments {
-    /// KZG commitment
-    KZG,
-    /// IPA commitment
-    IPA,
-}
-
-impl From<Option<Commitments>> for PyCommitments {
-    fn from(commitment: Option<Commitments>) -> Self {
-        match commitment {
-            Some(Commitments::KZG) => PyCommitments::KZG,
-            Some(Commitments::IPA) => PyCommitments::IPA,
-            None => PyCommitments::KZG,
-        }
-    }
-}
-
-impl From<PyCommitments> for Commitments {
-    fn from(py_commitments: PyCommitments) -> Self {
-        match py_commitments {
-            PyCommitments::KZG => Commitments::KZG,
-            PyCommitments::IPA => Commitments::IPA,
-        }
-    }
-}
-
-impl Into<PyCommitments> for Commitments {
-    fn into(self) -> PyCommitments {
-        match self {
-            Commitments::KZG => PyCommitments::KZG,
-            Commitments::IPA => PyCommitments::IPA,
-        }
-    }
-}
-
-impl FromStr for PyCommitments {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "kzg" => Ok(PyCommitments::KZG),
-            "ipa" => Ok(PyCommitments::IPA),
-            _ => Err("Invalid value for Commitments".to_string()),
         }
     }
 }
@@ -621,8 +564,7 @@ fn kzg_commit(
     let settings = GraphSettings::load(&settings_path)
         .map_err(|_| PyIOError::new_err("Failed to load circuit settings"))?;
 
-    let srs_path =
-        crate::execute::get_srs_path(settings.run_args.logrows, srs_path, Commitments::KZG);
+    let srs_path = crate::execute::get_srs_path(settings.run_args.logrows, srs_path);
 
     let srs = load_srs_prover::<KZGCommitmentScheme<Bn256>>(srs_path)
         .map_err(|_| PyIOError::new_err("Failed to load srs"))?;
@@ -631,65 +573,6 @@ fn kzg_commit(
         .map_err(|_| PyIOError::new_err("Failed to load vk"))?;
 
     let output = PolyCommitChip::commit::<KZGCommitmentScheme<Bn256>>(
-        message,
-        (vk.cs().blinding_factors() + 1) as u32,
-        &srs,
-    );
-
-    Ok(output.iter().map(|x| (*x).into()).collect::<Vec<_>>())
-}
-
-/// Generate an ipa commitment.
-///
-/// Arguments
-/// -------
-/// message: list[str]
-///     List of field elements represented as strings
-///
-/// vk_path: str
-///     Path to the verification key
-///
-/// settings_path: str
-///     Path to the settings file
-///
-/// srs_path: str
-///     Path to the Structure Reference String (SRS) file
-///
-/// Returns
-/// -------
-/// list[PyG1Affine]
-///
-#[pyfunction(signature = (
-    message,
-    vk_path=PathBuf::from(DEFAULT_VK),
-    settings_path=PathBuf::from(DEFAULT_SETTINGS),
-    srs_path=None
-))]
-#[gen_stub_pyfunction]
-fn ipa_commit(
-    message: Vec<PyFelt>,
-    vk_path: PathBuf,
-    settings_path: PathBuf,
-    srs_path: Option<PathBuf>,
-) -> PyResult<Vec<PyG1Affine>> {
-    let message: Vec<Fr> = message
-        .iter()
-        .map(crate::pfsys::string_to_field::<Fr>)
-        .collect::<Vec<_>>();
-
-    let settings = GraphSettings::load(&settings_path)
-        .map_err(|_| PyIOError::new_err("Failed to load circuit settings"))?;
-
-    let srs_path =
-        crate::execute::get_srs_path(settings.run_args.logrows, srs_path, Commitments::IPA);
-
-    let srs = load_srs_prover::<IPACommitmentScheme<G1Affine>>(srs_path)
-        .map_err(|_| PyIOError::new_err("Failed to load srs"))?;
-
-    let vk = load_vk::<IPACommitmentScheme<G1Affine>, GraphCircuit>(vk_path, settings)
-        .map_err(|_| PyIOError::new_err("Failed to load vk"))?;
-
-    let output = PolyCommitChip::commit::<IPACommitmentScheme<G1Affine>>(
         message,
         (vk.cs().blinding_factors() + 1) as u32,
         &srs,
@@ -825,8 +708,6 @@ fn gen_srs(srs_path: PathBuf, logrows: usize) -> PyResult<()> {
 /// srs_path: str
 ///     Path to the create the SRS file
 ///
-/// commitment: str
-///     Specify the commitment used ("kzg", "ipa")
 ///
 /// Returns
 /// -------
@@ -836,7 +717,6 @@ fn gen_srs(srs_path: PathBuf, logrows: usize) -> PyResult<()> {
     settings_path=PathBuf::from(DEFAULT_SETTINGS),
     logrows=None,
     srs_path=None,
-    commitment=None,
 ))]
 #[gen_stub_pyfunction]
 fn get_srs(
@@ -844,15 +724,9 @@ fn get_srs(
     settings_path: Option<PathBuf>,
     logrows: Option<u32>,
     srs_path: Option<PathBuf>,
-    commitment: Option<PyCommitments>,
 ) -> PyResult<Bound<'_, PyAny>> {
-    let commitment: Option<Commitments> = match commitment {
-        Some(c) => Some(c.into()),
-        None => None,
-    };
-
     pyo3_async_runtimes::tokio::future_into_py(py, async move {
-        crate::execute::get_srs_cmd(srs_path, settings_path, logrows, commitment)
+        crate::execute::get_srs_cmd(srs_path, settings_path, logrows)
             .await
             .map_err(|e| {
                 let err_str = format!("Failed to get srs: {}", e);
@@ -1602,14 +1476,12 @@ fn ezkl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyG1Affine>()?;
     m.add_class::<PyG1>()?;
     m.add_class::<PyTestDataSource>()?;
-    m.add_class::<PyCommitments>()?;
     m.add_class::<PyInputType>()?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_function(wrap_pyfunction!(felt_to_big_endian, m)?)?;
     m.add_function(wrap_pyfunction!(felt_to_int, m)?)?;
     m.add_function(wrap_pyfunction!(felt_to_float, m)?)?;
     m.add_function(wrap_pyfunction!(kzg_commit, m)?)?;
-    m.add_function(wrap_pyfunction!(ipa_commit, m)?)?;
     m.add_function(wrap_pyfunction!(swap_proof_commitments, m)?)?;
     m.add_function(wrap_pyfunction!(poseidon_hash, m)?)?;
     m.add_function(wrap_pyfunction!(float_to_felt, m)?)?;
