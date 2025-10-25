@@ -159,18 +159,17 @@ pub fn diff_less_than<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
     values: &[&ValTensor<F>; 2],
     constant: F,
 ) -> Result<(), CircuitError> {
-    let distance = l1_distance(config, region, values)?;
-
-    let constant = create_constant_tensor(constant, 1);
-    let is_less = less(config, region, &[&distance, &constant])?;
-
-    // assert the result is 1
-    let comparison_unit = create_constant_tensor(F::ONE, is_less.len());
-    enforce_equality(config, region, &[&is_less, &comparison_unit])?;
+    let diff = pairwise(config, region, values, BaseOp::Sub)?;
+    let int_rep_constant = felt_to_integer_rep(constant);
+    range_check(
+        config,
+        region,
+        &[&diff],
+        &(-int_rep_constant + 1, int_rep_constant - 1),
+    )?;
 
     Ok(())
 }
-
 /// Performs division of a tensor by a constant value.
 ///
 /// This function divides each element in a tensor by a scalar divisor value, using
