@@ -15,7 +15,10 @@ use serde::{Deserialize, Serialize};
 pub enum HybridOp {
     Ln {
         scale: utils::F32,
-        eps: f64,
+        eps: utils::F32,
+    },
+    Sigmoid {
+        scale: utils::F32,
     },
     Rsqrt {
         input_scale: utils::F32,
@@ -139,6 +142,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
             ),
             HybridOp::Sqrt { scale } => format!("SQRT(scale={})", scale),
             HybridOp::Ln { scale, eps } => format!("LN(scale={}, eps={})", scale, eps),
+            HybridOp::Sigmoid { scale } => format!("SIGMOID(scale={})", scale),
             HybridOp::RoundHalfToEven { scale, legs } => {
                 format!("ROUND_HALF_TO_EVEN(scale={}, legs={})", scale, legs)
             }
@@ -233,6 +237,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
             }
             HybridOp::Ln { scale, eps } => {
                 layouts::ln(config, region, values[..].try_into()?, *scale, *eps)?
+            }
+            HybridOp::Sigmoid { scale } => {
+                layouts::sigmoid(config, region, values[..].try_into()?, *scale)?
             }
             HybridOp::RoundHalfToEven { scale, legs } => {
                 layouts::round_half_to_even(config, region, values[..].try_into()?, *scale, *legs)?
@@ -381,7 +388,10 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
             HybridOp::Ln {
                 scale: output_scale,
                 eps: _,
-            } => 4 * multiplier_to_scale(output_scale.0 as f64),
+            } => 2 * multiplier_to_scale(output_scale.0 as f64),
+            HybridOp::Sigmoid {
+                scale: output_scale,
+            } => 2 * multiplier_to_scale(output_scale.0 as f64),
             _ => in_scales[0],
         };
         Ok(scale)

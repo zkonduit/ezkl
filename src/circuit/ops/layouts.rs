@@ -159,14 +159,14 @@ pub fn diff_less_than<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
     values: &[&ValTensor<F>; 2],
     constant: F,
 ) -> Result<(), CircuitError> {
-    let distance = l1_distance(config, region, values)?;
-
-    let constant = create_constant_tensor(constant, 1);
-    let is_less = less(config, region, &[&distance, &constant])?;
-
-    // assert the result is 1
-    let comparison_unit = create_constant_tensor(F::ONE, is_less.len());
-    enforce_equality(config, region, &[&is_less, &comparison_unit])?;
+    let diff = pairwise(config, region, values, BaseOp::Sub)?;
+    let int_rep_constant = felt_to_integer_rep(constant);
+    range_check(
+        config,
+        region,
+        &[&diff],
+        &(-int_rep_constant, int_rep_constant),
+    )?;
 
     Ok(())
 }
@@ -5630,7 +5630,98 @@ pub fn ceil<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     )
 }
 
-/// integer ln layout
+fn sixth_order_chebyshev_approximation<
+    F: PrimeField + TensorType + PartialOrd + std::hash::Hash,
+>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[&ValTensor<F>; 1],
+    coeffs: &[F],
+    scale: F,
+) -> Result<ValTensor<F>, CircuitError> {
+    let coeff_tensors: Vec<ValTensor<F>> = coeffs
+        .iter()
+        .map(|c| create_constant_tensor(*c, 1))
+        .collect();
+
+    let x = values[0];
+
+    let x_squared = pairwise(config, region, &[x, x], BaseOp::Mult)?;
+    let x_squared = div(config, region, &[&x_squared], scale)?;
+    let x_cubed = pairwise(config, region, &[&x_squared, x], BaseOp::Mult)?;
+    let x_cubed = div(config, region, &[&x_cubed], scale)?;
+    let x_fourth = pairwise(config, region, &[&x_squared, &x_squared], BaseOp::Mult)?;
+    let x_fourth = div(config, region, &[&x_fourth], scale)?;
+    let x_fifth = pairwise(config, region, &[&x_fourth, x], BaseOp::Mult)?;
+    let x_fifth = div(config, region, &[&x_fifth], scale)?;
+
+    let one = create_constant_tensor(scale, 1);
+    let term1 = pairwise(config, region, &[&coeff_tensors[0], &one], BaseOp::Mult)?;
+    let term2 = pairwise(config, region, &[&coeff_tensors[1], x], BaseOp::Mult)?;
+    let term3 = pairwise(
+        config,
+        region,
+        &[&coeff_tensors[2], &x_squared],
+        BaseOp::Mult,
+    )?;
+    let term4 = pairwise(config, region, &[&coeff_tensors[3], &x_cubed], BaseOp::Mult)?;
+    let term5 = pairwise(
+        config,
+        region,
+        &[&coeff_tensors[4], &x_fourth],
+        BaseOp::Mult,
+    )?;
+    let term6 = pairwise(config, region, &[&coeff_tensors[5], &x_fifth], BaseOp::Mult)?;
+
+    let temp_sum1 = pairwise(config, region, &[&term1, &term2], BaseOp::Add)?;
+    let temp_sum2 = pairwise(config, region, &[&term3, &term4], BaseOp::Add)?;
+    let temp_sum3 = pairwise(config, region, &[&term5, &term6], BaseOp::Add)?;
+    let temp_sum4 = pairwise(config, region, &[&temp_sum2, &temp_sum3], BaseOp::Add)?;
+    let temp_sum5 = pairwise(config, region, &[&temp_sum1, &temp_sum4], BaseOp::Add)?;
+    let claimed_val = temp_sum5;
+
+    Ok(claimed_val)
+}
+
+fn fourth_order_chebyshev_approximation_symmetric_func<
+    F: PrimeField + TensorType + PartialOrd + std::hash::Hash,
+>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[&ValTensor<F>; 1],
+    coeffs: &[F],
+    scale: F,
+) -> Result<ValTensor<F>, CircuitError> {
+    let coeff_tensors: Vec<ValTensor<F>> = coeffs
+        .iter()
+        .map(|c| create_constant_tensor(*c, 1))
+        .collect();
+
+    let x = values[0];
+
+    let x_squared = pairwise(config, region, &[x, x], BaseOp::Mult)?;
+    let x_squared = div(config, region, &[&x_squared], scale)?;
+    let x_cubed = pairwise(config, region, &[&x_squared, x], BaseOp::Mult)?;
+    let x_cubed = div(config, region, &[&x_cubed], scale)?;
+    let x_fourth = pairwise(config, region, &[&x_squared, &x_squared], BaseOp::Mult)?;
+    let x_fourth = div(config, region, &[&x_fourth], scale)?;
+    let x_fifth = pairwise(config, region, &[&x_fourth, x], BaseOp::Mult)?;
+    let x_fifth = div(config, region, &[&x_fifth], scale)?;
+
+    let one = create_constant_tensor(scale, 1);
+
+    let term1 = pairwise(config, region, &[&coeff_tensors[0], &one], BaseOp::Mult)?;
+    let term2 = pairwise(config, region, &[&coeff_tensors[1], x], BaseOp::Mult)?;
+    let term4 = pairwise(config, region, &[&coeff_tensors[2], &x_cubed], BaseOp::Mult)?;
+    let term6 = pairwise(config, region, &[&coeff_tensors[3], &x_fifth], BaseOp::Mult)?;
+    let temp_sum1 = pairwise(config, region, &[&term1, &term2], BaseOp::Add)?;
+    let temp_sum2 = pairwise(config, region, &[&term4, &term6], BaseOp::Add)?;
+    let temp_sum3 = pairwise(config, region, &[&temp_sum1, &temp_sum2], BaseOp::Add)?;
+    let claimed_val = temp_sum3;
+    Ok(claimed_val)
+}
+
+/// Integer ln approximated using 5 term chebyshev polynomials, optimized over interval [0.1, 5]
 /// # Arguments
 /// * `config` - BaseConfig
 /// * `region` - RegionCtx
@@ -5656,7 +5747,7 @@ pub fn ceil<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// &[1, 1, 2, 2],
 /// ).unwrap());
 ///
-/// let result = ln::<Fp>(&dummy_config, &mut dummy_region, &[&x], 2.0.into(), f64::EPSILON).unwrap();
+/// let result = ln::<Fp>(&dummy_config, &mut dummy_region, &[&x], 2.0.into()).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[4, 0, 4, -8]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -5666,235 +5757,80 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     region: &mut RegionCtx<F>,
     values: &[&ValTensor<F>; 1],
     scale: utils::F32,
-    eps: f64,
+    eps: utils::F32,
 ) -> Result<ValTensor<F>, CircuitError> {
     // first generate the claimed val
+    let coeffs = vec![
+        integer_rep_to_felt((-2.619115 * scale.0).round() as IntegerRep), // c0
+        integer_rep_to_felt((5.335041 * scale.0).round() as IntegerRep),  // c1
+        integer_rep_to_felt((-3.845028 * scale.0).round() as IntegerRep), // c2
+        integer_rep_to_felt((1.443970 * scale.0).round() as IntegerRep),  // c3
+        integer_rep_to_felt((-0.258144 * scale.0).round() as IntegerRep), // c4
+        integer_rep_to_felt((0.017459 * scale.0).round() as IntegerRep),  // c5
+    ];
 
-    let mut input = values[0].clone();
-    let scale_as_felt = integer_rep_to_felt(scale.0.round() as IntegerRep);
+    let scale_f = integer_rep_to_felt::<F>(scale.0.round() as IntegerRep);
 
-    let triple_scaled_as_felt_tensor =
-        create_constant_tensor(scale_as_felt * scale_as_felt * scale_as_felt, 1);
-
-    // natural ln is log2(x) * ln(2)
-    let ln2 = utils::F32::from(2.0_f32.ln());
-    // now create a constant tensor for ln2 with scale
-    let ln2_tensor: ValTensor<F> = create_constant_tensor(
-        integer_rep_to_felt((ln2.0 * scale.0).round() as IntegerRep),
-        1,
+    let res = sixth_order_chebyshev_approximation(config, region, values, &coeffs, scale_f)?;
+    // add eps to avoid log(0)
+    let eps_tensor = create_constant_tensor(
+        integer_rep_to_felt::<F>((eps.0 * scale.0.powi(2)).round() as IntegerRep),
+        res.len(),
     );
-    let unit = create_constant_tensor(integer_rep_to_felt(1), 1);
-    let negative_one = create_constant_tensor(integer_rep_to_felt(-1), 1);
 
-    // 2. assign the image
-    if !input.all_prev_assigned() {
-        input = region.assign(&config.custom_gates.inputs[0], &input)?;
-        // don't need to increment because the claimed output is assigned to output and incremented accordingly
-    }
+    let res = pairwise(config, region, &[&res, &eps_tensor], BaseOp::Add)?;
 
-    let is_assigned = !input.any_unknowns()?;
+    Ok(res)
+}
 
-    let mut claimed_output: ValTensor<F> = if is_assigned {
-        let input_evals = input.int_evals()?;
-        // returns an integer with the base 2 logarithm
-        tensor::ops::nonlinearities::ilog2(&input_evals, scale.0 as f64)
-            .par_iter()
-            .map(|x| Value::known(integer_rep_to_felt(*x)))
-            .collect::<Tensor<Value<F>>>()
-            .into()
-    } else {
-        Tensor::new(
-            Some(&vec![Value::<F>::unknown(); input.len()]),
-            &[input.len()],
-        )?
-        .into()
-    };
-    claimed_output.reshape(input.dims())?;
-    let claimed_output = decompose(
-        config,
-        region,
-        &[&claimed_output],
-        &region.base(),
-        &region.legs(),
-        true,
-    )?
-    .1;
-    region.increment(claimed_output.len());
+/// Sigmoid ln approximated using 5 term chebyshev polynomials, optimized over interval [-6, 6]
+/// # Arguments
+/// * `config` - BaseConfig
+/// * `region` - RegionCtx
+/// * `values` - &[&ValTensor<F>; 1]
+/// * `scale` - utils::F32
+/// # Returns
+/// * ValTensor<F>
+/// # Example
+///
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
+/// use ezkl::circuit::ops::layouts::sigmoid;
+/// use ezkl::tensor::val::ValTensor;
+/// use halo2curves::bn256::Fr as Fp;
+/// use ezkl::circuit::region::RegionCtx;
+/// use ezkl::circuit::region::RegionSettings;
+/// use ezkl::circuit::BaseConfig;
+/// let dummy_config = BaseConfig::dummy(12, 2);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+/// Some(&[3, 2, 3, 1]),
+/// &[1, 1, 2, 2],
+/// ).unwrap());
+///
+/// let result = sigmoid::<Fp>(&dummy_config, &mut dummy_region, &[&x], 2.0.into()).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[4, 0, 4, -8]), &[1, 1, 2, 2]).unwrap();
+/// assert_eq!(result.int_evals().unwrap(), expected);
+///
+/// ```
+pub fn sigmoid<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[&ValTensor<F>; 1],
+    scale: utils::F32,
+) -> Result<ValTensor<F>, CircuitError> {
+    // first generate the claimed val
+    let coeffs = vec![
+        integer_rep_to_felt((0.500000 * scale.0.round()) as IntegerRep), // c0
+        integer_rep_to_felt((0.212251 * scale.0.round()) as IntegerRep), // c1
+        integer_rep_to_felt((-0.007144 * scale.0.round()) as IntegerRep), // c3
+        integer_rep_to_felt((0.000100 * scale.0.round()) as IntegerRep), // c5
+    ];
 
-    let pow2_of_claimed_output = nonlinearity(
-        config,
-        region,
-        &[&claimed_output],
-        &LookupOp::PowersOfTwo { scale },
-    )?;
+    let scale_f = integer_rep_to_felt::<F>(scale.0.round() as IntegerRep);
 
-    let num_bits = (std::mem::size_of::<IntegerRep>() * 8) as IntegerRep;
-
-    region.update_max_min_lookup_inputs_force(-num_bits, num_bits)?;
-
-    // now subtract 1 from the claimed output
-    let claimed_output_minus_one =
-        pairwise(config, region, &[&claimed_output, &unit], BaseOp::Sub)?;
-
-    // now add 1 to the claimed output
-    let claimed_output_plus_one = pairwise(config, region, &[&claimed_output, &unit], BaseOp::Add)?;
-
-    // prior power of 2 is less than claimed output
-    let prior_pow2 = nonlinearity(
-        config,
-        region,
-        &[&claimed_output_minus_one],
-        &LookupOp::PowersOfTwo { scale },
-    )?;
-
-    // next power of 2 is greater than claimed output
-    let next_pow2 = nonlinearity(
-        config,
-        region,
-        &[&claimed_output_plus_one],
-        &LookupOp::PowersOfTwo { scale },
-    )?;
-
-    let distance_to_claimed = pairwise(
-        config,
-        region,
-        &[&input, &pow2_of_claimed_output],
-        BaseOp::Sub,
-    )?;
-
-    let abs_distance_to_claimed = abs(config, region, &[&distance_to_claimed])?;
-
-    let abs_distance_to_next_pow2 = l1_distance(config, region, &[&input, &next_pow2])?;
-
-    let abs_distance_to_prior_pow2 = l1_distance(config, region, &[&input, &prior_pow2])?;
-
-    // because we round up this can be equal
-    let is_closest_to_0: ValTensor<F> = less_equal(
-        config,
-        region,
-        &[&abs_distance_to_claimed, &abs_distance_to_next_pow2],
-    )?;
-
-    let is_closest_to_1 = less_equal(
-        config,
-        region,
-        &[&abs_distance_to_claimed, &abs_distance_to_prior_pow2],
-    )?;
-
-    let is_closest = and(config, region, &[&is_closest_to_0, &is_closest_to_1])?;
-
-    let mut comparison_unit = create_constant_tensor(integer_rep_to_felt(1), is_closest.len());
-    comparison_unit.reshape(is_closest.dims())?;
-    let assigned_unit = region.assign(&config.custom_gates.inputs[1], &comparison_unit)?;
-
-    enforce_equality(config, region, &[&is_closest, &assigned_unit])?;
-
-    // get a linear interpolation now
-
-    let sign_of_distance_to_claimed = sign(config, region, &[&distance_to_claimed], true)?;
-    let sign_of_distance_to_claimed_is_negative = equals(
-        config,
-        region,
-        &[&sign_of_distance_to_claimed, &negative_one],
-    )?;
-
-    let sign_of_distance_to_claimed_is_positive =
-        not(config, region, &[&sign_of_distance_to_claimed_is_negative])?;
-
-    let pow2_prior_to_claimed_distance = pairwise(
-        config,
-        region,
-        &[&pow2_of_claimed_output, &prior_pow2],
-        BaseOp::Sub,
-    )?;
-
-    let pow2_next_to_claimed_distance = pairwise(
-        config,
-        region,
-        &[&next_pow2, &pow2_of_claimed_output],
-        BaseOp::Sub,
-    )?;
-
-    let recip_pow2_prior_to_claimed_distance = recip(
-        config,
-        region,
-        &[&pow2_prior_to_claimed_distance],
-        scale_as_felt,
-        scale_as_felt * scale_as_felt,
-        eps,
-    )?;
-
-    let interpolated_distance = pairwise(
-        config,
-        region,
-        &[&recip_pow2_prior_to_claimed_distance, &distance_to_claimed],
-        BaseOp::Mult,
-    )?;
-
-    let gated_prior_interpolated_distance = pairwise(
-        config,
-        region,
-        &[
-            &interpolated_distance,
-            &sign_of_distance_to_claimed_is_negative,
-        ],
-        BaseOp::Mult,
-    )?;
-
-    let recip_next_to_claimed_distance = recip(
-        config,
-        region,
-        &[&pow2_next_to_claimed_distance],
-        scale_as_felt,
-        scale_as_felt * scale_as_felt,
-        eps,
-    )?;
-
-    let interpolated_distance_next = pairwise(
-        config,
-        region,
-        &[&recip_next_to_claimed_distance, &distance_to_claimed],
-        BaseOp::Mult,
-    )?;
-
-    let gated_next_interpolated_distance = pairwise(
-        config,
-        region,
-        &[
-            &interpolated_distance_next,
-            &sign_of_distance_to_claimed_is_positive,
-        ],
-        BaseOp::Mult,
-    )?;
-
-    let scaled_claimed_output = pairwise(
-        config,
-        region,
-        &[&claimed_output, &triple_scaled_as_felt_tensor],
-        BaseOp::Mult,
-    )?;
-
-    let claimed_output = pairwise(
-        config,
-        region,
-        &[&scaled_claimed_output, &gated_prior_interpolated_distance],
-        BaseOp::Add,
-    )?;
-
-    let claimed_output = pairwise(
-        config,
-        region,
-        &[&claimed_output, &gated_next_interpolated_distance],
-        BaseOp::Add,
-    )?;
-
-    // now multiply the claimed output by ln2
-    pairwise(
-        config,
-        region,
-        &[&claimed_output, &ln2_tensor],
-        BaseOp::Mult,
-    )
+    fourth_order_chebyshev_approximation_symmetric_func(config, region, values, &coeffs, scale_f)
 }
 
 /// round layout
@@ -6229,9 +6165,9 @@ pub(crate) fn recompose<F: PrimeField + TensorType + PartialOrd + std::hash::Has
         (0..num_first_dims)
             .flat_map(|_| {
                 (0..n).rev().map(|x| {
-                    let base = (*base).checked_pow(x as u32);
+                    let base = (*base as IntegerRep).checked_pow(x as u32);
                     if let Some(base) = base {
-                        Ok(ValType::Constant(integer_rep_to_felt(base as IntegerRep)))
+                        Ok(ValType::Constant(integer_rep_to_felt(base)))
                     } else {
                         Err(CircuitError::DecompositionBaseOverflow)
                     }
@@ -6341,9 +6277,9 @@ pub(crate) fn decompose<F: PrimeField + TensorType + PartialOrd + std::hash::Has
         (0..input.len())
             .flat_map(|_| {
                 (0..*n).rev().map(|x| {
-                    let base = (*base).checked_pow(x as u32);
+                    let base = (*base as IntegerRep).checked_pow(x as u32);
                     if let Some(base) = base {
-                        Ok(ValType::Constant(integer_rep_to_felt(base as IntegerRep)))
+                        Ok(ValType::Constant(integer_rep_to_felt(base)))
                     } else {
                         Err(CircuitError::DecompositionBaseOverflow)
                     }

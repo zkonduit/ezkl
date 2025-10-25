@@ -2325,8 +2325,8 @@ pub mod nonlinearities {
     /// ```
     pub fn const_div(a: &Tensor<IntegerRep>, denom: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
-            let d_inv_x = (a_i as f64) / (denom);
-            Ok::<_, TensorError>(d_inv_x.round() as IntegerRep)
+            let d_inv_x = (a_i) / (denom as i128);
+            Ok::<_, TensorError>(d_inv_x)
         })
         .unwrap()
     }

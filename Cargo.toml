@@ -186,7 +186,7 @@ harness = false
 
 
 [[bench]]
-name = "sigmoid"
+name = "tanh"
 harness = false
 
 [[bench]]
@@ -194,12 +194,12 @@ name = "relu_lookupless"
 harness = false
 
 [[bench]]
-name = "accum_matmul_sigmoid"
+name = "accum_matmul_tanh"
 harness = false
 
 
 [[bench]]
-name = "accum_matmul_sigmoid_overflow"
+name = "accum_matmul_tanh_overflow"
 harness = false
 
 [[bin]]
@@ -282,11 +282,11 @@ halo2_proofs = { git = "https://github.com/zkonduit/halo2#1dd2090741f006fd031a07
 [patch.crates-io]
 uniffi_testing = { git = "https://github.com/ElusAegis/uniffi-rs", branch = "feat/testing-feature-build-fix" }
 
-[profile.release]
-# debug = true
-rustflags = ["-C", "relocation-model=pic"]
-lto = "fat"
-codegen-units = 1
+# [profile.release]
+# # debug = true
+# rustflags = ["-C", "relocation-model=pic"]
+# lto = "fat"
+# codegen-units = 1
 # panic = "abort"
 
 

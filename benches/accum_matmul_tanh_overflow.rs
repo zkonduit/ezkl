@@ -66,7 +66,7 @@ impl Circuit<Fr> for MyCircuit {
                 &a,
                 BITS,
                 k,
-                &LookupOp::Sigmoid { scale: 1.0.into() },
+                &LookupOp::Tanh { scale: 1.0.into() },
             )
             .unwrap();
 
@@ -95,7 +95,7 @@ impl Circuit<Fr> for MyCircuit {
                     .layout(
                         &mut region,
                         &[&output.unwrap()],
-                        Box::new(LookupOp::Sigmoid { scale: 1.0.into() }),
+                        Box::new(LookupOp::Tanh { scale: 1.0.into() }),
                     )
                     .unwrap();
                 Ok(())

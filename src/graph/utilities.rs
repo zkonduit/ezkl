@@ -889,9 +889,6 @@ pub fn new_op_from_onnx(
         "HardSwish" => SupportedOp::Nonlinear(LookupOp::HardSwish {
             scale: scale_to_multiplier(input_scales[0]).into(),
         }),
-        "Sigmoid" => SupportedOp::Nonlinear(LookupOp::Sigmoid {
-            scale: scale_to_multiplier(input_scales[0]).into(),
-        }),
         "Sqrt" => SupportedOp::Hybrid(HybridOp::Sqrt {
             scale: scale_to_multiplier(input_scales[0]).into(),
         }),
@@ -911,19 +908,13 @@ pub fn new_op_from_onnx(
             scale: scale_to_multiplier(input_scales[0]).into(),
             base: E.into(),
         }),
-        "Ln" => {
-            if run_args.bounded_log_lookup {
-                SupportedOp::Hybrid(HybridOp::Ln {
-                    scale: scale_to_multiplier(input_scales[0]).into(),
-                    eps: run_args.get_epsilon(),
-                })
-            } else {
-                SupportedOp::Nonlinear(LookupOp::Ln {
-                    scale: scale_to_multiplier(input_scales[0]).into(),
-                })
-            }
-        }
-
+        "Ln" => SupportedOp::Hybrid(HybridOp::Ln {
+            scale: scale_to_multiplier(input_scales[0]).into(),
+            eps: run_args.get_epsilon().into(),
+        }),
+        "Sigmoid" => SupportedOp::Hybrid(HybridOp::Sigmoid {
+            scale: scale_to_multiplier(input_scales[0]).into(),
+        }),
         "Sin" => SupportedOp::Nonlinear(LookupOp::Sin {
             scale: scale_to_multiplier(input_scales[0]).into(),
         }),

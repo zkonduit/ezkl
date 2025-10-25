@@ -175,9 +175,6 @@ struct PyRunArgs {
     /// int: The number of legs used for decomposition
     #[pyo3(get, set)]
     pub decomp_legs: usize,
-    /// bool: Should the circuit use unbounded lookups for log
-    #[pyo3(get, set)]
-    pub bounded_log_lookup: bool,
     /// bool: Should the circuit use range checks for inputs and outputs (set to false if the input is a felt)
     #[pyo3(get, set)]
     pub ignore_range_check_inputs_outputs: bool,
@@ -202,7 +199,6 @@ impl PyRunArgs {
 impl From<PyRunArgs> for RunArgs {
     fn from(py_run_args: PyRunArgs) -> Self {
         RunArgs {
-            bounded_log_lookup: py_run_args.bounded_log_lookup,
             input_scale: py_run_args.input_scale,
             param_scale: py_run_args.param_scale,
             rebase_scale: py_run_args.rebase_scale,
@@ -229,7 +225,6 @@ impl Into<PyRunArgs> for RunArgs {
     fn into(self) -> PyRunArgs {
         let eps = self.get_epsilon();
         PyRunArgs {
-            bounded_log_lookup: self.bounded_log_lookup,
             input_scale: self.input_scale,
             param_scale: self.param_scale,
             rebase_scale: self.rebase_scale,

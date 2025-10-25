@@ -2553,7 +2553,7 @@ mod lookup_ultra_overflow {
                 .map(|_| VarTensor::new_advice(cs, 4, 1, 3))
                 .collect::<Vec<_>>();
 
-            let nl = LookupOp::Sigmoid { scale: 1.0.into() };
+            let nl = LookupOp::Tanh { scale: 1.0.into() };
 
             let mut config = BaseConfig::default();
 
@@ -2586,7 +2586,7 @@ mod lookup_ultra_overflow {
                             .layout(
                                 &mut region,
                                 &[&self.input],
-                                Box::new(LookupOp::Sigmoid { scale: 1.0.into() }),
+                                Box::new(LookupOp::Tanh { scale: 1.0.into() }),
                             )
                             .map_err(|_| Error::Synthesis)
                     },

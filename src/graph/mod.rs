@@ -2298,7 +2298,6 @@ pub mod tests {
         "commitment": "KZG",
         "decomp_base": 128,
         "decomp_legs": 2,
-        "bounded_log_lookup": false,
         "ignore_range_check_inputs_outputs": false,
         "disable_freivalds": false
     },

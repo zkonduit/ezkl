@@ -260,12 +260,6 @@ pub struct RunArgs {
     /// Controls decomposition granularity
     #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "2", value_hint = clap::ValueHint::Other))]
     pub decomp_legs: usize,
-    /// Whether to use bounded lookup for logarithm computation
-    #[cfg_attr(
-        all(feature = "ezkl", not(target_arch = "wasm32")),
-        arg(long, default_value = "false")
-    )]
-    pub bounded_log_lookup: bool,
     /// Range check inputs and outputs (turn off if the inputs are felts)
     #[cfg_attr(
         all(feature = "ezkl", not(target_arch = "wasm32")),
@@ -298,7 +292,6 @@ impl Default for RunArgs {
     /// while maintaining reasonable proving time and circuit size
     fn default() -> Self {
         Self {
-            bounded_log_lookup: false,
             input_scale: 7,
             param_scale: 7,
             rebase_scale: None,
