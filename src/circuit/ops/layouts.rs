@@ -6229,9 +6229,9 @@ pub(crate) fn recompose<F: PrimeField + TensorType + PartialOrd + std::hash::Has
         (0..num_first_dims)
             .flat_map(|_| {
                 (0..n).rev().map(|x| {
-                    let base = (*base).checked_pow(x as u32);
+                    let base = (*base as IntegerRep).checked_pow(x as u32);
                     if let Some(base) = base {
-                        Ok(ValType::Constant(integer_rep_to_felt(base as IntegerRep)))
+                        Ok(ValType::Constant(integer_rep_to_felt(base)))
                     } else {
                         Err(CircuitError::DecompositionBaseOverflow)
                     }
