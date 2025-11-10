@@ -306,10 +306,13 @@ impl<T: Clone + TensorType + PrimeField> Tensor<T> {
             std::fs::File::create(path).map_err(|e| TensorError::FileSaveError(e.to_string()))?;
         let mut buf_writer = std::io::BufWriter::new(writer);
 
-        self.inner.iter().copied().for_each(|x| {
+        for x in self.inner.iter().copied() {
             let x = x.to_repr();
-            buf_writer.write_all(x.as_ref()).unwrap();
-        });
+            buf_writer.write_all(x.as_ref()).map_err(|e| TensorError::FileSaveError(e.to_string()))?;
+        }
+        
+        // Ensure all data is written to disk
+        buf_writer.flush().map_err(|e| TensorError::FileSaveError(e.to_string()))?;
 
         Ok(())
     }

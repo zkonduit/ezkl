@@ -1024,13 +1024,13 @@ pub(crate) fn calibrate(
             .map(|chunk| {
                 let chunk = chunk.clone();
 
-                let data = circuit
+                let mut data = circuit
                     .load_graph_input(&chunk)
                     .map_err(|e| format!("failed to load circuit inputs: {}", e))?;
 
                 let forward_res = circuit
                     .forward::<KZGCommitmentScheme<Bn256>>(
-                        &mut data.clone(),
+                        &mut data,
                         None,
                         None,
                         RegionSettings::all_true(
@@ -1395,7 +1395,10 @@ pub(crate) async fn create_evm_vka(
         )))
     })?;
 
-    File::create(vka_path.clone())?.write_all(&serialized_vka_words)?;
+    let file = File::create(vka_path.clone())?;
+    let mut writer = std::io::BufWriter::new(file);
+    writer.write_all(&serialized_vka_words)?;
+    writer.flush()?;
 
     // Load in the vka words and deserialize them and check that they match the original
     let bytes = std::fs::read(vka_path)?;
