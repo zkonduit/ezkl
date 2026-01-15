@@ -33,7 +33,7 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
-          toolchain: nightly-2025-05-01
+          toolchain: nightly-2025-12-01
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3
@@ -58,7 +58,7 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
-          toolchain: nightly-2025-05-01
+          toolchain: nightly-2025-12-01
           override: true
           components: rustfmt, clippy
       - name: install libc6
@@ -82,7 +82,7 @@ jobs:
           persist-credentials: false
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
-          toolchain: nightly-2025-05-01
+          toolchain: nightly-2025-12-01
           override: true
           components: rustfmt, clippy
       - name: install libc6
@@ -106,7 +106,7 @@ jobs:
           persist-credentials: false
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
-          toolchain: nightly-2025-05-01
+          toolchain: nightly-2025-12-01
           override: true
           components: rustfmt, clippy
       - name: install libc6
@@ -140,7 +140,7 @@ jobs:
           persist-credentials: false
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
-          toolchain: nightly-2025-05-01
+          toolchain: nightly-2025-12-01
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3 #v3.3.0
@@ -185,7 +185,7 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
-          toolchain: nightly-2025-05-01
+          toolchain: nightly-2025-12-01
           override: true
           components: rustfmt, clippy
       - name: install libc6
@@ -223,7 +223,7 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
-          toolchain: nightly-2025-05-01
+          toolchain: nightly-2025-12-01
           override: true
           components: rustfmt, clippy
       - name: install libc6
@@ -256,7 +256,7 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
-          toolchain: nightly-2025-05-01
+          toolchain: nightly-2025-12-01
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3 #v3.3.0
@@ -331,7 +331,7 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
-          toolchain: nightly-2025-05-01
+          toolchain: nightly-2025-12-01
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3 #v3.3.0
@@ -344,7 +344,7 @@ jobs:
         with:
           persist-credentials: false
       - name: "Add rust-src"
-        run: rustup component add rust-src --toolchain nightly-2025-05-01-x86_64-unknown-linux-gnu
+        run: rustup component add rust-src --toolchain nightly-2025-12-01-x86_64-unknown-linux-gnu
       # - name: Install solc
       #   run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
@@ -380,11 +380,11 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
-          toolchain: nightly-2025-05-01
+          toolchain: nightly-2025-12-01
           override: true
           components: rustfmt, clippy
       - name: Add rust-src
-        run: rustup component add rust-src --toolchain nightly-2025-05-01-x86_64-unknown-linux-gnu
+        run: rustup component add rust-src --toolchain nightly-2025-12-01-x86_64-unknown-linux-gnu
       - name: Force rebuild icicle dependencies
         run: cargo clean -p icicle-runtime -p icicle-core -p icicle-hash -p icicle-bn254
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
@@ -437,11 +437,11 @@ jobs:
           persist-credentials: false
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
-          toolchain: nightly-2025-05-01
+          toolchain: nightly-2025-12-01
           override: true
           components: rustfmt, clippy
       - name: Add rust-src
-        run: rustup component add rust-src --toolchain nightly-2025-05-01-x86_64-unknown-linux-gnu
+        run: rustup component add rust-src --toolchain nightly-2025-12-01-x86_64-unknown-linux-gnu
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3 #v3.3.0
         with:
           crate: cargo-nextest
@@ -486,7 +486,7 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
-          toolchain: nightly-2025-05-01
+          toolchain: nightly-2025-12-01
           override: true
           components: rustfmt, clippy
       - name: install libc6
@@ -520,7 +520,7 @@ jobs:
           python-version: "3.12"
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
-          toolchain: nightly-2025-05-01
+          toolchain: nightly-2025-12-01
           override: true
           components: rustfmt, clippy
       - name: Install cmake
@@ -554,7 +554,7 @@ jobs:
           python-version: "3.12"
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
-          toolchain: nightly-2025-05-01
+          toolchain: nightly-2025-12-01
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3 #v3.3.0
@@ -592,7 +592,7 @@ jobs:
           python-version: "3.11"
       - uses: actions-rust-lang/setup-rust-toolchain@fb51252c7ba57d633bc668f941da052e410add48 #v1.0.6
         with:
-          toolchain: nightly-2025-05-01
+          toolchain: nightly-2025-12-01
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3 #v3.3.0
