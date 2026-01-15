@@ -98,14 +98,11 @@ jobs:
           echo "ASSET=build-artifacts/ezkl-linux-gpu.tar.gz" >> $GITHUB_ENV
 
       - name: Upload release archive
-        uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5  #v1.0.2
-        env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda  #v2.2.1
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ env.ASSET }}
-          asset_name: ${{ env.ASSET }}
-          asset_content_type: application/octet-stream
+          token: ${{ secrets.RELEASE_TOKEN }}
+          tag_name: ${{ env.EZKL_VERSION }}
+          files: ${{ env.ASSET }}
 
   build-release:
     permissions:
@@ -240,11 +237,8 @@ jobs:
           echo "ASSET=build-artifacts/ezkl-win.zip" >> $GITHUB_ENV
 
       - name: Upload release archive
-        uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5  #v1.0.2
-        env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda  #v2.2.1
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ env.ASSET }}
-          asset_name: ${{ env.ASSET }}
-          asset_content_type: application/octet-stream
+          token: ${{ secrets.RELEASE_TOKEN }}
+          tag_name: ${{ env.EZKL_VERSION }}
+          files: ${{ env.ASSET }}
