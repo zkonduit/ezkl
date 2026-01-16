@@ -238,9 +238,11 @@ impl<'py> IntoPyObject<'py> for CalibrationTarget {
 
 #[cfg(feature = "python-bindings")]
 /// Obtains CalibrationTarget from PyObject (Required for CalibrationTarget to be compatible with Python)
-impl<'source> FromPyObject<'source> for CalibrationTarget {
-    fn extract_bound(ob: &pyo3::Bound<'source, pyo3::PyAny>) -> PyResult<Self> {
-        let strval = String::extract_bound(ob)?;
+impl<'py> FromPyObject<'_, 'py> for CalibrationTarget {
+    type Error = pyo3::PyErr;
+
+    fn extract(ob: pyo3::Borrowed<'_, 'py, pyo3::PyAny>) -> Result<Self, Self::Error> {
+        let strval = String::extract(ob)?;
         match strval.to_lowercase().as_str() {
             "resources" => Ok(CalibrationTarget::Resources {
                 col_overflow: false,
@@ -270,9 +272,11 @@ impl<'py> IntoPyObject<'py> for ContractType {
 
 #[cfg(feature = "python-bindings")]
 /// Obtains ContractType from PyObject (Required for ContractType to be compatible with Python)
-impl<'source> FromPyObject<'source> for ContractType {
-    fn extract_bound(ob: &pyo3::Bound<'source, pyo3::PyAny>) -> PyResult<Self> {
-        let strval = String::extract_bound(ob)?;
+impl<'py> FromPyObject<'_, 'py> for ContractType {
+    type Error = pyo3::PyErr;
+
+    fn extract(ob: pyo3::Borrowed<'_, 'py, pyo3::PyAny>) -> Result<Self, Self::Error> {
+        let strval = String::extract(ob)?;
         match strval.to_lowercase().as_str() {
             "verifier" => Ok(ContractType::Verifier { reusable: false }),
             "verifier/reusable" => Ok(ContractType::Verifier { reusable: true }),
