@@ -4,31 +4,26 @@ use alloy::core::primitives::Address as H160;
 use alloy::core::primitives::Bytes;
 use alloy::core::primitives::I256;
 use alloy::dyn_abi::abi::TokenSeq;
-// use alloy::providers::Middleware;
 use alloy::json_abi::JsonAbi;
+use alloy::network::{Ethereum, EthereumWallet};
 use alloy::primitives::ruint::ParseError;
 use alloy::primitives::ParseSignedError;
-use alloy::providers::fillers::{
-    ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, SignerFiller,
-};
-use alloy::providers::network::{Ethereum, EthereumSigner};
 use alloy::providers::ProviderBuilder;
-use alloy::providers::{Identity, Provider, RootProvider};
-use alloy::rpc::types::eth::TransactionInput;
-use alloy::rpc::types::eth::TransactionRequest;
+use alloy::providers::Provider;
+use alloy::rpc::types::TransactionInput;
+use alloy::rpc::types::TransactionRequest;
 use alloy::signers::k256::ecdsa;
-use alloy::signers::wallet::{LocalWallet, WalletError};
+use alloy::signers::local::{PrivateKeySigner, LocalSignerError};
 use alloy::transports::http::Http;
 use alloy::transports::{RpcError, TransportErrorKind};
 use foundry_compilers::artifacts::Settings as SolcSettings;
 use foundry_compilers::error::{SolcError, SolcIoError};
-use foundry_compilers::Solc;
+use foundry_compilers::solc::Solc;
 use halo2_solidity_verifier::encode_register_vk_calldata;
 use halo2curves::bn256::{Fr, G1Affine};
 use log::{debug, info, warn};
 use reqwest::Client;
 use std::path::PathBuf;
-use std::str::FromStr;
 use std::sync::Arc;
 
 const ANVIL_DEFAULT_PRIVATE_KEY: &str =
@@ -52,8 +47,10 @@ pub enum EthError {
     Transport(#[from] RpcError<TransportErrorKind>),
     #[error("a contract error occurred: {0}")]
     Contract(#[from] alloy::contract::Error),
+    #[error("a pending transaction error occurred: {0}")]
+    PendingTransaction(#[from] alloy::providers::PendingTransactionError),
     #[error("a wallet error occurred: {0}")]
-    Wallet(#[from] WalletError),
+    Wallet(#[from] LocalSignerError),
     #[error("failed to parse url {0}")]
     UrlParse(String),
     #[error("Private key must be in hex format, 64 chars, without 0x prefix")]
@@ -102,49 +99,57 @@ pub enum EthError {
 }
 
 pub type EthersClient = Arc<
-    FillProvider<
-        JoinFill<
-            JoinFill<JoinFill<JoinFill<Identity, GasFiller>, NonceFiller>, ChainIdFiller>,
-            SignerFiller<EthereumSigner>,
+    alloy::providers::fillers::FillProvider<
+        alloy::providers::fillers::JoinFill<
+            alloy::providers::fillers::JoinFill<
+                alloy::providers::fillers::JoinFill<
+                    alloy::providers::fillers::JoinFill<
+                        alloy::providers::Identity,
+                        alloy::providers::fillers::GasFiller,
+                    >,
+                    alloy::providers::fillers::NonceFiller,
+                >,
+                alloy::providers::fillers::ChainIdFiller,
+            >,
+            alloy::providers::fillers::WalletFiller<EthereumWallet>,
         >,
-        RootProvider<Http<Client>>,
+        alloy::providers::RootProvider<Http<Client>>,
         Http<Client>,
-        Ethereum,
     >,
 >;
 
-pub type ContractFactory<M> = CallBuilder<Http<Client>, Arc<M>, ()>;
+pub type ContractFactory<M> = CallBuilder<Arc<M>, (), Ethereum>;
 
 /// Return an instance of Anvil and a client for the given RPC URL. If none is provided, a local client is used.
 pub async fn setup_eth_backend(
     rpc_url: &str,
     private_key: Option<&str>,
-) -> Result<(EthersClient, alloy::primitives::Address), EthError> {
+) -> Result<(Arc<impl Provider + Clone>, alloy::primitives::Address), EthError> {
     // Launch anvil
 
     let endpoint = rpc_url.to_string();
 
     // Instantiate the wallet
-    let wallet: LocalWallet;
+    let signer: PrivateKeySigner;
     if let Some(private_key) = private_key {
         debug!("using private key {}", private_key);
         if private_key.len() != 64 {
             return Err(EthError::PrivateKeyFormat);
         }
         let private_key_buffer = hex::decode(private_key)?;
-        wallet = LocalWallet::from_slice(&private_key_buffer)?;
+        signer = PrivateKeySigner::from_slice(&private_key_buffer)?;
     } else {
-        wallet = LocalWallet::from_str(ANVIL_DEFAULT_PRIVATE_KEY)?;
+        signer = ANVIL_DEFAULT_PRIVATE_KEY.parse()?;
     }
 
-    let wallet_address = wallet.address();
+    let wallet_address = signer.address();
+    let wallet = EthereumWallet::from(signer);
 
     // Connect to the network
     let client = Arc::new(
         ProviderBuilder::new()
-            .with_recommended_fillers()
-            .signer(EthereumSigner::from(wallet))
-            .on_http(endpoint.parse().map_err(|_| EthError::UrlParse(endpoint))?),
+            .wallet(wallet)
+            .connect_http(endpoint.parse().map_err(|_| EthError::UrlParse(endpoint))?),
     );
 
     let chain_id = client.get_chain_id().await?;
@@ -194,7 +199,7 @@ pub async fn register_vka_via_rv(
     let tx = TransactionRequest::default().to(rv_address).input(input);
     debug!("transaction {:#?}", tx);
 
-    let result = client.call(&tx).await;
+    let result = client.call(tx.clone()).await;
 
     if let Err(e) = result {
         return Err(EthError::EvmVerificationError(e.to_string()).into());
@@ -204,7 +209,7 @@ pub async fn register_vka_via_rv(
     // decode return bytes value into uint8
     let output = result.to_vec();
 
-    let gas = client.estimate_gas(&tx).await?;
+    let gas = client.estimate_gas(tx.clone()).await?;
 
     info!("estimated vka registration cost: {:#?}", gas);
 
@@ -215,11 +220,11 @@ pub async fn register_vka_via_rv(
     result.watch().await?;
 
     // if gas is greater than 30 million warn the user that the gas cost is above ethereum's 30 million block gas limit
-    if gas > 30_000_000_u128 {
+    if gas > 30_000_000_u64 {
         warn!(
             "Gas cost of verify transaction is greater than 30 million block gas limit. It will fail on mainnet."
         );
-    } else if gas > 15_000_000_u128 {
+    } else if gas > 15_000_000_u64 {
         warn!(
             "Gas cost of verify transaction is greater than 15 million, the target block size for ethereum"
         );
@@ -266,7 +271,7 @@ pub async fn verify_proof_via_solidity(
     let tx = TransactionRequest::default().to(addr).input(input);
     debug!("transaction {:#?}", tx);
 
-    let result = client.call(&tx).await;
+    let result = client.call(tx.clone()).await;
 
     if let Err(e) = result {
         return Err(EthError::EvmVerificationError(e.to_string()).into());
@@ -291,7 +296,7 @@ pub async fn verify_proof_via_solidity(
                 if !scaled_matches(inst, exp) {
                     return Err(EthError::RescaleCheckError(RescaleCheckError::Mismatch {
                         idx,
-                        expected: exp.clone(),
+                        expected: exp.to_string(),
                         got: to_decimal_18(inst),
                     }));
                 }
@@ -308,16 +313,16 @@ pub async fn verify_proof_via_solidity(
         return Err(EthError::EvmVerificationError("Invalid proof".into()));
     }
 
-    let gas = client.estimate_gas(&tx).await?;
+    let gas = client.estimate_gas(tx.clone()).await?;
 
     info!("estimated verify gas cost: {:#?}", gas);
 
     // if gas is greater than 30 million warn the user that the gas cost is above ethereum's 30 million block gas limit
-    if gas > 30_000_000_u128 {
+    if gas > 30_000_000_u64 {
         warn!(
             "Gas cost of verify transaction is greater than 30 million block gas limit. It will fail on mainnet."
         );
-    } else if gas > 15_000_000_u128 {
+    } else if gas > 15_000_000_u64 {
         warn!(
             "Gas cost of verify transaction is greater than 15 million, the target block size for ethereum"
         );
@@ -327,7 +332,7 @@ pub async fn verify_proof_via_solidity(
 }
 
 /// Generates the contract factory for a solidity verifier. The factory is used to deploy the contract
-fn get_sol_contract_factory<'a, M: 'static + Provider<Http<Client>, Ethereum>, T: TokenSeq<'a>>(
+fn get_sol_contract_factory<'a, M: 'static + Provider, T: TokenSeq<'a>>(
     abi: JsonAbi,
     bytecode: Bytes,
     runtime_bytecode: Bytes,
@@ -365,7 +370,7 @@ fn get_sol_contract_factory<'a, M: 'static + Provider<Http<Client>, Ethereum>, T
         }
     };
 
-    Ok(CallBuilder::new_raw_deploy(client, data))
+    Ok(CallBuilder::<_, _, Ethereum>::new_raw_deploy(client, data))
 }
 
 /// Compiles a solidity verifier contract and returns the abi, bytecode, and runtime bytecode
@@ -374,11 +379,12 @@ pub async fn get_contract_artifacts(
     contract_name: &str,
     runs: usize,
 ) -> Result<(JsonAbi, Bytes, Bytes), EthError> {
-    use foundry_compilers::{
-        artifacts::{output_selection::OutputSelection, Optimizer},
-        compilers::CompilerInput,
-        SolcInput, SHANGHAI_SOLC,
+    use foundry_compilers::artifacts::{
+        output_selection::OutputSelection, Optimizer, SolcInput, SolcLanguage,
     };
+    use semver::Version;
+
+    const SHANGHAI_SOLC: Version = Version::new(0, 8, 20);
 
     if !sol_code_path.exists() {
         return Err(EthError::ContractNotFound(
@@ -396,16 +402,14 @@ pub async fn get_contract_artifacts(
         ..Default::default()
     };
 
-    let input = SolcInput::build(
-        std::collections::BTreeMap::from([(
-            sol_code_path.clone(),
-            foundry_compilers::artifacts::Source::read(sol_code_path)?,
-        )]),
-        settings,
-        &SHANGHAI_SOLC,
-    );
+    let sources = foundry_compilers::artifacts::Sources::from([(
+        sol_code_path.clone(),
+        foundry_compilers::artifacts::Source::read(&sol_code_path)?,
+    )]);
 
-    let solc_opt = Solc::find_svm_installed_version(SHANGHAI_SOLC.to_string())?;
+    let input = SolcInput::new(SolcLanguage::Solidity, sources, settings).sanitized(&SHANGHAI_SOLC);
+
+    let solc_opt = Solc::find_svm_installed_version(&SHANGHAI_SOLC)?;
     let solc = match solc_opt {
         Some(solc) => solc,
         None => {
@@ -416,7 +420,7 @@ pub async fn get_contract_artifacts(
         }
     };
 
-    let compiled: foundry_compilers::CompilerOutput = solc.compile(&input[0])?;
+    let compiled = solc.compile(&input)?;
 
     let (abi, bytecode, runtime_bytecode) = match compiled.find(contract_name) {
         Some(c) => c.into_parts_or_default(),
