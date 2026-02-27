@@ -1050,7 +1050,7 @@ pub fn new_op_from_onnx(
                 }
 
                 if let Some(c) = inputs[const_idx].opkind().get_mutable_constant() {
-                    if c.raw_values.len() == 1 && c.raw_values[0] < 1. {
+                    if c.raw_values.len() == 1 && c.raw_values[0] < 1. && c.raw_values[0] != 0.0 {
                         // if not divisible by 2 then we need to add a range check
                         let raw_values = 1.0 / c.raw_values[0];
                         if raw_values.log2().fract() == 0.0 {
