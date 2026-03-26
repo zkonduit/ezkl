@@ -33,6 +33,8 @@ EZKL
 
 In the backend we use the collaboratively-developed [Halo2](https://github.com/privacy-scaling-explorations/halo2) as a proof system.
 
+**Custom lookup table:** You can supply a user-defined piecewise-linear (PWL) lookup table for Sigmoid via `custom_lookup_path`. See [Custom Lookup Table](docs/custom_lookup_table.md) for how to produce the JSON file and caveats (e.g. soundness and approximation error).
+
 The generated proofs can then be verified with much less computational resources, including on-chain (with the Ethereum Virtual Machine), in a browser, or on a device. 
 
 - If you have any questions, we'd love for you to open up a discussion topic in [Discussions](https://github.com/zkonduit/ezkl/discussions). Alternatively, you can join the ✨[EZKL Community Telegram Group](https://t.me/+QRzaRvTPIthlYWMx)💫.

@@ -260,17 +260,20 @@ jobs:
 
       - name: Install built wheel
         if: matrix.target == 'x86_64-unknown-linux-musl'
-        uses: addnab/docker-run-action@3e77f186b7a929ef010f183a9e24c0f9955ea609
-        with:
-          image: alpine:latest
-          options: -v ${{ github.workspace }}:/io -w /io
-          run: |
-            apk add py3-pip
-            pip3 install -U pip
-            python3 -m venv .venv
-            source .venv/bin/activate
-            pip3 install ezkl --no-index --find-links /io/dist/ --force-reinstall
-            python3 -c "import ezkl"
+        shell: bash
+        run: |
+          docker run --rm \
+            -v "${GITHUB_WORKSPACE}:/io" \
+            -w /io \
+            alpine:latest \
+            sh -lc '
+              apk add --no-cache py3-pip python3
+              python3 -m venv .venv
+              . .venv/bin/activate
+              pip3 install -U pip
+              pip3 install ezkl --no-index --find-links /io/dist/ --force-reinstall
+              python3 -c "import ezkl"
+            '
 
       - name: Upload wheels
         uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 #v4.6.0
@@ -375,6 +378,7 @@ jobs:
       contents: read
     name: Trigger ReadTheDocs Build
     runs-on: ubuntu-latest
+    environment: docs
     needs: pypi-publish
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2

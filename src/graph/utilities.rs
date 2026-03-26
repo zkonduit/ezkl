@@ -889,9 +889,18 @@ pub fn new_op_from_onnx(
         "HardSwish" => SupportedOp::Nonlinear(LookupOp::HardSwish {
             scale: scale_to_multiplier(input_scales[0]).into(),
         }),
-        "Sigmoid" => SupportedOp::Nonlinear(LookupOp::Sigmoid {
-            scale: scale_to_multiplier(input_scales[0]).into(),
-        }),
+        "Sigmoid" => {
+            let scale = scale_to_multiplier(input_scales[0]).into();
+            // When custom_lookup_path is set, use Custom lookup (user PWL file) instead of built-in Sigmoid table.
+            if let Some(path) = &run_args.custom_lookup_path {
+                SupportedOp::Nonlinear(LookupOp::Custom {
+                    scale,
+                    path: path.clone(),
+                })
+            } else {
+                SupportedOp::Nonlinear(LookupOp::Sigmoid { scale })
+            }
+        }
         "Sqrt" => SupportedOp::Hybrid(HybridOp::Sqrt {
             scale: scale_to_multiplier(input_scales[0]).into(),
         }),

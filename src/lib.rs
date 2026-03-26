@@ -282,6 +282,14 @@ pub struct RunArgs {
     /// when it is good to do so
     #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long))]
     pub disable_freivalds: bool,
+    /// Optional path to a JSON file defining a **custom lookup table** (e.g. piecewise-linear Sigmoid).
+    /// When set, every ONNX Sigmoid node is implemented with this table instead of the built-in Sigmoid table.
+    /// Semantics: if `Some(path)`, the graph layer replaces Sigmoid with `LookupOp::Custom { scale, path }`;
+    /// the table is filled by evaluating the PWL over `lookup_range`. If `None`, behavior is unchanged (built-in Sigmoid).
+    /// Compatible with existing RunArgs: this field is optional and has no effect when unset.
+    #[serde(default)]
+    #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long))]
+    pub custom_lookup_path: Option<String>,
 }
 
 impl RunArgs {
@@ -317,6 +325,7 @@ impl Default for RunArgs {
             ignore_range_check_inputs_outputs: false,
             epsilon: None,
             disable_freivalds: false,
+            custom_lookup_path: None,
         }
     }
 }

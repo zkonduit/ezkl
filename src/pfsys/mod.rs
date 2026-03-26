@@ -33,6 +33,9 @@ use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Cursor, Write};
 use std::ops::Deref;
 use std::path::PathBuf;
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
 use thiserror::Error as thisError;
 
 #[cfg(feature = "python-bindings")]
@@ -453,14 +456,31 @@ where
     // not wasm32 unknown
     let now = Instant::now();
 
-    create_proof::<Scheme, P, _, _, TW, _>(
+    eprintln!("[ezkl] halo2 create_proof starting (synthesize + FFT + commit) ...");
+    let (tx, rx) = mpsc::channel::<()>();
+    let heartbeat = thread::spawn(move || {
+        for i in 1.. {
+            match rx.recv_timeout(Duration::from_secs(10)) {
+                Ok(_) => break,
+                Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    eprintln!("[ezkl] prove FFT/commit phase: {}s elapsed ...", i * 10);
+                }
+            }
+        }
+    });
+    let result = create_proof::<Scheme, P, _, _, TW, _>(
         params,
         pk,
         &[circuit],
         pi_inner,
         &mut rng,
         &mut transcript,
-    )?;
+    );
+    drop(tx);
+    let _ = heartbeat.join();
+    result?;
+    eprintln!("[ezkl] halo2 create_proof returned.");
     let proof = transcript.finalize();
     let hex_proof = format!("0x{}", hex::encode(&proof));
 

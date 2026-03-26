@@ -329,14 +329,17 @@ mod native_tests {
         #[cfg(test)]
         mod tests {
             use seq_macro::seq;
+            use std::process::Command;
             use crate::native_tests::TESTS;
             use crate::native_tests::ACCURACY_CAL_TESTS;
             use crate::native_tests::LARGE_TESTS;
             use test_case::test_case;
             use crate::native_tests::mock;
+            use crate::native_tests::gen_circuit_settings_and_witness;
             use crate::native_tests::accuracy_measurement;
             use crate::native_tests::prove_and_verify;
             use crate::native_tests::model_serialization_different_binaries;
+            use crate::native_tests::{CARGO_TARGET_DIR, TEST_BINARY};
 
             use tempdir::TempDir;
 
@@ -436,6 +439,45 @@ mod native_tests {
                 test_dir.close().unwrap();
             }
 
+            #[test]
+            fn mock_custom_lookup_1l_sigmoid() {
+                crate::native_tests::init_binary();
+                let test_dir = TempDir::new("custom_lookup").unwrap();
+                let path = test_dir.path().to_str().unwrap();
+                let example_name = "1l_sigmoid";
+                crate::native_tests::mv_test_(path, example_name);
+                let pwl_dest = std::path::Path::new(path).join(example_name).join("pwl_sigmoid.json");
+                std::fs::copy("examples/pwl_sigmoid_example.json", &pwl_dest).expect("copy PWL example");
+                let pwl_abs = std::fs::canonicalize(&pwl_dest).unwrap().to_string_lossy().to_string();
+                gen_circuit_settings_and_witness(
+                    path,
+                    example_name.to_string(),
+                    "private",
+                    "private",
+                    "public",
+                    1,
+                    "resources",
+                    None,
+                    2,
+                    2,
+                    false,
+                    None,
+                    None,
+                    Some(&pwl_abs),
+                );
+                let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
+                    .args([
+                        "mock",
+                        "-W",
+                        format!("{}/{}/witness.json", path, example_name).as_str(),
+                        "-M",
+                        format!("{}/{}/network.compiled", path, example_name).as_str(),
+                    ])
+                    .status()
+                    .expect("failed to execute process");
+                assert!(status.success());
+                test_dir.close().unwrap();
+            }
 
             #(#[test_case(TESTS[N])])*
             fn mock_large_batch_public_outputs_(test: &str) {
@@ -1125,6 +1167,7 @@ mod native_tests {
             bounded_lookup_log,
             decomp_base,
             decomp_legs,
+            None,
         );
 
         let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
@@ -1155,6 +1198,7 @@ mod native_tests {
         bounded_lookup_log: bool,
         decomp_base: Option<usize>,
         decomp_legs: Option<usize>,
+        custom_lookup_path: Option<&str>,
     ) {
         let mut args = vec![
             "gen-settings".to_string(),
@@ -1174,6 +1218,11 @@ mod native_tests {
             format!("--num-inner-cols={}", num_inner_columns),
             format!("--logrows={}", 22),
         ];
+
+        if let Some(pwl_path) = custom_lookup_path {
+            args.push("--custom-lookup-path".to_string());
+            args.push(pwl_path.to_string());
+        }
 
         // if output-visibility is fixed set --range-check-inputs-outputs to False
         if output_visibility == "fixed" {
@@ -1286,6 +1335,7 @@ mod native_tests {
             false,
             None,
             None,
+            None,
         );
 
         println!(
@@ -1341,6 +1391,7 @@ mod native_tests {
             num_inner_columns,
             lookup_safety_margin,
             false,
+            None,
             None,
             None,
         );

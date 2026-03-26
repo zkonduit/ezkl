@@ -1,5 +1,19 @@
+//! Custom lookup table support: user-provided PWL (piecewise-linear) mapping via JSON.
+//!
+//! When `run_args.custom_lookup_path` is set, ONNX Sigmoid is implemented as `LookupOp::Custom { scale, path }`
+//! instead of `LookupOp::Sigmoid`. The file at `path` must contain breakpoints, slopes, and intercepts (see README).
+//! Table layout reuses the same Halo2 lookup machinery as other LookupOp variants; only the table contents differ.
+//!
+//! We use a global cache (lazy_static + Mutex) for PWL params so that during prove, multiple layout passes
+//! (possibly from different threads) reuse the same loaded data without re-reading the file, avoiding both
+//! redundant I/O and thread-local cache misses that could cause hangs.
+
 use super::*;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
+use std::sync::Mutex;
 
 use crate::{
     circuit::{layouts, table::Range, utils},
@@ -9,6 +23,119 @@ use crate::{
 
 use super::Op;
 use halo2curves::ff::PrimeField;
+use lazy_static::lazy_static;
+
+/// Piecewise-linear lookup params loaded from JSON at `path`.
+/// Format: `{ "breakpoints": [f64], "slopes": [f64], "intercepts": [f64] }`.
+/// - `breakpoints`: length n+1, strictly increasing; segments are `[breakpoints[i], breakpoints[i+1])`.
+/// - `slopes`, `intercepts`: length n; segment i gives `y = slopes[i]*x + intercepts[i]`.
+/// Out-of-range x uses the first/last segment for extrapolation.
+#[derive(Clone, Deserialize)]
+struct PwlParams {
+    breakpoints: Vec<f64>,
+    slopes: Vec<f64>,
+    intercepts: Vec<f64>,
+}
+
+fn load_pwl_from_path(path: &str) -> Result<PwlParams, TensorError> {
+    let s = fs::read_to_string(Path::new(path))
+        .map_err(|e| TensorError::FileLoadError(format!("custom lookup file '{}': {}", path, e)))?;
+    let p: PwlParams = serde_json::from_str(&s)
+        .map_err(|e| TensorError::InvalidArgument(format!("custom lookup JSON ({}): {}", path, e)))?;
+    if p.breakpoints.len() < 2
+        || p.slopes.len() != p.breakpoints.len() - 1
+        || p.intercepts.len() != p.breakpoints.len() - 1
+    {
+        return Err(TensorError::InvalidArgument(
+            "custom lookup: require breakpoints (n+1), slopes (n), intercepts (n) with n>=1".to_string(),
+        ));
+    }
+    for i in 1..p.breakpoints.len() {
+        if p.breakpoints[i] <= p.breakpoints[i - 1] {
+            return Err(TensorError::InvalidArgument(format!(
+                "custom lookup: breakpoints must be strictly increasing; got breakpoints[{}]={} <= breakpoints[{}]={}",
+                i,
+                p.breakpoints[i],
+                i - 1,
+                p.breakpoints[i - 1]
+            )));
+        }
+    }
+    Ok(p)
+}
+
+// Global cache for PWL params so that all layout passes (including during prove, possibly on different threads)
+// reuse the same data without re-reading the file. A thread-local cache was tried but caused prove to hang
+// when layout ran on a worker thread that had an empty cache while the main thread was blocking on rayon.
+lazy_static! {
+    static ref PWL_CACHE: Mutex<HashMap<String, PwlParams>> = Mutex::new(HashMap::new());
+}
+
+fn get_pwl_cached(path: &str) -> Result<PwlParams, TensorError> {
+    let mut m = PWL_CACHE
+        .lock()
+        .map_err(|e| TensorError::InvalidArgument(format!("PWL cache lock: {}", e)))?;
+    if let Some(p) = m.get(path) {
+        return Ok(p.clone());
+    }
+    let p = load_pwl_from_path(path)?;
+    log::warn!(
+        "custom lookup loaded from '{}': ensure this PWL approximates the intended activation (e.g. sigmoid) to avoid soundness issues or proof failure",
+        path
+    );
+    m.insert(path.to_string(), p.clone());
+    Ok(p)
+}
+
+/// Apply piecewise-linear map: x_float -> y_float using loaded params, then quantize with scale.
+/// Fails with a clear error if the input range (in float) extends outside the PWL breakpoints,
+/// to avoid unsound extrapolation (e.g. PWL defined on [-5, 5] but model input 10).
+fn apply_pwl(
+    x: &Tensor<IntegerRep>,
+    scale_mult: f64,
+    pwl: &PwlParams,
+) -> Result<Tensor<IntegerRep>, TensorError> {
+    let bp = &pwl.breakpoints;
+    let sl = &pwl.slopes;
+    let ic = &pwl.intercepts;
+    let n = sl.len();
+    let bp_min = bp[0];
+    let bp_max = bp[n];
+
+    let min_int = x
+        .iter()
+        .copied()
+        .min()
+        .ok_or_else(|| TensorError::InvalidArgument("custom lookup: empty input range".to_string()))?;
+    let max_int = x
+        .iter()
+        .copied()
+        .max()
+        .ok_or_else(|| TensorError::InvalidArgument("custom lookup: empty input range".to_string()))?;
+    let min_float = min_int as f64 / scale_mult;
+    let max_float = max_int as f64 / scale_mult;
+    if min_float < bp_min || max_float > bp_max {
+        return Err(TensorError::InvalidArgument(format!(
+            "custom lookup: input range [{}, {}] (float) must be within PWL breakpoints [{}, {}]. \
+             Either extend breakpoints in your JSON to cover the circuit lookup range, or reduce run_args.lookup_range.",
+            min_float, max_float, bp_min, bp_max
+        )));
+    }
+
+    let res = x.map(|int_val| {
+        let x_float = int_val as f64 / scale_mult;
+        let y_float = if x_float <= bp[0] {
+            sl[0] * x_float + ic[0]
+        } else if x_float >= bp[n] {
+            sl[n - 1] * x_float + ic[n - 1]
+        } else {
+            let i = (0..n).find(|&i| x_float >= bp[i] && x_float < bp[i + 1]).unwrap_or(n - 1);
+            sl[i] * x_float + ic[i]
+        };
+        (y_float * scale_mult).round() as IntegerRep
+    });
+    Ok(res)
+}
 
 #[allow(missing_docs)]
 /// An enum representing the operations that can be used to express more complex operations via accumulation
@@ -35,6 +162,13 @@ pub enum LookupOp {
     Erf { scale: utils::F32 },
     Pow { scale: utils::F32, a: utils::F32 },
     HardSwish { scale: utils::F32 },
+    /// Custom lookup from a JSON file (piecewise-linear mapping). `scale` is the fixed-point scale for
+    /// input/output; `path` points to JSON with `breakpoints` (n+1), `slopes` (n), `intercepts` (n).
+    /// Same Halo2 lookup constraint as other LookupOp variants; only the table contents are user-defined.
+    Custom {
+        scale: utils::F32,
+        path: String,
+    },
 }
 
 impl LookupOp {
@@ -69,6 +203,9 @@ impl LookupOp {
             LookupOp::ATanh { scale } => format!("atanh_{}", scale),
             LookupOp::Tanh { scale } => format!("tanh_{}", scale),
             LookupOp::HardSwish { scale } => format!("hardswish_{}", scale),
+            LookupOp::Custom { scale, path } => {
+                format!("custom_{}_{}", scale, path.replace('/', "_"))
+            }
         }
     }
 
@@ -141,6 +278,11 @@ impl LookupOp {
                 LookupOp::HardSwish { scale } => {
                     Ok::<_, TensorError>(tensor::ops::nonlinearities::hardswish(&x, scale.into()))
                 }
+                LookupOp::Custom { scale, path } => {
+                    let scale_mult: f64 = scale.into();
+                    let pwl = get_pwl_cached(path)?;
+                    apply_pwl(&x, scale_mult, &pwl)
+                }
             }?;
 
         let output = res.map(|x| integer_rep_to_felt(x));
@@ -179,6 +321,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Lookup
             LookupOp::Sinh { scale } => format!("SINH(scale={})", scale),
             LookupOp::ASinh { scale } => format!("ASINH(scale={})", scale),
             LookupOp::HardSwish { scale } => format!("HARDSWISH(scale={})", scale),
+            LookupOp::Custom { scale, path } => format!("CUSTOM(scale={}, path={})", scale, path),
         }
     }
 

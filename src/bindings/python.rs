@@ -187,6 +187,10 @@ struct PyRunArgs {
     /// bool: Whether to disable using Freivalds' argument in einsum operations
     #[pyo3(get, set)]
     pub disable_freivalds: bool,
+    /// Optional path to a JSON file defining a custom lookup table (e.g. PWL Sigmoid).
+    /// When set, ONNX Sigmoid nodes use this table instead of the built-in one. Use an absolute path.
+    #[pyo3(get, set)]
+    pub custom_lookup_path: Option<String>,
 }
 
 /// default instantiation of PyRunArgs
@@ -221,6 +225,7 @@ impl From<PyRunArgs> for RunArgs {
             ignore_range_check_inputs_outputs: py_run_args.ignore_range_check_inputs_outputs,
             epsilon: Some(py_run_args.epsilon),
             disable_freivalds: py_run_args.disable_freivalds,
+            custom_lookup_path: py_run_args.custom_lookup_path,
         }
     }
 }
@@ -248,6 +253,7 @@ impl Into<PyRunArgs> for RunArgs {
             ignore_range_check_inputs_outputs: self.ignore_range_check_inputs_outputs,
             epsilon: eps,
             disable_freivalds: self.disable_freivalds,
+            custom_lookup_path: self.custom_lookup_path,
         }
     }
 }
@@ -1053,6 +1059,7 @@ fn setup(
     srs_path=None,
 ))]
 #[gen_stub_pyfunction]
+#[allow(deprecated)] // allow_threads releases GIL during prove so rayon workers can run without deadlock
 fn prove(
     py: Python<'_>,
     witness: PathBuf,
@@ -1061,14 +1068,17 @@ fn prove(
     proof_path: Option<PathBuf>,
     srs_path: Option<PathBuf>,
 ) -> PyResult<Py<PyAny>> {
-    let snark = crate::execute::prove(
-        witness,
-        model,
-        pk_path,
-        proof_path,
-        srs_path,
-        CheckMode::UNSAFE,
-    )
+    // Release GIL during prove: halo2 uses rayon for FFT/commit; holding GIL on the main thread can deadlock.
+    let snark = py.allow_threads(|| {
+        crate::execute::prove(
+            witness,
+            model,
+            pk_path,
+            proof_path,
+            srs_path,
+            CheckMode::UNSAFE,
+        )
+    })
     .map_err(|e| {
         let err_str = format!("Failed to run prove: {}", e);
         PyRuntimeError::new_err(err_str)
