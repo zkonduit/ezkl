@@ -16,10 +16,7 @@ jobs:
     name: create-release
     runs-on: ubuntu-22.04
     if: startsWith(github.ref, 'refs/tags/')
-
-    outputs:
-      upload_url: ${{ steps.create-release.outputs.upload_url}}
-      ezkl_version: ${{ env.EZKL_VERSION }}
+    environment: release
 
     steps:
       - name: Get release version from tag
@@ -28,11 +25,16 @@ jobs:
           echo "EZKL_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
 
       - name: Create Github Release
-        id: create-release
-        uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda  #v2.2.1
-        with:
-          token: ${{ secrets.RELEASE_TOKEN }}
-          tag_name: ${{ env.EZKL_VERSION }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          set -euo pipefail
+          if gh release view "${EZKL_VERSION}" >/dev/null 2>&1; then
+            echo "Release ${EZKL_VERSION} already exists"
+          else
+            gh release create "${EZKL_VERSION}" --verify-tag --title "${EZKL_VERSION}" --generate-notes
+          fi
 
   build-release-gpu:
     permissions:
@@ -41,6 +43,7 @@ jobs:
     name: build-release-gpu
     needs: ["create-release"]
     runs-on: GPU
+    environment: release
     env:
       CARGO: cargo
       TARGET_FLAGS: ""
@@ -98,11 +101,12 @@ jobs:
           echo "ASSET=build-artifacts/ezkl-linux-gpu.tar.gz" >> $GITHUB_ENV
 
       - name: Upload release archive
-        uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda  #v2.2.1
-        with:
-          token: ${{ secrets.RELEASE_TOKEN }}
-          tag_name: ${{ env.EZKL_VERSION }}
-          files: ${{ env.ASSET }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release upload "${EZKL_VERSION}" "${ASSET}" --clobber
 
   build-release:
     permissions:
@@ -112,6 +116,7 @@ jobs:
     name: build-release
     needs: ["create-release"]
     runs-on: ${{ matrix.os }}
+    environment: release
     env:
       CARGO: cargo
       TARGET_FLAGS: ""
@@ -174,9 +179,12 @@ jobs:
           fi
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@4f94fbe7e03939b0e674bcc9ca609a16088f63ff  #nightly branch, TODO: update when required
-        with:
-          target: ${{ matrix.target }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install "${{ matrix.rust }}" --profile minimal
+          rustup default "${{ matrix.rust }}"
+          rustup target add "${{ matrix.target }}"
 
       - name: Install Rust targets
         run: rustup target add ${{ matrix.target }}
@@ -237,8 +245,9 @@ jobs:
           echo "ASSET=build-artifacts/ezkl-win.zip" >> $GITHUB_ENV
 
       - name: Upload release archive
-        uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda  #v2.2.1
-        with:
-          token: ${{ secrets.RELEASE_TOKEN }}
-          tag_name: ${{ env.EZKL_VERSION }}
-          files: ${{ env.ASSET }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release upload "${EZKL_VERSION}" "${ASSET}" --clobber

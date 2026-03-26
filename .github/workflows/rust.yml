@@ -24,6 +24,7 @@ jobs:
     permissions:
       contents: read
     runs-on: large-self-hosted
+    environment: evm-verifier
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
@@ -47,6 +48,7 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-22.04
+    environment: evm-verifier
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
       RUSTFLAGS: "-C linker=gcc"
@@ -74,6 +76,7 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-22.04
+    environment: evm-verifier
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
     steps:
@@ -96,6 +99,7 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-22.04
+    environment: evm-verifier
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
       RUSTFLAGS: "-C linker=gcc"
@@ -129,6 +133,7 @@ jobs:
     permissions:
       contents: read
     runs-on: gpu
+    environment: evm-verifier
     env:
       ENABLE_ICICLE_GPU: true
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -173,6 +178,7 @@ jobs:
       contents: read
     runs-on: [non-gpu, non-sgx]
     needs: [build, library-tests, docs]
+    environment: evm-verifier
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
       RUSTFLAGS: "-C linker=gcc"
@@ -211,6 +217,7 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-22.04
+    environment: evm-verifier
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
       RUSTFLAGS: "-C linker=gcc"
@@ -244,6 +251,7 @@ jobs:
       contents: read
     runs-on: [non-gpu, non-sgx]
     needs: [build, library-tests, docs]
+    environment: evm-verifier
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
       RUSTFLAGS: "-C linker=gcc"
@@ -319,6 +327,7 @@ jobs:
       contents: read
     runs-on: [non-gpu, non-sgx]
     needs: [build, library-tests, docs]
+    environment: evm-verifier
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
       RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory"
@@ -370,6 +379,7 @@ jobs:
     permissions:
       contents: read
     runs-on: [non-gpu, non-sgx]
+    environment: evm-verifier
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
@@ -426,6 +436,7 @@ jobs:
       contents: read
     runs-on: gpu
     needs: [build, library-tests, docs]
+    environment: evm-verifier
     env:
       ENABLE_ICICLE_GPU: true
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
@@ -474,6 +485,7 @@ jobs:
       contents: read
     runs-on: ubuntu-22.04
     needs: [build, library-tests, docs]
+    environment: evm-verifier
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
       RUSTFLAGS: "-C linker=gcc"
@@ -507,6 +519,7 @@ jobs:
       contents: read
     runs-on: [non-gpu, non-sgx]
     needs: [build, library-tests, docs]
+    environment: evm-verifier
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
@@ -541,6 +554,7 @@ jobs:
       contents: read
     runs-on: [non-gpu, non-sgx]
     needs: [build, library-tests, docs]
+    environment: evm-verifier
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
@@ -579,6 +593,7 @@ jobs:
       contents: read
     runs-on: large-self-hosted
     needs: [build, library-tests, docs, python-tests]
+    environment: evm-verifier
     env:
       EVM_VERIFIER_EZKL_TOKEN: ${{ secrets.EVM_VERIFIER_EZKL_TOKEN }}
 
