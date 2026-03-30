@@ -71,8 +71,10 @@ lazy_static! {
     /// The path to the ezkl related data.
     pub static ref EZKL_REPO_PATH: String =
         std::env::var("EZKL_REPO_PATH").unwrap_or_else(|_|
-            // $HOME/.ezkl/
-            format!("{}/.ezkl", std::env::var("HOME").unwrap())
+            // ~/.ezkl/
+            format!("{}/.ezkl", std::env::var("HOME")
+                .or_else(|_| std::env::var("USERPROFILE"))
+                .unwrap())
         );
 
     /// The path to the ezkl related data (SRS)
