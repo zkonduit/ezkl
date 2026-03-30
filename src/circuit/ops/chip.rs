@@ -102,9 +102,11 @@ impl<'py> IntoPyObject<'py> for CheckMode {
 
 #[cfg(feature = "python-bindings")]
 /// Obtains CheckMode from PyObject (Required for CheckMode to be compatible with Python)
-impl<'source> FromPyObject<'source> for CheckMode {
-    fn extract_bound(ob: &pyo3::Bound<'source, pyo3::PyAny>) -> PyResult<Self> {
-        let trystr = String::extract_bound(ob)?;
+impl<'py> FromPyObject<'_, 'py> for CheckMode {
+    type Error = pyo3::PyErr;
+
+    fn extract(ob: pyo3::Borrowed<'_, 'py, pyo3::PyAny>) -> Result<Self, Self::Error> {
+        let trystr = String::extract(ob)?;
         match trystr.to_lowercase().as_str() {
             "safe" => Ok(CheckMode::SAFE),
             "unsafe" => Ok(CheckMode::UNSAFE),

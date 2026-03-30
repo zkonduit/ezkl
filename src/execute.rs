@@ -541,7 +541,7 @@ pub(crate) async fn get_srs_cmd(
 
     if !srs_exists_check(k, srs_path.clone()) {
         info!("SRS does not exist, downloading...");
-        let srs_uri = format!("{}{}", PUBLIC_SRS_URL, k);
+        let srs_uri = format!("{}{}.srs", PUBLIC_SRS_URL, k);
         let mut reader = Cursor::new(fetch_srs(&srs_uri).await?);
         // check the SRS
         let pb = init_spinner();

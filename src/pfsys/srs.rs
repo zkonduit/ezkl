@@ -7,8 +7,9 @@ use std::io::BufReader;
 use std::path::PathBuf;
 
 /// for now we use the urls of the powers of tau ceremony from <https://github.com/han0110/halo2-kzg-srs>
+/// A mirror is now hosted on https://kzg.ezkl.xyz
 pub const PUBLIC_SRS_URL: &str =
-    "https://trusted-setup-halo2kzg.s3.eu-central-1.amazonaws.com/perpetual-powers-of-tau-raw-";
+    "https://kzg.ezkl.xyz/kzg";
 
 /// Helper function for generating SRS. Only use for testing
 pub fn gen_srs<Scheme: CommitmentScheme>(k: u32) -> Scheme::ParamsProver {

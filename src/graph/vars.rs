@@ -8,7 +8,7 @@ use halo2curves::ff::PrimeField;
 use itertools::Itertools;
 use log::debug;
 #[cfg(feature = "python-bindings")]
-use pyo3::{exceptions::PyValueError, FromPyObject, IntoPyObject, PyResult, Python};
+use pyo3::{exceptions::PyValueError, FromPyObject, IntoPyObject, Python};
 use serde::{Deserialize, Serialize};
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use tosubcommand::ToFlags;
@@ -78,7 +78,7 @@ impl<'a> From<&'a str> for Visibility {
             let outlets = outlets
                 .trim_start_matches('/')
                 .split(',')
-                .map(|s| s.parse::<usize>().unwrap())
+                .map(|s: &str| s.parse::<usize>().unwrap())
                 .collect_vec();
 
             return Visibility::Hashed {
@@ -139,10 +139,12 @@ impl<'py> IntoPyObject<'py> for Visibility {
 }
 
 #[cfg(feature = "python-bindings")]
-impl<'source> FromPyObject<'source> for Visibility {
+impl<'py> FromPyObject<'_, 'py> for Visibility {
+    type Error = pyo3::PyErr;
+
     /// Extracts Visibility from Python object
-    fn extract_bound(ob: &pyo3::Bound<'source, pyo3::PyAny>) -> PyResult<Self> {
-        let strval = String::extract_bound(ob)?;
+    fn extract(ob: pyo3::Borrowed<'_, 'py, pyo3::PyAny>) -> Result<Self, Self::Error> {
+        let strval = String::extract(ob)?;
         let strval = strval.as_str();
 
         if strval.contains("hashed/private") {
@@ -150,7 +152,7 @@ impl<'source> FromPyObject<'source> for Visibility {
             let outlets = outlets
                 .trim_start_matches('/')
                 .split(',')
-                .map(|s| s.parse::<usize>().unwrap())
+                .map(|s: &str| s.parse::<usize>().unwrap())
                 .collect_vec();
 
             return Ok(Visibility::Hashed {

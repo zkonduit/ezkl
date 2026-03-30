@@ -920,18 +920,19 @@ fn calibrate_settings(
 ))]
 #[gen_stub_pyfunction]
 fn gen_witness(
+    py: Python<'_>,
     data: String,
     model: PathBuf,
     output: Option<PathBuf>,
     vk_path: Option<PathBuf>,
     srs_path: Option<PathBuf>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let output =
         crate::execute::gen_witness(model, data, output, vk_path, srs_path).map_err(|e| {
             let err_str = format!("Failed to generate witness: {}", e);
             PyRuntimeError::new_err(err_str)
         })?;
-    Python::with_gil(|py| Ok(output.into_pyobject(py).unwrap().into()))
+    Ok(output.into_pyobject(py).unwrap().unbind())
 }
 
 /// Mocks the prover
@@ -1053,12 +1054,13 @@ fn setup(
 ))]
 #[gen_stub_pyfunction]
 fn prove(
+    py: Python<'_>,
     witness: PathBuf,
     model: PathBuf,
     pk_path: PathBuf,
     proof_path: Option<PathBuf>,
     srs_path: Option<PathBuf>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let snark = crate::execute::prove(
         witness,
         model,
@@ -1072,7 +1074,7 @@ fn prove(
         PyRuntimeError::new_err(err_str)
     })?;
 
-    Python::with_gil(|py| Ok(snark.into_pyobject(py).unwrap().into()))
+    Ok(snark.into_pyobject(py).unwrap().unbind())
 }
 
 /// Verifies a given proof
