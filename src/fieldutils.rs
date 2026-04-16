@@ -62,12 +62,6 @@ mod test {
 
         let res: F = integer_rep_to_felt(2_i128.pow(17));
         assert_eq!(res, F::from(131072));
-
-        let res: F = integer_rep_to_felt(-15);
-        assert_eq!(res, -F::from(15));
-
-        let res: F = integer_rep_to_felt(2_i128.pow(17));
-        assert_eq!(res, F::from(131072));
     }
 
     #[test]
