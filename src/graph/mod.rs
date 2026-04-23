@@ -14,6 +14,13 @@ pub mod vars;
 /// errors for the graph
 pub mod errors;
 
+/// Canonicalises ONNX models that have been pre-quantized by tools like
+/// `onnxruntime.quantization`. Invoked automatically during model load so
+/// that EZKL's float pipeline can consume them; also exposed via the
+/// `ezkl dequantize` subcommand. See module docs for the patterns handled.
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
+pub mod dequantize;
+
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use colored_json::ToColoredJson;
 #[cfg(all(not(not(feature = "ezkl")), unix))]

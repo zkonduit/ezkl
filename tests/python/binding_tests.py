@@ -47,6 +47,10 @@ def test_py_run_args():
     run_args = ezkl.PyRunArgs()
     run_args.input_visibility = "hashed"
     run_args.output_visibility = "hashed"
+    # Round-trip the disable_quantization_fixup flag so the binding mirror
+    # for the new RunArgs field doesn't silently regress.
+    run_args.disable_quantization_fixup = True
+    assert run_args.disable_quantization_fixup is True
 
 
 def test_poseidon_hash():

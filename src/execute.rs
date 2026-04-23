@@ -132,6 +132,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             logrows,
         } => get_srs_cmd(srs_path, settings_path, logrows).await,
         Commands::Table { model, args } => table(model.unwrap_or(DEFAULT_MODEL.into()), args),
+        Commands::Dequantize { model, output } => dequantize_cmd(model, output),
         Commands::GenSettings {
             model,
             settings_path,
@@ -574,6 +575,71 @@ pub(crate) fn table(model: PathBuf, run_args: RunArgs) -> Result<String, EZKLErr
     Ok(String::new())
 }
 
+/// Implementation of `ezkl dequantize`. Reads a (possibly pre-quantized) ONNX
+/// model from disk, runs [`crate::graph::dequantize::apply`] over
+/// it, and writes the cleaned float graph back out. The same dequantize pass
+/// runs transparently inside `Model::new` during regular pipeline commands;
+/// this subcommand exists so users can persist the cleaned model (for
+/// inspection, audit, sharing, or feeding to non-EZKL tools).
+///
+/// Returns a one-line human-readable report of what was rewritten — useful
+/// both as CLI output and for tests asserting on counts.
+pub(crate) fn dequantize_cmd(model: PathBuf, output: PathBuf) -> Result<String, EZKLError> {
+    use prost::Message;
+
+    let bytes = std::fs::read(&model).map_err(|e| {
+        crate::graph::errors::GraphError::ReadWriteFileError(
+            model.display().to_string(),
+            e.to_string(),
+        )
+    })?;
+
+    let mut model_proto = tract_onnx::pb::ModelProto::decode(bytes.as_slice())
+        .map_err(|e| crate::graph::errors::GraphError::OnnxProtoDecode(e.to_string()))?;
+    let report = crate::graph::dequantize::apply(&mut model_proto)
+        .map_err(|e| crate::graph::errors::GraphError::OnnxDequantize(e.to_string()))?;
+
+    let mut out = Vec::with_capacity(bytes.len());
+    model_proto
+        .encode(&mut out)
+        .map_err(|e| crate::graph::errors::GraphError::OnnxProtoEncode(e.to_string()))?;
+    std::fs::write(&output, out).map_err(|e| {
+        crate::graph::errors::GraphError::ReadWriteFileError(
+            output.display().to_string(),
+            e.to_string(),
+        )
+    })?;
+
+    let summary = format!(
+        "wrote cleaned ONNX to {} (collapsed {} Q/DQ pairs, folded {} weight DQ, replaced {} dynamic-quantize fusions{})",
+        output.display(),
+        report.qdq_pairs_collapsed,
+        report.weight_dq_folded,
+        report.dyn_quant_fusions_replaced,
+        if report.is_clean() {
+            String::new()
+        } else {
+            format!(
+                "; {} unsupported quantization op(s) remain: {}",
+                report.remaining_quantization_ops.len(),
+                {
+                    const MAX: usize = 5;
+                    let total = report.remaining_quantization_ops.len();
+                    let shown = total.min(MAX);
+                    let head = report.remaining_quantization_ops[..shown].join(", ");
+                    if total > shown {
+                        format!("{}, … (+{} more)", head, total - shown)
+                    } else {
+                        head
+                    }
+                }
+            )
+        }
+    );
+    info!("{}", summary);
+    Ok(summary)
+}
+
 pub(crate) fn gen_witness(
     compiled_circuit_path: PathBuf,
     data: String,
@@ -687,7 +753,14 @@ pub(crate) fn gen_random_data(
         )
     })?;
 
-    let (tract_model, _symbol_values) = Model::load_onnx_using_tract(&mut file, &variables)?;
+    // gen_random_data only needs input fact shapes, not the circuit; we
+    // always run the dequantize pass here so a pre-quantized model still
+    // yields meaningful inputs.
+    let (tract_model, _symbol_values) = Model::load_onnx_using_tract(
+        &mut file,
+        &variables,
+        /* disable_quantization_fixup = */ false,
+    )?;
 
     let input_facts = tract_model
         .input_outlets()

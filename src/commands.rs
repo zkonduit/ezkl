@@ -420,6 +420,22 @@ pub enum Commands {
         srs_path: Option<PathBuf>,
     },
 
+    /// Strips post-training-quantization operators (`QuantizeLinear`,
+    /// `DequantizeLinear`, `DynamicQuantizeLinear`, `MatMulInteger`,
+    /// `ConvInteger`, …) from an ONNX model and writes the cleaned float
+    /// graph to a new file. The same canonicalisation runs automatically
+    /// during `gen-settings`/`mock`/`prove`/etc.; this subcommand exposes it
+    /// for explicit inspection or for sharing the cleaned model. See
+    /// `src/graph/dequantize.rs` for the patterns handled.
+    Dequantize {
+        /// The path to the input .onnx model file (pre-quantized).
+        #[arg(short = 'M', long, default_value = DEFAULT_MODEL, value_hint = clap::ValueHint::FilePath)]
+        model: PathBuf,
+        /// The path to write the cleaned (float) .onnx model to.
+        #[arg(short = 'O', long, value_hint = clap::ValueHint::FilePath)]
+        output: PathBuf,
+    },
+
     /// Produces the proving hyperparameters, from run-args
     GenSettings {
         /// The path to the .onnx model file
