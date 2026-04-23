@@ -630,6 +630,52 @@ impl Model {
         Ok(res.into())
     }
 
+    /// Returns an error if the parsed ONNX graph contains operators produced by
+    /// post-training quantization toolchains (e.g. `onnxruntime.quantization`).
+    ///
+    /// EZKL applies its own fixed-point quantization driven by the `scale` run
+    /// argument, so a pre-quantized model is both redundant and unsupported by
+    /// the downstream tract analyzer (see issue #942). Detecting these ops up
+    /// front lets us emit an actionable error instead of an opaque tract panic.
+    #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
+    fn reject_onnx_quantization_ops(
+        model: &tract_onnx::prelude::InferenceModel,
+    ) -> Result<(), GraphError> {
+        const QUANT_OP_PREFIXES: &[&str] = &[
+            "QuantizeLinear",
+            "DequantizeLinear",
+            "DynamicQuantizeLinear",
+            "QLinear",
+        ];
+        const QUANT_OP_NAMES: &[&str] = &["ConvInteger", "MatMulInteger"];
+
+        let mut offending: Vec<String> = Vec::new();
+        for node in &model.nodes {
+            let op_name = node.op().name();
+            let op_name_str: &str = op_name.as_ref();
+            let is_quant_op = QUANT_OP_PREFIXES
+                .iter()
+                .any(|prefix| op_name_str.starts_with(prefix))
+                || QUANT_OP_NAMES.iter().any(|name| op_name_str == *name);
+            if is_quant_op {
+                offending.push(format!("{} ({})", node.name, op_name_str));
+            }
+        }
+
+        if offending.is_empty() {
+            Ok(())
+        } else {
+            const MAX_REPORTED: usize = 5;
+            let total = offending.len();
+            let shown = offending.len().min(MAX_REPORTED);
+            let mut summary = offending[..shown].join(", ");
+            if total > shown {
+                summary.push_str(&format!(", … (+{} more)", total - shown));
+            }
+            Err(GraphError::UnsupportedQuantizationOps(summary))
+        }
+    }
+
     /// Loads an Onnx model from a specified path.
     /// # Arguments
     /// * `reader` - A reader for an Onnx file.
@@ -643,6 +689,8 @@ impl Model {
         use tract_onnx::tract_hir::internal::GenericFactoid;
 
         let mut model = tract_onnx::onnx().model_for_read(reader)?;
+
+        Self::reject_onnx_quantization_ops(&model)?;
 
         let variables: std::collections::HashMap<String, usize> =
             std::collections::HashMap::from_iter(variables.iter().map(|(k, v)| (k.clone(), *v)));

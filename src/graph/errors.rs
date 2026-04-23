@@ -60,6 +60,16 @@ pub enum GraphError {
     ))]
     #[error("[tract] {0}")]
     TractError(#[from] tract_onnx::prelude::TractError),
+    /// Model contains ONNX quantization ops that EZKL does not support
+    #[error(
+        "model contains ONNX quantization operators that EZKL cannot consume directly ({0}). \
+         EZKL handles quantization internally via the `scale` parameter, so a pre-quantized model \
+         is redundant and conflicts with EZKL's pipeline. \
+         Please export the original floating-point model, or strip the Q/DQ nodes (e.g. with \
+         onnxruntime's quant_pre_process or a small ONNX preprocessor that folds \
+         `weight_float = (weight_int8 - zero_point) * scale`)."
+    )]
+    UnsupportedQuantizationOps(String),
     /// Packing exponent is too large
     #[error("largest packing exponent exceeds max. try reducing the scale")]
     PackingExponent,
