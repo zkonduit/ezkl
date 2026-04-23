@@ -282,6 +282,15 @@ pub struct RunArgs {
     /// when it is good to do so
     #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long))]
     pub disable_freivalds: bool,
+    /// Disable the automatic ONNX dequantize pass that rewrites
+    /// `QuantizeLinear`/`DequantizeLinear`/`DynamicQuantizeLinear` and
+    /// integer-arithmetic ops back into their float equivalents on load.
+    /// Enable this only when you intentionally want EZKL to see the
+    /// original pre-quantized graph, e.g. for debugging the rewriter.
+    /// When set, models containing post-training quantization ops will be
+    /// rejected by the safety-net detector with `UnsupportedQuantizationOps`.
+    #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long))]
+    pub disable_quantization_fixup: bool,
 }
 
 impl RunArgs {
@@ -317,6 +326,7 @@ impl Default for RunArgs {
             ignore_range_check_inputs_outputs: false,
             epsilon: None,
             disable_freivalds: false,
+            disable_quantization_fixup: false,
         }
     }
 }

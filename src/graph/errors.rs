@@ -60,6 +60,44 @@ pub enum GraphError {
     ))]
     #[error("[tract] {0}")]
     TractError(#[from] tract_onnx::prelude::TractError),
+    /// Model contains ONNX quantization ops that EZKL's dequantize pass could
+    /// not rewrite. Fires after [`crate::graph::dequantize::apply`] has had
+    /// a chance to canonicalise the graph; only the patterns we have no
+    /// rewrite for (e.g. `QLinearConv`, `QLinearMatMul`, `QLinearAdd`) reach
+    /// this error. Also fires when the user has explicitly disabled the
+    /// dequantize pass via `--disable-quantization-fixup`.
+    #[error(
+        "model contains ONNX quantization operators EZKL cannot rewrite ({0}). \
+         EZKL handles quantization internally via the `scale` run argument and \
+         transparently strips post-training-quantization patterns it recognises. \
+         The operators above were not recognised — please export the original \
+         floating-point model, or run `ezkl dequantize -M <input.onnx> -O <output.onnx>` \
+         to inspect the partial rewrite. (If you set `--disable-quantization-fixup`, \
+         remove that flag to let EZKL rewrite supported patterns.)"
+    )]
+    UnsupportedQuantizationOps(String),
+    /// Failed to decode the ONNX protobuf bytes before the dequantize pass.
+    #[cfg(all(
+        feature = "ezkl",
+        not(all(target_arch = "wasm32", target_os = "unknown"))
+    ))]
+    #[error("[onnx] failed to decode ONNX protobuf: {0}")]
+    OnnxProtoDecode(String),
+    /// Failed to re-encode the ONNX protobuf after the dequantize pass.
+    #[cfg(all(
+        feature = "ezkl",
+        not(all(target_arch = "wasm32", target_os = "unknown"))
+    ))]
+    #[error("[onnx] failed to re-encode ONNX protobuf after dequantize: {0}")]
+    OnnxProtoEncode(String),
+    /// The ONNX dequantize pass itself failed (e.g. unsupported per-channel
+    /// quantization parameter shape).
+    #[cfg(all(
+        feature = "ezkl",
+        not(all(target_arch = "wasm32", target_os = "unknown"))
+    ))]
+    #[error("[onnx] dequantize pass failed: {0}")]
+    OnnxDequantize(String),
     /// Packing exponent is too large
     #[error("largest packing exponent exceeds max. try reducing the scale")]
     PackingExponent,

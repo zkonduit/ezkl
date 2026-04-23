@@ -187,6 +187,10 @@ struct PyRunArgs {
     /// bool: Whether to disable using Freivalds' argument in einsum operations
     #[pyo3(get, set)]
     pub disable_freivalds: bool,
+    /// bool: Whether to disable the automatic ONNX dequantize pass that
+    /// normalises pre-quantized models on load.
+    #[pyo3(get, set)]
+    pub disable_quantization_fixup: bool,
 }
 
 /// default instantiation of PyRunArgs
@@ -221,6 +225,7 @@ impl From<PyRunArgs> for RunArgs {
             ignore_range_check_inputs_outputs: py_run_args.ignore_range_check_inputs_outputs,
             epsilon: Some(py_run_args.epsilon),
             disable_freivalds: py_run_args.disable_freivalds,
+            disable_quantization_fixup: py_run_args.disable_quantization_fixup,
         }
     }
 }
@@ -248,6 +253,7 @@ impl Into<PyRunArgs> for RunArgs {
             ignore_range_check_inputs_outputs: self.ignore_range_check_inputs_outputs,
             epsilon: eps,
             disable_freivalds: self.disable_freivalds,
+            disable_quantization_fixup: self.disable_quantization_fixup,
         }
     }
 }

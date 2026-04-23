@@ -189,7 +189,7 @@ mod native_tests {
         "1l_tiny_div",
     ];
 
-    const TESTS: [&str; 100] = [
+    const TESTS: [&str; 101] = [
         "1l_mlp",     //0
         "1l_slice",   //1
         "1l_concat",  //2
@@ -294,6 +294,10 @@ mod native_tests {
         "general_exp", // 97
         "integer_div", // 98
         "large_mlp",   // 99
+        // Pre-quantized fixture exercising the auto-dequantize pass inside
+        // `Model::new`. See tests/dequantize_e2e.rs for the dedicated
+        // float-vs-quantized accuracy check.
+        "quantized_qdq", // 100
     ];
 
     const TESTS_EVM: [&str; 23] = [
@@ -362,7 +366,7 @@ mod native_tests {
             }
         });
 
-            seq!(N in 0..99 {
+            seq!(N in 0..=100 {
 
             // #(#[test_case(TESTS[N])])*
             // #[ignore]
@@ -791,7 +795,7 @@ mod native_tests {
 
 
 
-            seq!(N in 0..=99 {
+            seq!(N in 0..=100 {
                 #(#[test_case(TESTS[N])])*
                 fn kzg_evm_prove_and_verify_reusable_verifier_(test: &str) {
                     crate::native_tests::init_binary();

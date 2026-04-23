@@ -90,6 +90,11 @@ pyo3-async-runtimes = { git = "https://github.com/PyO3/pyo3-async-runtimes", ver
 ], default-features = false, optional = true }
 pyo3-log = { version = "0.13.2", default-features = false, optional = true }
 tract-onnx = { git = "https://github.com/sonos/tract/", rev = "37132e0397d0a73e5bd3a8615d932dabe44f6736", default-features = false, optional = true }
+# Direct dep used by `src/graph/dequantize.rs` to encode/decode
+# `tract_onnx::pb::ModelProto` when canonicalising post-training-quantization
+# patterns. Must match the major version that tract-onnx itself depends on
+# so the prost::Message trait impls resolve consistently.
+prost = { version = "0.11", default-features = false, features = ["std"], optional = true }
 tabled = { version = "0.12.0", optional = true }
 objc = { version = "0.2.4", optional = true }
 pyo3-stub-gen = { version = "0.6.0", optional = true }
@@ -224,7 +229,7 @@ default = [
     "parallel-poly-read",
     "reusable-verifier",
 ]
-onnx = ["dep:tract-onnx"]
+onnx = ["dep:tract-onnx", "dep:prost"]
 python-bindings = ["pyo3", "pyo3-log", "pyo3-async-runtimes", "pyo3-stub-gen"]
 logging = ["dep:colored", "dep:env_logger", "dep:chrono"]
 ezkl = [

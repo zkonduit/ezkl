@@ -630,19 +630,108 @@ impl Model {
         Ok(res.into())
     }
 
+    /// Returns an error if the parsed ONNX graph contains operators produced by
+    /// post-training quantization toolchains (e.g. `onnxruntime.quantization`).
+    ///
+    /// EZKL applies its own fixed-point quantization driven by the `scale` run
+    /// argument, so a pre-quantized model is both redundant and unsupported by
+    /// the downstream tract analyzer. Detecting these ops up front lets us
+    /// emit an actionable error instead of an opaque tract panic.
+    #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
+    fn reject_onnx_quantization_ops(
+        model: &tract_onnx::prelude::InferenceModel,
+    ) -> Result<(), GraphError> {
+        const QUANT_OP_PREFIXES: &[&str] = &[
+            "QuantizeLinear",
+            "DequantizeLinear",
+            "DynamicQuantizeLinear",
+            "QLinear",
+        ];
+        const QUANT_OP_NAMES: &[&str] = &["ConvInteger", "MatMulInteger"];
+
+        let mut offending: Vec<String> = Vec::new();
+        for node in &model.nodes {
+            let op_name = node.op().name();
+            let op_name_str: &str = op_name.as_ref();
+            let is_quant_op = QUANT_OP_PREFIXES
+                .iter()
+                .any(|prefix| op_name_str.starts_with(prefix))
+                || QUANT_OP_NAMES.iter().any(|name| op_name_str == *name);
+            if is_quant_op {
+                offending.push(format!("{} ({})", node.name, op_name_str));
+            }
+        }
+
+        if offending.is_empty() {
+            Ok(())
+        } else {
+            const MAX_REPORTED: usize = 5;
+            let total = offending.len();
+            let shown = offending.len().min(MAX_REPORTED);
+            let mut summary = offending[..shown].join(", ");
+            if total > shown {
+                summary.push_str(&format!(", … (+{} more)", total - shown));
+            }
+            Err(GraphError::UnsupportedQuantizationOps(summary))
+        }
+    }
+
     /// Loads an Onnx model from a specified path.
     /// # Arguments
     /// * `reader` - A reader for an Onnx file.
-    /// * `scale` - The scale to use for quantization.
-    /// * `public_params` - Whether to make the params public.
+    /// * `variables` - Symbol bindings for graph variables (e.g. `batch_size`).
+    /// * `disable_quantization_fixup` - When true, skip the dequantize pass
+    ///   that rewrites post-training-quantization patterns into their float
+    ///   equivalents. Defaults to `false` from [`Model::new`] so quantized
+    ///   models are accepted out of the box.
     #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
     pub(crate) fn load_onnx_using_tract(
         reader: &mut dyn std::io::Read,
         variables: &[(String, usize)],
+        disable_quantization_fixup: bool,
     ) -> Result<TractResult, GraphError> {
+        use std::io::Cursor;
         use tract_onnx::tract_hir::internal::GenericFactoid;
 
-        let mut model = tract_onnx::onnx().model_for_read(reader)?;
+        // Read the entire ONNX payload up front. We need the bytes twice:
+        // once for the protobuf-level dequantize pass, once for the cleaned
+        // payload we hand to tract. Streaming the reader through tract first
+        // would deny us the ability to rewrite the graph in place.
+        let mut bytes = Vec::new();
+        reader
+            .read_to_end(&mut bytes)
+            .map_err(|e| GraphError::ReadWriteFileError("<onnx reader>".to_string(), e.to_string()))?;
+
+        let cleaned_bytes = if disable_quantization_fixup {
+            bytes
+        } else {
+            use prost::Message;
+            let mut model_proto = tract_onnx::pb::ModelProto::decode(bytes.as_slice())
+                .map_err(|e| GraphError::OnnxProtoDecode(e.to_string()))?;
+            let report = crate::graph::dequantize::apply(&mut model_proto)
+                .map_err(|e| GraphError::OnnxDequantize(e.to_string()))?;
+            if report.changed() {
+                debug!(
+                    "onnx dequantize: collapsed {} Q/DQ pairs, folded {} weight DQ, replaced {} dynamic-quantize fusions",
+                    report.qdq_pairs_collapsed,
+                    report.weight_dq_folded,
+                    report.dyn_quant_fusions_replaced,
+                );
+            }
+            let mut out = Vec::with_capacity(bytes.len());
+            model_proto
+                .encode(&mut out)
+                .map_err(|e| GraphError::OnnxProtoEncode(e.to_string()))?;
+            out
+        };
+
+        let mut model = tract_onnx::onnx().model_for_read(&mut Cursor::new(cleaned_bytes))?;
+
+        // Safety net: any quantization ops the dequantize pass didn't
+        // recognise (e.g. QLinearConv, QLinearMatMul) still cause tract to
+        // crash, so we bail out here with an actionable error. Also fires
+        // when the user explicitly disabled the dequantize pass.
+        Self::reject_onnx_quantization_ops(&model)?;
 
         let variables: std::collections::HashMap<String, usize> =
             std::collections::HashMap::from_iter(variables.iter().map(|(k, v)| (k.clone(), *v)));
@@ -705,7 +794,11 @@ impl Model {
     ) -> Result<ParsedNodes, GraphError> {
         let start_time = instant::Instant::now();
 
-        let (model, symbol_values) = Self::load_onnx_using_tract(reader, &run_args.variables)?;
+        let (model, symbol_values) = Self::load_onnx_using_tract(
+            reader,
+            &run_args.variables,
+            run_args.disable_quantization_fixup,
+        )?;
 
         let scales = VarScales::from_args(run_args);
         let nodes = Self::nodes_from_graph(
@@ -1001,7 +1094,11 @@ impl Model {
             GraphError::ReadWriteFileError(model_path.display().to_string(), e.to_string())
         })?;
 
-        let (model, _) = Model::load_onnx_using_tract(&mut file, &run_args.variables)?;
+        let (model, _) = Model::load_onnx_using_tract(
+            &mut file,
+            &run_args.variables,
+            run_args.disable_quantization_fixup,
+        )?;
 
         let datum_types: Vec<DatumType> = model
             .input_outlets()?

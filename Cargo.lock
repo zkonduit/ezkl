@@ -2335,6 +2335,7 @@ dependencies = [
  "num",
  "objc",
  "openssl",
+ "prost",
  "pyo3",
  "pyo3-async-runtimes",
  "pyo3-log",
