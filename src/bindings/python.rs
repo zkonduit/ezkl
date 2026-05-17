@@ -28,10 +28,70 @@ use pyo3_stub_gen::{
 };
 use snark_verifier::util::arithmetic::PrimeField;
 use std::collections::HashSet;
+#[cfg(all(target_os = "linux", feature = "gpu-accelerated"))]
+use std::ffi::{CStr, CString};
 use std::str::FromStr;
+#[cfg(all(target_os = "linux", feature = "gpu-accelerated"))]
+use std::os::raw::{c_char, c_int};
 use std::{fs::File, path::PathBuf};
 
 type PyFelt = String;
+
+#[cfg(all(target_os = "linux", feature = "gpu-accelerated"))]
+#[allow(unsafe_code)]
+fn promote_icicle_frontend_libs_global() -> Result<(), String> {
+    const ICICLE_FRONTEND_LIBS: [&str; 4] = [
+        "libicicle_device.so",
+        "libicicle_hash.so",
+        "libicicle_field_bn254.so",
+        "libicicle_curve_bn254.so",
+    ];
+    const RTLD_NOW: c_int = 2;
+    const RTLD_NOLOAD: c_int = 4;
+    const RTLD_GLOBAL: c_int = 0x100;
+
+    unsafe extern "C" {
+        fn dlopen(filename: *const c_char, flags: c_int) -> *mut core::ffi::c_void;
+        fn dlerror() -> *const c_char;
+    }
+
+    fn last_dl_error() -> String {
+        unsafe {
+            let err = dlerror();
+            if err.is_null() {
+                "unknown dlopen error".to_string()
+            } else {
+                CStr::from_ptr(err).to_string_lossy().into_owned()
+            }
+        }
+    }
+
+    for lib_name in ICICLE_FRONTEND_LIBS {
+        let lib_name = CString::new(lib_name).map_err(|e| e.to_string())?;
+        unsafe {
+            dlerror();
+            let mut handle = dlopen(
+                lib_name.as_ptr(),
+                RTLD_NOW | RTLD_NOLOAD | RTLD_GLOBAL,
+            );
+
+            if handle.is_null() {
+                dlerror();
+                handle = dlopen(lib_name.as_ptr(), RTLD_NOW | RTLD_GLOBAL);
+            }
+
+            if handle.is_null() {
+                return Err(format!(
+                    "failed to promote {} to RTLD_GLOBAL: {}",
+                    lib_name.to_string_lossy(),
+                    last_dl_error()
+                ));
+            }
+        }
+    }
+
+    Ok(())
+}
 
 /// pyclass representing an enum
 #[pyclass]
@@ -1474,6 +1534,10 @@ define_stub_info_gatherer!(stub_info);
 #[pymodule]
 fn ezkl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     pyo3_log::init();
+    #[cfg(all(target_os = "linux", feature = "gpu-accelerated"))]
+    if let Err(err) = promote_icicle_frontend_libs_global() {
+        log::warn!("Failed to promote ICICLE frontend libraries to RTLD_GLOBAL: {err}");
+    }
     m.add_class::<PyRunArgs>()?;
     m.add_class::<PyG1Affine>()?;
     m.add_class::<PyG1>()?;
