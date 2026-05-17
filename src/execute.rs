@@ -60,6 +60,8 @@ use std::io::Cursor;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
+#[cfg(feature = "gpu-accelerated")]
+use std::sync::Once;
 use std::time::Duration;
 use tabled::Tabled;
 use thiserror::Error;
@@ -80,20 +82,25 @@ lazy_static! {
 
 }
 
+#[cfg(feature = "gpu-accelerated")]
+static GPU_BACKEND_INIT: Once = Once::new();
+
 /// Set the device used for computation.
 #[cfg(feature = "gpu-accelerated")]
 pub fn set_device() {
-    if std::env::var("ICICLE_BACKEND_INSTALL_DIR").is_ok() {
-        info!("Running with ICICLE GPU");
-        try_load_and_set_backend_device("CUDA");
-        match warmup(&IcicleStream::default()) {
-            Ok(_) => info!("GPU warmed :)"),
-            Err(e) => log::error!("GPU warmup failed: {:?}", e),
+    GPU_BACKEND_INIT.call_once(|| {
+        if std::env::var("ICICLE_BACKEND_INSTALL_DIR").is_ok() {
+            info!("Running with ICICLE GPU");
+            try_load_and_set_backend_device("CUDA");
+            match warmup(&IcicleStream::default()) {
+                Ok(_) => info!("GPU warmed :)"),
+                Err(e) => log::error!("GPU warmup failed: {:?}", e),
+            }
+        } else {
+            info!("Running with CPU: 'ICICLE_BACKEND_INSTALL_DIR' not set");
+            try_load_and_set_backend_device("CPU");
         }
-    } else {
-        info!("Running with CPU: 'ICICLE_BACKEND_INSTALL_DIR' not set");
-        try_load_and_set_backend_device("CPU");
-    }
+    });
 }
 
 /// A wrapper for execution errors
@@ -452,6 +459,8 @@ fn srs_exists_check(logrows: u32, srs_path: Option<PathBuf>) -> bool {
 }
 
 pub(crate) fn gen_srs_cmd(srs_path: PathBuf, logrows: u32) -> Result<String, EZKLError> {
+    #[cfg(feature = "gpu-accelerated")]
+    set_device();
     let params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
     save_params::<KZGCommitmentScheme<Bn256>>(&srs_path, &params)?;
     Ok(String::new())
@@ -1548,6 +1557,9 @@ pub(crate) fn setup(
     witness: Option<PathBuf>,
     disable_selector_compression: bool,
 ) -> Result<String, EZKLError> {
+    #[cfg(feature = "gpu-accelerated")]
+    set_device();
+
     // these aren't real values so the sanity checks are mostly meaningless
 
     let mut circuit = GraphCircuit::load(compiled_circuit)?;
@@ -1580,6 +1592,9 @@ pub(crate) fn prove(
     srs_path: Option<PathBuf>,
     check_mode: CheckMode,
 ) -> Result<Snark<Fr, G1Affine>, EZKLError> {
+    #[cfg(feature = "gpu-accelerated")]
+    set_device();
+
     let data = GraphWitness::from_path(data_path)?;
     let mut circuit = GraphCircuit::load(compiled_circuit_path)?;
 
