@@ -946,6 +946,12 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// let mut expected = Tensor::<IntegerRep>::new(Some(&[1, 3, 5, 2, 4, 6, 7, 9, 11, 8, 10, 12]), &[2, 2, 3]).unwrap();
     /// let b = a.move_axis(2, 1).unwrap();
     /// assert_eq!(b, expected);
+    ///
+    /// // Regression: source > dest with higher-rank tensors (fixes transformer patchify panic).
+    /// // move_axis(2, 1) on [1, 3, 2, 4] -> [1, 2, 3, 4]
+    /// let mut a = Tensor::<IntegerRep>::new(Some(&(0..24).collect::<Vec<IntegerRep>>()), &[1, 3, 2, 4]).unwrap();
+    /// let b = a.move_axis(2, 1).unwrap();
+    /// assert_eq!(b.dims(), &[1, 2, 3, 4]);
     /// ```
     pub fn move_axis(&mut self, source: usize, destination: usize) -> Result<Self, TensorError> {
         assert!(source < self.dims.len());
@@ -972,28 +978,44 @@ impl<T: Clone + TensorType> Tensor<T> {
         for coord in cartesian_coords {
             let mut old_coord = vec![0; self.dims.len()];
 
-            // now fetch the old index
+            // Map each new-array coordinate back to the corresponding old-array coordinate.
+            //
+            // When moving axis `source` to position `destination`:
+            //   source < destination (axis moves right):
+            //     new[i] → old[i]     for i < source          (before source: unchanged)
+            //     new[i] → old[i+1]   for source ≤ i < dest   (shifted: source itself → source+1)
+            //     new[i] = old[source] for i == dest            (the moved axis)
+            //     new[i] → old[i]     for i > dest             (after dest: unchanged)
+            //   source > destination (axis moves left):
+            //     new[i] → old[i]     for i < dest             (before dest: unchanged)
+            //     new[i] = old[source] for i == dest            (the moved axis)
+            //     new[i] → old[i-1]   for dest < i ≤ source   (shifted)
+            //     new[i] → old[i]     for i > source           (after source: unchanged)
             for (i, c) in coord.iter().enumerate() {
                 if i == destination {
                     old_coord[source] = *c;
-                } else if i == source && source < destination {
-                    old_coord[source + 1] = *c;
-                } else if i == source && source > destination {
-                    old_coord[source - 1] = *c;
-                } else if (i < source && source < destination)
-                    || (i < destination && source > destination)
-                    || (i > source && source > destination)
-                    || (i > destination && source < destination)
-                {
-                    old_coord[i] = *c;
-                } else if i > source && source < destination {
-                    old_coord[i + 1] = *c;
-                } else if i > destination && source > destination {
-                    old_coord[i - 1] = *c;
+                } else if source < destination {
+                    // axis moved right: source → destination
+                    if i < source {
+                        old_coord[i] = *c; // before source: unchanged
+                    } else if i < destination {
+                        // source ≤ i < destination (i != destination already handled above)
+                        old_coord[i + 1] = *c; // shifted right in old
+                    } else {
+                        // i > destination: after dest, unchanged
+                        old_coord[i] = *c;
+                    }
                 } else {
-                    return Err(TensorError::DimError(
-                        "Unknown condition for moving the axis".to_string(),
-                    ));
+                    // source > destination: axis moved left
+                    if i < destination {
+                        old_coord[i] = *c; // before dest: unchanged
+                    } else if i <= source {
+                        // destination < i ≤ source (i != destination already handled above)
+                        old_coord[i - 1] = *c; // shifted left in old
+                    } else {
+                        // i > source: after source, unchanged
+                        old_coord[i] = *c;
+                    }
                 }
             }
 
@@ -1984,5 +2006,101 @@ mod tests {
             a.get_slice(&[0..2, 0..1]).unwrap(),
             b.get_slice(&[0..2, 0..1]).unwrap()
         );
+    }
+
+    // Regression tests for move_axis with higher-rank tensors.
+    //
+    // The previous implementation used a flat if/else chain that had missing
+    // conditions for ranks > 3, causing a "Unknown condition" DimError (or
+    // wrong coordinate mapping) when tract decomposes a high-rank Transpose into
+    // a sequence of AxisOp::Move operations (transformers routinely do this).
+    #[test]
+    fn move_axis_4d_source_less_than_dest() {
+        // shape [2, 3, 4, 5], move axis 1 → 3  (source < destination)
+        // expected output shape: [2, 4, 5, 3]
+        let data: Vec<IntegerRep> = (0..120).collect();
+        let mut a = Tensor::<IntegerRep>::new(Some(&data), &[2, 3, 4, 5]).unwrap();
+        let b = a.move_axis(1, 3).unwrap();
+        assert_eq!(b.dims(), &[2, 4, 5, 3]);
+        // Verify correctness: b[i0, i2, i3, i1] == a[i0, i1, i2, i3]
+        for i0 in 0..2usize {
+            for i1 in 0..3usize {
+                for i2 in 0..4usize {
+                    for i3 in 0..5usize {
+                        assert_eq!(
+                            b.get(&[i0, i2, i3, i1]),
+                            a.get(&[i0, i1, i2, i3]),
+                            "mismatch at ({},{},{},{})",
+                            i0,
+                            i1,
+                            i2,
+                            i3
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn move_axis_4d_source_greater_than_dest() {
+        // shape [1, 3, 2, 4], move axis 2 → 1  (source > destination)
+        // expected output shape: [1, 2, 3, 4]
+        let data: Vec<IntegerRep> = (0..24).collect();
+        let mut a = Tensor::<IntegerRep>::new(Some(&data), &[1, 3, 2, 4]).unwrap();
+        let b = a.move_axis(2, 1).unwrap();
+        assert_eq!(b.dims(), &[1, 2, 3, 4]);
+        // b[i0, i2, i1, i3] == a[i0, i1, i2, i3]
+        for i0 in 0..1usize {
+            for i1 in 0..3usize {
+                for i2 in 0..2usize {
+                    for i3 in 0..4usize {
+                        assert_eq!(
+                            b.get(&[i0, i2, i1, i3]),
+                            a.get(&[i0, i1, i2, i3]),
+                            "mismatch at ({},{},{},{})",
+                            i0,
+                            i1,
+                            i2,
+                            i3
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn move_axis_6d_transformer_patchify() {
+        // 6-D case: shape [1, 2, 3, 4, 5, 6], move axis 4 → 2  (source > destination)
+        // Exercises the rank-6 path that previously panicked for transformer patchify layers.
+        let data: Vec<IntegerRep> = (0..720).collect();
+        let mut a = Tensor::<IntegerRep>::new(Some(&data), &[1, 2, 3, 4, 5, 6]).unwrap();
+        let b = a.move_axis(4, 2).unwrap();
+        assert_eq!(b.dims(), &[1, 2, 5, 3, 4, 6]);
+        // b[i0, i1, i4, i2, i3, i5] == a[i0, i1, i2, i3, i4, i5]
+        for i0 in 0..1usize {
+            for i1 in 0..2usize {
+                for i2 in 0..3usize {
+                    for i3 in 0..4usize {
+                        for i4 in 0..5usize {
+                            for i5 in 0..6usize {
+                                assert_eq!(
+                                    b.get(&[i0, i1, i4, i2, i3, i5]),
+                                    a.get(&[i0, i1, i2, i3, i4, i5]),
+                                    "mismatch at ({},{},{},{},{},{})",
+                                    i0,
+                                    i1,
+                                    i2,
+                                    i3,
+                                    i4,
+                                    i5
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
