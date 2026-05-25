@@ -857,6 +857,7 @@ fn gen_random_data(
     scales = None,
     scale_rebase_multiplier = DEFAULT_SCALE_REBASE_MULTIPLIERS.split(",").map(|x| x.parse().unwrap()).collect(),
     max_logrows = None,
+    ignore_lookup_range_check = false,
 ))]
 #[gen_stub_pyfunction]
 fn calibrate_settings(
@@ -868,6 +869,7 @@ fn calibrate_settings(
     scales: Option<Vec<crate::Scale>>,
     scale_rebase_multiplier: Vec<u32>,
     max_logrows: Option<u32>,
+    ignore_lookup_range_check: bool,
 ) -> PyResult<bool> {
     crate::execute::calibrate(
         model,
@@ -878,6 +880,7 @@ fn calibrate_settings(
         scales,
         scale_rebase_multiplier,
         max_logrows,
+        ignore_lookup_range_check,
     )
     .map_err(|e| {
         let err_str = format!("Failed to calibrate settings: {}", e);

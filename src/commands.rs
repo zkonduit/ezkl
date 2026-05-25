@@ -485,6 +485,11 @@ pub enum Commands {
         /// max logrows to use for calibration, 26 is the max public SRS size
         #[arg(long, value_hint = clap::ValueHint::Other)]
         max_logrows: Option<u32>,
+        /// Skip LookupRangeTooLarge and RangeCheckTooLarge guards during calibration; useful for
+        /// networks with polynomial activations (e.g. x^2, x^3) where the lookup range naturally
+        /// exceeds the defaults. ExtendedKTooLarge is still enforced as a hard ZK constraint.
+        #[arg(long, default_value = "false")]
+        ignore_lookup_range_check: bool,
     },
 
     /// Generates a dummy SRS
