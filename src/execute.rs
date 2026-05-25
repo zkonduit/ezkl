@@ -165,6 +165,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             scales,
             scale_rebase_multiplier,
             max_logrows,
+            ignore_lookup_range_check,
         } => calibrate(
             model.unwrap_or(DEFAULT_MODEL.into()),
             data.unwrap_or(DEFAULT_DATA.into()),
@@ -174,6 +175,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             scales,
             scale_rebase_multiplier,
             max_logrows,
+            ignore_lookup_range_check,
         )
         .map(|e| serde_json::to_string(&e).unwrap()),
         Commands::GenWitness {
@@ -895,10 +897,24 @@ pub(crate) fn calibrate(
     scales: Option<Vec<crate::Scale>>,
     scale_rebase_multiplier: Vec<u32>,
     max_logrows: Option<u32>,
+    ignore_lookup_range_check: bool,
 ) -> Result<GraphSettings, EZKLError> {
+    use crate::graph::MAX_LOOKUP_ABS;
     use log::error;
     use std::collections::HashMap;
     use tabled::Table;
+
+    /// Diagnostic record for each scale combination attempted during calibration.
+    #[derive(Debug)]
+    struct CalibrationAttempt {
+        input_scale: crate::Scale,
+        param_scale: crate::Scale,
+        scale_rebase_multiplier: u32,
+        min_lookup_range: i128,
+        max_lookup_range: i128,
+        max_range_size: i128,
+        outcome: String,
+    }
 
     use crate::fieldutils::IntegerRep;
 
@@ -930,6 +946,8 @@ pub(crate) fn calibrate(
     };
 
     let mut found_params: Vec<GraphSettings> = vec![];
+    // Diagnostic log: one entry per (input_scale, param_scale, rebase) combo.
+    let mut calibration_attempts: Vec<CalibrationAttempt> = vec![];
 
     // 2 x 2 grid
     let range_grid = range
@@ -1013,6 +1031,15 @@ pub(crate) fn calibrate(
                     scale_rebase_multiplier.to_string().yellow(),
                     e
                 ));
+                calibration_attempts.push(CalibrationAttempt {
+                    input_scale,
+                    param_scale,
+                    scale_rebase_multiplier,
+                    min_lookup_range: 0,
+                    max_lookup_range: 0,
+                    max_range_size: 0,
+                    outcome: format!("FAIL:CircuitCreation ({})", e),
+                });
                 pb.inc(1);
                 num_failed += 1;
                 continue;
@@ -1064,6 +1091,15 @@ pub(crate) fn calibrate(
                     scale_rebase_multiplier.to_string().yellow(),
                     e
                 ));
+                calibration_attempts.push(CalibrationAttempt {
+                    input_scale,
+                    param_scale,
+                    scale_rebase_multiplier,
+                    min_lookup_range: 0,
+                    max_lookup_range: 0,
+                    max_range_size: 0,
+                    outcome: format!("FAIL:ForwardPass ({})", e),
+                });
                 continue;
             }
         }
@@ -1090,12 +1126,68 @@ pub(crate) fn calibrate(
 
         let max_range_size = result.iter().map(|x| x.max_range_size).max().unwrap_or(0);
 
+        // When --ignore-lookup-range-check is set we clamp the lookup range so that the
+        // LookupRangeTooLarge / RangeCheckTooLarge guards inside calc_min_logrows are
+        // bypassed.  We still let ExtendedKTooLarge fire (that is a hard ZK constraint).
+        let (eff_min_lookup, eff_max_lookup, eff_range_size) = if ignore_lookup_range_check {
+            let safety = lookup_safety_margin.max(1.0) as i128;
+            let clamped_span = MAX_LOOKUP_ABS / safety - 1;
+            let clamped_min = -(clamped_span / 2);
+            let clamped_max = clamped_span / 2;
+            let clamped_range = MAX_LOOKUP_ABS - 1;
+            (
+                min_lookup_range.max(clamped_min),
+                max_lookup_range.min(clamped_max),
+                max_range_size.min(clamped_range),
+            )
+        } else {
+            (min_lookup_range, max_lookup_range, max_range_size)
+        };
+
         let res = circuit.calc_min_logrows(
-            (min_lookup_range, max_lookup_range),
-            max_range_size,
+            (eff_min_lookup, eff_max_lookup),
+            eff_range_size,
             max_logrows,
             lookup_safety_margin,
         );
+
+        // Record diagnostic outcome for this scale combination.
+        let outcome_str = match &res {
+            Ok(()) => {
+                let logrows = circuit.settings().run_args.logrows;
+                let lookup_range = circuit.settings().run_args.lookup_range;
+                format!(
+                    "OK  logrows={} lookup_range=[{},{}]",
+                    logrows, lookup_range.0, lookup_range.1
+                )
+            }
+            Err(e) => {
+                let msg = e.to_string();
+                let kind = if msg.contains("max lookup input")
+                    || (msg.contains("too large") && msg.contains("lookup"))
+                {
+                    "FAIL:LookupRangeTooLarge"
+                } else if msg.contains("max range check size")
+                    || (msg.contains("too large") && msg.contains("range"))
+                {
+                    "FAIL:RangeCheckTooLarge"
+                } else if msg.contains("extended k") {
+                    "FAIL:ExtendedKTooLarge"
+                } else {
+                    "FAIL:Other"
+                };
+                format!("{} ({})", kind, msg)
+            }
+        };
+        calibration_attempts.push(CalibrationAttempt {
+            input_scale,
+            param_scale,
+            scale_rebase_multiplier,
+            min_lookup_range,
+            max_lookup_range,
+            max_range_size,
+            outcome: outcome_str,
+        });
 
         if res.is_ok() {
             let new_settings = circuit.settings().clone();
@@ -1153,6 +1245,42 @@ pub(crate) fn calibrate(
             for reason in failure_reasons {
                 error!("{}", reason);
             }
+        }
+
+        // Emit a full per-combination diagnostic table to stderr so users can see
+        // exactly why every scale combination was rejected.
+        eprintln!(
+            "\n[ezkl] Calibration failed. Attempted {} scale combination(s). Detailed outcomes:\n",
+            calibration_attempts.len()
+        );
+        eprintln!(
+            "{:<14} {:<13} {:<8} {:<18} {:<18} {:<16} outcome",
+            "input_scale", "param_scale", "rebase", "min_lookup", "max_lookup", "max_range_size",
+        );
+        eprintln!("{}", "-".repeat(120));
+        for a in &calibration_attempts {
+            eprintln!(
+                "{:<14} {:<13} {:<8} {:<18} {:<18} {:<16} {}",
+                a.input_scale,
+                a.param_scale,
+                a.scale_rebase_multiplier,
+                a.min_lookup_range,
+                a.max_lookup_range,
+                a.max_range_size,
+                a.outcome,
+            );
+        }
+        eprintln!();
+        if calibration_attempts.iter().any(|a| {
+            a.outcome.contains("FAIL:LookupRangeTooLarge")
+                || a.outcome.contains("FAIL:RangeCheckTooLarge")
+        }) {
+            eprintln!(
+                "[ezkl] Hint: if all failures are FAIL:LookupRangeTooLarge or FAIL:RangeCheckTooLarge,\n\
+                 consider passing --ignore-lookup-range-check to bypass those guards (networks with\n\
+                 polynomial activations typically need this). The resulting circuit will be larger\n\
+                 but will calibrate successfully.\n"
+            );
         }
 
         return Err("calibration failed, could not find any suitable parameters given the calibration dataset".into());
