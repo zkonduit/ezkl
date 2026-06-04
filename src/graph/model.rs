@@ -1016,10 +1016,8 @@ impl Model {
             outputs.push(
                 result
                     .into_iter()
-                    .map(|t| {
-                        crate::graph::utilities::extract_tensor_value(t.into_arc_tensor()).unwrap()
-                    })
-                    .collect(),
+                    .map(|t| crate::graph::utilities::extract_tensor_value(t.into_arc_tensor()))
+                    .collect::<Result<Vec<_>, GraphError>>()?,
             );
         }
         Ok(outputs)

@@ -43,6 +43,31 @@ use tract_onnx::tract_hir::{
     tract_core::ops::cnn::{MaxPool, SumPool},
 };
 
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
+fn is_exact_u64_to_f32(value: u64) -> bool {
+    const F32_SIGNIFICAND_BITS: u32 = 24;
+
+    if value == 0 {
+        return true;
+    }
+
+    let bits = u64::BITS - value.leading_zeros();
+    let excess_bits = bits.saturating_sub(F32_SIGNIFICAND_BITS);
+    value.trailing_zeros() >= excess_bits
+}
+
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
+fn exact_i64_to_f32(value: i64, datum_type: DatumType) -> Result<f32, GraphError> {
+    if is_exact_u64_to_f32(value.unsigned_abs()) {
+        Ok(value as f32)
+    } else {
+        Err(GraphError::LossyTensorValue(
+            format!("{:?}", datum_type),
+            value.to_string(),
+        ))
+    }
+}
+
 /// Quantizes an iterable of f64 to a [Tensor] of IntegerRep using a fixed point representation.
 /// NAN gets mapped to 0. INFINITY and NEG_INFINITY error out.
 /// Arguments
@@ -168,7 +193,10 @@ pub fn extract_tensor_value(
         DatumType::I64 => {
             // Generally a shape or hyperparam
             let vec = input.as_slice::<i64>()?.to_vec();
-            let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
+            let cast = vec
+                .iter()
+                .map(|x| exact_i64_to_f32(*x, dt))
+                .collect::<Result<Vec<_>, GraphError>>()?;
             const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
         DatumType::I32 => {
@@ -1658,6 +1686,33 @@ pub mod tests {
         assert_eq!(quantize_float(&f64::NAN, 0.0, 0).unwrap(), 0);
         assert!(quantize_float(&f64::INFINITY, 0.0, 0).is_err());
         assert!(quantize_float(&f64::NEG_INFINITY, 0.0, 0).is_err());
+    }
+
+    #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
+    #[test]
+    fn test_extract_tensor_value_rejects_lossy_i64() {
+        use tract_onnx::prelude::{IntoArcTensor, IntoTensor};
+
+        let tensor = tract_onnx::prelude::tract_ndarray::arr1(&[16_777_217_i64, -16_777_217_i64])
+            .into_tensor();
+        let err = extract_tensor_value(tensor.into_arc_tensor()).unwrap_err();
+
+        assert!(matches!(err, GraphError::LossyTensorValue(_, _)));
+    }
+
+    #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
+    #[test]
+    fn test_extract_tensor_value_accepts_exact_i64() {
+        use tract_onnx::prelude::{IntoArcTensor, IntoTensor};
+
+        let tensor =
+            tract_onnx::prelude::tract_ndarray::arr1(&[16_777_216_i64, 16_777_218_i64, i64::MIN])
+                .into_tensor();
+        let extracted = extract_tensor_value(tensor.into_arc_tensor()).unwrap();
+
+        assert_eq!(extracted[0], 16_777_216.0);
+        assert_eq!(extracted[1], 16_777_218.0);
+        assert_eq!(extracted[2], i64::MIN as f32);
     }
 
     #[test]

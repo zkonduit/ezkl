@@ -29,6 +29,9 @@ pub enum GraphError {
     /// This operation is unsupported
     #[error("unsupported datatype in graph node {0} ({1})")]
     UnsupportedDataType(usize, String),
+    /// A tensor value cannot be represented without changing its value
+    #[error("lossy tensor value conversion for {0}: {1}")]
+    LossyTensorValue(String, String),
     /// A node has missing parameters
     #[error("a node is missing required params: {0}")]
     MissingParams(String),
