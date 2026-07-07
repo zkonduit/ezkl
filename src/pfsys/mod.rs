@@ -30,7 +30,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use snark_verifier::verifier::plonk::PlonkProtocol;
 use std::fs::File;
-use std::io::{self, BufReader, BufWriter, Cursor, Write};
+use std::io::{self, BufReader, BufWriter, Cursor, Read, Write};
 use std::ops::Deref;
 use std::path::PathBuf;
 use thiserror::Error as thisError;
@@ -47,6 +47,73 @@ fn serde_format_from_str(s: &str) -> halo2_proofs::SerdeFormat {
         "raw-bytes-unchecked" => halo2_proofs::SerdeFormat::RawBytesUnchecked,
         "raw-bytes" => halo2_proofs::SerdeFormat::RawBytes,
         _ => panic!("invalid serde format"),
+    }
+}
+
+/// Magic bytes prefixed to key files that carry an embedded ezkl version header.
+/// Legacy key files (raw halo2 serialization) never start with these bytes.
+const KEY_VERSION_MAGIC: &[u8; 8] = b"EZKLKEY\0";
+
+/// Upper bound on the embedded version string length, as a sanity check when
+/// parsing headers.
+const KEY_VERSION_MAX_LEN: u32 = 64;
+
+/// Writes the versioned key header (magic + ezkl version) to `writer`.
+fn write_key_version_header<W: Write>(writer: &mut W) -> Result<(), io::Error> {
+    let version = crate::version().as_bytes();
+    writer.write_all(KEY_VERSION_MAGIC)?;
+    writer.write_all(&(version.len() as u32).to_le_bytes())?;
+    writer.write_all(version)?;
+    Ok(())
+}
+
+/// Reads the versioned key header from `reader`, if present.
+///
+/// Returns a reader positioned at the start of the raw key bytes, plus the
+/// embedded version (`None` for legacy key files written before versioning).
+fn read_key_version_header<R: io::Read>(
+    mut reader: R,
+) -> Result<(io::Chain<Cursor<Vec<u8>>, R>, Option<String>), io::Error> {
+    let mut prefix = vec![0u8; KEY_VERSION_MAGIC.len()];
+    let mut filled = 0;
+    while filled < prefix.len() {
+        let n = reader.read(&mut prefix[filled..])?;
+        if n == 0 {
+            break;
+        }
+        filled += n;
+    }
+
+    if filled == KEY_VERSION_MAGIC.len() && prefix == KEY_VERSION_MAGIC {
+        let mut len_bytes = [0u8; 4];
+        reader.read_exact(&mut len_bytes)?;
+        let len = u32::from_le_bytes(len_bytes);
+        if len > KEY_VERSION_MAX_LEN {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("key version header length {} exceeds maximum", len),
+            ));
+        }
+        let mut version = vec![0u8; len as usize];
+        reader.read_exact(&mut version)?;
+        let version = String::from_utf8(version)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        Ok((Cursor::new(vec![]).chain(reader), Some(version)))
+    } else {
+        // legacy key file without a version header: replay the consumed bytes
+        prefix.truncate(filled);
+        Ok((Cursor::new(prefix).chain(reader), None))
+    }
+}
+
+/// Checks the embedded key version against the current ezkl version, warning on mismatch.
+fn check_key_version(artifact_version: Option<String>, key_kind: &str) {
+    match artifact_version {
+        Some(version) => crate::check_version_string_matches(&version),
+        None => log::warn!(
+            "{} file has no embedded ezkl version (written by ezkl before key versioning); no compatibility guaranteed",
+            key_kind
+        ),
     }
 }
 
@@ -600,7 +667,10 @@ where
 {
     debug!("loading verification key from {:?}", path);
     let f = File::open(path.clone()).map_err(|e| PfsysError::LoadVk(format!("{}", e)))?;
-    let mut reader = BufReader::with_capacity(*EZKL_BUF_CAPACITY, f);
+    let reader = BufReader::with_capacity(*EZKL_BUF_CAPACITY, f);
+    let (mut reader, artifact_version) =
+        read_key_version_header(reader).map_err(|e| PfsysError::LoadVk(format!("{}", e)))?;
+    check_key_version(artifact_version, "verification key");
     let vk = VerifyingKey::<Scheme::Curve>::read::<_, C>(
         &mut reader,
         serde_format_from_str(&EZKL_KEY_FORMAT),
@@ -623,7 +693,10 @@ where
     debug!("loading proving key from {:?}", path);
     let start = instant::Instant::now();
     let f = File::open(path.clone()).map_err(|e| PfsysError::LoadPk(format!("{}", e)))?;
-    let mut reader = BufReader::with_capacity(*EZKL_BUF_CAPACITY, f);
+    let reader = BufReader::with_capacity(*EZKL_BUF_CAPACITY, f);
+    let (mut reader, artifact_version) =
+        read_key_version_header(reader).map_err(|e| PfsysError::LoadPk(format!("{}", e)))?;
+    check_key_version(artifact_version, "proving key");
     let pk = ProvingKey::<Scheme::Curve>::read::<_, C>(
         &mut reader,
         serde_format_from_str(&EZKL_KEY_FORMAT),
@@ -646,6 +719,7 @@ where
     debug!("saving proving key 💾");
     let f = File::create(path)?;
     let mut writer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, f);
+    write_key_version_header(&mut writer)?;
     pk.write(&mut writer, serde_format_from_str(&EZKL_KEY_FORMAT))?;
     writer.flush()?;
     info!("done saving proving key ✅");
@@ -663,6 +737,7 @@ where
     debug!("saving verification key 💾");
     let f = File::create(path)?;
     let mut writer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, f);
+    write_key_version_header(&mut writer)?;
     vk.write(&mut writer, serde_format_from_str(&EZKL_KEY_FORMAT))?;
     writer.flush()?;
     info!("done saving verification key ✅");
@@ -726,5 +801,51 @@ mod tests {
         .unwrap();
         assert_eq!(snark.instances, snark2.instances);
         assert_eq!(snark.proof, snark2.proof);
+    }
+
+    #[test]
+    fn test_key_version_header_roundtrip() {
+        let key_bytes = vec![42u8; 128];
+        let mut buf = Vec::new();
+        write_key_version_header(&mut buf).unwrap();
+        buf.extend_from_slice(&key_bytes);
+
+        let (mut reader, version) = read_key_version_header(Cursor::new(buf)).unwrap();
+        assert_eq!(version.as_deref(), Some(crate::version()));
+        let mut rest = Vec::new();
+        io::Read::read_to_end(&mut reader, &mut rest).unwrap();
+        assert_eq!(rest, key_bytes);
+    }
+
+    #[test]
+    fn test_key_version_header_legacy_passthrough() {
+        // legacy key files have no header: all bytes must be replayed untouched
+        let key_bytes = vec![7u8; 128];
+        let (mut reader, version) =
+            read_key_version_header(Cursor::new(key_bytes.clone())).unwrap();
+        assert!(version.is_none());
+        let mut rest = Vec::new();
+        io::Read::read_to_end(&mut reader, &mut rest).unwrap();
+        assert_eq!(rest, key_bytes);
+    }
+
+    #[test]
+    fn test_key_version_header_short_file_passthrough() {
+        // files shorter than the magic must also be replayed untouched
+        let key_bytes = vec![1u8, 2, 3];
+        let (mut reader, version) =
+            read_key_version_header(Cursor::new(key_bytes.clone())).unwrap();
+        assert!(version.is_none());
+        let mut rest = Vec::new();
+        io::Read::read_to_end(&mut reader, &mut rest).unwrap();
+        assert_eq!(rest, key_bytes);
+    }
+
+    #[test]
+    fn test_key_version_header_rejects_oversized_version() {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(KEY_VERSION_MAGIC);
+        buf.extend_from_slice(&(KEY_VERSION_MAX_LEN + 1).to_le_bytes());
+        assert!(read_key_version_header(Cursor::new(buf)).is_err());
     }
 }
