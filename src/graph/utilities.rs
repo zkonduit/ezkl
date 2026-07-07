@@ -136,6 +136,20 @@ pub fn node_output_shapes(
 }
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use tract_onnx::prelude::SymbolValues;
+
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
+/// Casts an integer to f32, erroring if the value cannot be represented exactly.
+/// f32 has a 24-bit significand, so integers with magnitude above 2^24 may round,
+/// silently changing the semantics of the source model.
+fn exact_int_to_f32(x: i128) -> Result<f32, GraphError> {
+    let cast = x as f32;
+    if cast as i128 != x {
+        Err(GraphError::LossyIntegerConversion(x, cast))
+    } else {
+        Ok(cast)
+    }
+}
+
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 /// Extracts the raw values from a tensor.
 pub fn extract_tensor_value(
@@ -168,13 +182,19 @@ pub fn extract_tensor_value(
         DatumType::I64 => {
             // Generally a shape or hyperparam
             let vec = input.as_slice::<i64>()?.to_vec();
-            let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
+            let cast: Vec<f32> = vec
+                .iter()
+                .map(|x| exact_int_to_f32(*x as i128))
+                .collect::<Result<_, _>>()?;
             const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
         DatumType::I32 => {
             // Generally a shape or hyperparam
             let vec = input.as_slice::<i32>()?.to_vec();
-            let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
+            let cast: Vec<f32> = vec
+                .iter()
+                .map(|x| exact_int_to_f32(*x as i128))
+                .collect::<Result<_, _>>()?;
             const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
         DatumType::I16 => {
@@ -204,13 +224,19 @@ pub fn extract_tensor_value(
         DatumType::U32 => {
             // Generally a shape or hyperparam
             let vec = input.as_slice::<u32>()?.to_vec();
-            let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
+            let cast: Vec<f32> = vec
+                .iter()
+                .map(|x| exact_int_to_f32(*x as i128))
+                .collect::<Result<_, _>>()?;
             const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
         DatumType::U64 => {
             // Generally a shape or hyperparam
             let vec = input.as_slice::<u64>()?.to_vec();
-            let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
+            let cast: Vec<f32> = vec
+                .iter()
+                .map(|x| exact_int_to_f32(*x as i128))
+                .collect::<Result<_, _>>()?;
             const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
         DatumType::Bool => {
@@ -226,7 +252,7 @@ pub fn extract_tensor_value(
             let cast: Result<Vec<f32>, GraphError> = vec
                 .iter()
                 .map(|x| match x.to_i64() {
-                    Ok(v) => Ok(v as f32),
+                    Ok(v) => exact_int_to_f32(v as i128),
                     Err(_) => Err(GraphError::UnsupportedDataType(0, "TDim".to_string())),
                 })
                 .collect();
@@ -1651,6 +1677,44 @@ pub mod tests {
         let quantized: Tensor<Fp> = quantize_tensor(tensor, scale, visibility).unwrap();
         assert_eq!(quantized.len(), 10);
         assert_eq!(quantized, reference);
+    }
+
+    #[test]
+    #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
+    fn test_exact_int_to_f32() {
+        // exactly representable values pass through unchanged
+        assert_eq!(exact_int_to_f32(0).unwrap(), 0.0);
+        assert_eq!(exact_int_to_f32(16_777_216).unwrap(), 16_777_216.0);
+        assert_eq!(exact_int_to_f32(-16_777_216).unwrap(), -16_777_216.0);
+        // 2^24 + 1 is the first integer f32 cannot represent
+        assert!(exact_int_to_f32(16_777_217).is_err());
+        assert!(exact_int_to_f32(-16_777_217).is_err());
+        // beyond 2^24, integers remain representable when even
+        assert_eq!(exact_int_to_f32(16_777_218).unwrap(), 16_777_218.0);
+        // 2^63 is a power of two so exactly representable; i64::MAX is not
+        assert_eq!(
+            exact_int_to_f32(1 << 63).unwrap(),
+            9_223_372_036_854_775_808.0
+        );
+        assert!(exact_int_to_f32(i64::MAX as i128).is_err());
+    }
+
+    #[test]
+    #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
+    fn test_extract_tensor_value_rejects_inexact_integers() {
+        use tract_onnx::prelude::{tensor1, IntoArcTensor};
+
+        // representable i64 values extract fine
+        let ok = tensor1(&[0i64, 16_777_216]).into_arc_tensor();
+        let extracted = extract_tensor_value(ok).unwrap();
+        assert_eq!(extracted[1], 16_777_216.0);
+
+        // 2^24 + 1 would silently round to 2^24 in f32: must fail loudly
+        let lossy = tensor1(&[16_777_217i64]).into_arc_tensor();
+        assert!(matches!(
+            extract_tensor_value(lossy),
+            Err(GraphError::LossyIntegerConversion(16_777_217, _))
+        ));
     }
 
     #[test]

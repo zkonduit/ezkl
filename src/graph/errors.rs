@@ -29,6 +29,9 @@ pub enum GraphError {
     /// This operation is unsupported
     #[error("unsupported datatype in graph node {0} ({1})")]
     UnsupportedDataType(usize, String),
+    /// An integer value in the model cannot be represented exactly
+    #[error("integer value {0} cannot be represented exactly by ezkl's internal f32 representation (it would round to {1}); exact integer semantics beyond ±2^24 are unsupported")]
+    LossyIntegerConversion(i128, f32),
     /// A node has missing parameters
     #[error("a node is missing required params: {0}")]
     MissingParams(String),
